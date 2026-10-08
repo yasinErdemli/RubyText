@@ -206,7 +206,7 @@ private struct RubyTextContent: View {
 
     var body: some View {
         if furigana == 0 && romaji == 0 && reader == nil && textColors.isEmpty && backgroundColors.isEmpty
-            && wordGaps.isZero && !isTappable {
+            && wordGaps.isZero && !isTappable && lineBreaking != .phrases {
             Text(Self.plainText(content.string, lineBreaking: lineBreaking))
         } else {
             let metrics = RubyMetrics(font: font ?? .body, in: fontResolutionContext)
@@ -454,7 +454,7 @@ nonisolated struct RubyAnimatableVector: VectorArithmetic {
 
 /// Font measurements for one text, computed once and reused for every
 /// annotation strength, so animating the style doesn't re-measure text.
-private final class RubyMeasurements {
+final class RubyMeasurements {
     struct Furigana {
         /// Index among all of the content's readings, for its visibility.
         let source: Int
@@ -487,6 +487,9 @@ private final class RubyMeasurements {
     let characters: [Character]
     /// Width of each character in the base font.
     let widths: [CGFloat]
+    /// Whether each character is in the same reading phrase as the next,
+    /// for `RubyLineBreaking.phrases`.
+    let joinsNext: [Bool]
     /// UTF-16 offset where each character starts, plus the end offset.
     let starts: [Int]
     let furigana: [Furigana]
@@ -497,14 +500,22 @@ private final class RubyMeasurements {
     private static let cache = NSCache<NSString, RubyMeasurements>()
 
     static func measurements(for content: RubyContent, metrics: RubyMetrics) -> RubyMeasurements {
-        let key = (metrics.cacheKey + "\n" + content.string) as NSString
+        // Content objects are cached too, so the same text read by another
+        // analyzer is a different object.
+        let key = "\(metrics.cacheKey) \(ObjectIdentifier(content).hashValue)\n\(content.string)" as NSString
         if let cached = cache.object(forKey: key) { return cached }
         let measurements = RubyMeasurements(content: content, metrics: metrics)
         cache.setObject(measurements, forKey: key)
         return measurements
     }
 
-    private init(content: RubyContent, metrics: RubyMetrics) {
+    private convenience init(content: RubyContent, metrics: RubyMetrics) {
+        self.init(content: content, baseWidth: metrics.baseWidth(of:), annotationWidth: metrics.annotationWidth(of:))
+    }
+
+    /// Measures `content` with the given text widths, which tests can
+    /// supply without fonts.
+    init(content: RubyContent, baseWidth: (String) -> CGFloat, annotationWidth: (String) -> CGFloat) {
         let characters = Array(content.string)
         var starts: [Int] = []
         var offset = 0
@@ -518,7 +529,7 @@ private final class RubyMeasurements {
             Self.index(of: range.lowerBound, in: starts)..<Self.index(of: range.upperBound, in: starts)
         }
 
-        let widths = characters.map { metrics.baseWidth(of: String($0)) }
+        let widths = characters.map { baseWidth(String($0)) }
         let readings = content.words.flatMap(\.furigana)
         var hasReading = [Bool](repeating: false, count: characters.count)
         for reading in readings {
@@ -545,7 +556,7 @@ private final class RubyMeasurements {
                 characters: indices,
                 range: reading.range,
                 text: reading.text,
-                extraWidth: metrics.annotationWidth(of: reading.text) - indices.reduce(0) { $0 + widths[$1] },
+                extraWidth: annotationWidth(reading.text) - indices.reduce(0) { $0 + widths[$1] },
                 leadingOverhang: overhang(onto: indices.lowerBound - 1, beyond: indices.lowerBound - 2),
                 trailingOverhang: overhang(onto: indices.upperBound, beyond: indices.upperBound + 1),
                 startsParagraph: indices.lowerBound == 0 || characters[indices.lowerBound - 1].isNewline
@@ -560,7 +571,7 @@ private final class RubyMeasurements {
                 characters: indices,
                 range: word.range,
                 text: word.text,
-                width: metrics.annotationWidth(of: word.text)
+                width: annotationWidth(word.text)
             ))
         }
 
@@ -569,8 +580,14 @@ private final class RubyMeasurements {
             paragraphStarts.append(starts[index + 1])
         }
 
+        var joinsNext = [Bool](repeating: false, count: characters.count)
+        for unit in RubyReadingUnits.units(in: content.string, words: content.words) {
+            for index in characterRange(unit.range).dropLast() { joinsNext[index] = true }
+        }
+
         self.characters = characters
         self.widths = widths
+        self.joinsNext = joinsNext
         self.starts = starts
         self.furigana = furigana
         self.romaji = romaji
@@ -596,10 +613,16 @@ private final class RubyMeasurements {
 }
 
 /// The attributed text and renderer data for one pair of annotation strengths.
-private struct RubyLayout {
+struct RubyLayout {
     let text: AttributedString
     let paragraphs: [RubyParagraph]
+    /// Where each paragraph starts in `text`.
     private let paragraphStarts: [Int]
+    /// UTF-16 offset of each character in the content, plus the end.
+    private let contentStarts: [Int]
+    /// UTF-16 offset of each character in `text`, which may also hold word
+    /// joiners, plus the end.
+    private let textStarts: [Int]
 
     init(
         measurements: RubyMeasurements,
@@ -643,6 +666,23 @@ private struct RubyLayout {
         let tracking = spacing.tracking
         let shifts = spacing.shifts
 
+        // Phrase line breaking joins the characters of each phrase with
+        // word joiners, which offsets in `text` then account for.
+        let joins = lineBreaking == .phrases ? measurements.joinsNext : [Bool](repeating: false, count: characters.count)
+        var textStarts = [0]
+        for (index, character) in characters.enumerated() {
+            textStarts.append(textStarts[index] + character.utf16.count + (joins[index] ? 1 : 0))
+        }
+        self.contentStarts = starts
+        self.textStarts = textStarts
+        /// Range in `text` of the characters in `range`, leaving out a
+        /// joiner after the last one.
+        func textRange(_ range: Range<Int>) -> Range<Int> {
+            guard !range.isEmpty else { return textStarts[range.lowerBound]..<textStarts[range.lowerBound] }
+            let last = range.upperBound - 1
+            return textStarts[range.lowerBound]..<(textStarts[last] + characters[last].utf16.count)
+        }
+
         // Build one flat attributed string with a run per tracking value and color.
         var text = AttributedString()
         var tracked: [RubyTrackedRange] = []
@@ -653,13 +693,44 @@ private struct RubyLayout {
                   colors[upper] == colors[lower] {
                 upper += 1
             }
-            var piece = AttributedString(String(characters[lower..<upper]))
-            piece.foregroundColor = colors[lower]
-            if tracking[lower] > 0 || shifts[lower] > 0 {
-                piece.tracking = tracking[lower]
-                tracked.append(RubyTrackedRange(range: starts[lower]..<starts[upper], tracking: tracking[lower], shift: shifts[lower]))
+            let isTracked = tracking[lower] > 0 || shifts[lower] > 0
+            // Tracking adds space after every character of a run, so a
+            // tracked run's joiners go in runs of their own.
+            var string = ""
+            func appendPiece() {
+                guard !string.isEmpty else { return }
+                var piece = AttributedString(string)
+                piece.foregroundColor = colors[lower]
+                if isTracked { piece.tracking = tracking[lower] }
+                text.append(piece)
+                string = ""
             }
-            text.append(piece)
+            for index in lower..<upper {
+                string.append(characters[index])
+                guard joins[index] else { continue }
+                if isTracked {
+                    appendPiece()
+                    var joiner = AttributedString("\u{2060}")
+                    joiner.foregroundColor = colors[lower]
+                    text.append(joiner)
+                } else {
+                    string.append("\u{2060}")
+                }
+            }
+            appendPiece()
+            // One range per stretch without joiners, so joiners get no
+            // tracking or shift.
+            if isTracked {
+                for index in lower..<upper {
+                    let range = textRange(index..<(index + 1))
+                    if let last = tracked.last, last.range.upperBound == range.lowerBound,
+                       last.tracking == tracking[lower], last.shift == shifts[lower] {
+                        tracked[tracked.count - 1] = RubyTrackedRange(range: last.range.lowerBound..<range.upperBound, tracking: last.tracking, shift: last.shift)
+                    } else {
+                        tracked.append(RubyTrackedRange(range: range, tracking: tracking[lower], shift: shifts[lower]))
+                    }
+                }
+            }
             lower = upper
         }
         // The language decides where lines may break, such as only between
@@ -669,7 +740,7 @@ private struct RubyLayout {
 
         // Layout character indices restart at each paragraph, so ranges are
         // converted to paragraph-relative offsets.
-        let paragraphStarts = measurements.paragraphStarts
+        let paragraphStarts = measurements.paragraphStarts.map { textStarts[RubyMeasurements.index(of: $0, in: starts)] }
         self.paragraphStarts = paragraphStarts
         var paragraphs = [RubyParagraph](repeating: RubyParagraph(), count: paragraphStarts.count)
         for item in tracked {
@@ -680,7 +751,7 @@ private struct RubyLayout {
             for (id, reading) in measurements.furigana.enumerated() {
                 let visibility = readingVisibility.value(at: reading.source, default: 1)
                 guard visibility > 0 else { continue }
-                let placed = Self.place(reading.range, paragraphStarts: paragraphStarts)
+                let placed = Self.place(textRange(reading.characters), paragraphStarts: paragraphStarts)
                 paragraphs[placed.paragraph].above.append(RubyAnnotation(
                     id: id, text: reading.text, range: placed.range, baseCount: reading.characters.count,
                     color: colors[reading.characters.lowerBound],
@@ -692,7 +763,7 @@ private struct RubyLayout {
             for (id, word) in measurements.romaji.enumerated() {
                 let visibility = romajiVisibility.value(at: word.source, default: 1)
                 guard visibility > 0 else { continue }
-                let placed = Self.place(word.range, paragraphStarts: paragraphStarts)
+                let placed = Self.place(textRange(word.characters), paragraphStarts: paragraphStarts)
                 paragraphs[placed.paragraph].below.append(RubyAnnotation(
                     id: id, text: word.text, range: placed.range, baseCount: word.characters.count,
                     color: colors[word.characters.lowerBound],
@@ -701,7 +772,9 @@ private struct RubyLayout {
             }
         }
         for item in backgrounds {
-            let placed = Self.place(item.range, paragraphStarts: paragraphStarts)
+            let characters = RubyMeasurements.index(of: item.range.lowerBound, in: starts)
+                ..< RubyMeasurements.index(of: item.range.upperBound, in: starts)
+            let placed = Self.place(textRange(characters), paragraphStarts: paragraphStarts)
             paragraphs[placed.paragraph].backgrounds.append(RubyColoredRange(range: placed.range, color: item.color))
         }
         self.paragraphs = paragraphs
@@ -709,7 +782,7 @@ private struct RubyLayout {
 
     /// Space after each character, and how far right each glyph moves
     /// within the space before it, to fit annotations and word spacing.
-    private static func spacing(
+    static func spacing(
         measurements: RubyMeasurements,
         furigana: CGFloat,
         romaji: CGFloat,
@@ -822,15 +895,28 @@ private struct RubyLayout {
         return (tracking, shifts)
     }
 
-    /// Converts a paragraph-relative UTF-16 offset to one in the whole text.
+    /// Converts a paragraph-relative UTF-16 offset in the laid-out text to
+    /// an offset in the content.
     func offset(_ offset: Int, inParagraph paragraph: Int) -> Int {
-        (paragraphStarts.indices.contains(paragraph) ? paragraphStarts[paragraph] : 0) + offset
+        let textOffset = (paragraphStarts.indices.contains(paragraph) ? paragraphStarts[paragraph] : 0) + offset
+        // The character starting at or before it; a joiner maps to the
+        // character it follows.
+        var low = 0
+        var high = textStarts.count - 1
+        while low < high {
+            let mid = (low + high + 1) / 2
+            if textStarts[mid] <= textOffset { low = mid } else { high = mid - 1 }
+        }
+        return contentStarts[low]
     }
 
-    /// Converts a UTF-16 range in the whole text to its paragraph and a
-    /// paragraph-relative range.
+    /// Converts a UTF-16 range in the content to its paragraph and a
+    /// paragraph-relative range in the laid-out text.
     func place(_ range: Range<Int>) -> (paragraph: Int, range: Range<Int>) {
-        Self.place(range, paragraphStarts: paragraphStarts)
+        let lower = RubyMeasurements.index(of: range.lowerBound, in: contentStarts)
+        let upper = RubyMeasurements.index(of: range.upperBound, in: contentStarts)
+        let end = upper > lower ? textStarts[upper - 1] + (contentStarts[upper] - contentStarts[upper - 1]) : textStarts[lower]
+        return Self.place(textStarts[lower]..<end, paragraphStarts: paragraphStarts)
     }
 
     private static func place(_ range: Range<Int>, paragraphStarts: [Int]) -> (paragraph: Int, range: Range<Int>) {
