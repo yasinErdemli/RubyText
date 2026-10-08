@@ -8,6 +8,8 @@ enum RubyRuleSpans {
     struct Match {
         let end: Int
         let reading: String
+        /// Offsets in the reading where romaji put a space.
+        var romajiBreaks: [Int] = []
     }
 
     /// `segments` with each stretch `match` recognizes replaced by one rule
@@ -43,12 +45,14 @@ enum RubyRuleSpans {
             if segments[index].source == .dictionary,
                let found = match(characters, starts[index], isEnd),
                isEnd(found.end), let last = ends[found.end] {
-                result.append(RubySegment(
+                var segment = RubySegment(
                     String(characters[starts[index]..<found.end]),
                     reading: found.reading,
                     word: RubySegment.Word(partOfSpeech: .noun, dictionaryForm: nil, attachesToPrevious: false),
                     source: .rule
-                ))
+                )
+                segment.romajiBreaks = found.romajiBreaks
+                result.append(segment)
                 index = last + 1
             } else {
                 result.append(segments[index])

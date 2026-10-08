@@ -22,6 +22,7 @@ import Testing
         ("げんいん", nil, nil, "gen'in"),
         ("きんようび", "きんよーび", nil, "kin'yōbi"),
         ("しんぶん", nil, nil, "shinbun"),
+        ("ごはん", nil, "を", "gohan"),
         // Long vowels: ー, and the pronunciation where there is one.
         ("こーひー", nil, nil, "kōhī"),
         ("とうきょう", "とーきょー", nil, "tōkyō"),
@@ -59,8 +60,17 @@ import Testing
         #expect(content.romajiWords.map(\.text).joined(separator: " ") == expected)
     }
 
-    @Test func numbersReadByRuleHaveRomaji() {
-        let content = RubyContent.content(for: "十日")
-        #expect(content.romajiWords.map(\.text) == ["tōka"])
+    @Test(arguments: [
+        ("十日", "tōka"),
+        ("2026年", "nisen nijūrokunen"),
+        ("3500円", "sanzen gohyakuen"),
+        ("六百人", "roppyakunin"),
+        ("1,234,567", "hyaku nijūsanman yonsen gohyaku rokujūnana"),
+        ("100", "hyaku"),
+    ])
+    func numbersReadInParts(_ text: String, _ expected: String) {
+        let content = RubyContent.content(for: text)
+        let romaji = content.romajiWords.map(\.text).joined(separator: " ")
+        #expect(romaji == expected, "\(romaji)")
     }
 }

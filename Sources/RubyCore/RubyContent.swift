@@ -257,7 +257,12 @@ package final class RubyContent {
             // The next word's reading resolves a final っ (入っ|た → itta).
             let next = index + 1 < segments.count ? segments[index + 1].reading : nil
             let romaji = segment.reading.map {
-                RubyRomaji.hepburn($0, pronunciation: segment.pronunciation ?? particlePronunciation[segment.base], next: next)
+                RubyRomaji.hepburn(
+                    $0,
+                    pronunciation: segment.pronunciation ?? particlePronunciation[segment.base],
+                    next: next,
+                    breaks: segment.romajiBreaks
+                )
             }
             words.append(RubyWord(
                 range: range,

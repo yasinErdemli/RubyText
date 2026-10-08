@@ -23,6 +23,9 @@ public struct RubySegment: Hashable, Sendable {
     public var pronunciation: String?
     public var word: Word?
     public var source: ReadingSource
+    /// Offsets in `reading` where romaji put a space, so long numbers read
+    /// in parts: nisen nijūroku.
+    package var romajiBreaks: [Int] = []
 
     /// What's known about a segment's grammar.
     public struct Word: Hashable, Sendable {

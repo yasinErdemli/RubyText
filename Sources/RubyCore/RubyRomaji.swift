@@ -16,7 +16,16 @@ package nonisolated enum RubyRomaji {
     ///     one, おう, おお and うう are read as long vowels.
     ///   - next: The following word's reading, so a final っ doubles the
     ///     consonant after it: 入っ before た is it, making itta.
-    package static func hepburn(_ reading: String, pronunciation: String? = nil, next: String? = nil) -> String {
+    ///   - breaks: Offsets in the reading where romaji put a space.
+    package static func hepburn(_ reading: String, pronunciation: String? = nil, next: String? = nil, breaks: [Int] = []) -> String {
+        if !breaks.isEmpty {
+            let characters = Array(reading)
+            let bounds = [0] + breaks.filter { 0 < $0 && $0 < characters.count } + [characters.count]
+            let parts = zip(bounds, bounds.dropFirst()).map { String(characters[$0..<$1]) }
+            return parts.enumerated().map { index, part in
+                hepburn(part, next: index + 1 < parts.count ? parts[index + 1] : next)
+            }.joined(separator: " ")
+        }
         let kana = Array(RubyReadings.hiragana(reading))
         let spoken = pronunciation.map { Array(RubyReadings.hiragana($0)) }
         var effective = kana
@@ -46,9 +55,12 @@ package nonisolated enum RubyRomaji {
                 guard let after, let first = after.first, !vowels.contains(first) else { continue }
                 result += after.hasPrefix("ch") ? "t" : String(first)
             case "n":
-                // ん before a vowel or y takes an apostrophe: gen'in, kin'yōbi.
+                // ん before a vowel or y in the same word takes an
+                // apostrophe: gen'in, kin'yōbi, but gohan o.
                 result += "n"
-                if let first = after?.first, vowels.contains(first) || first == "y" { result += "'" }
+                if index + 1 < pieces.count, let first = pieces[index + 1].first, vowels.contains(first) || first == "y" {
+                    result += "'"
+                }
             case "ー":
                 lengthenLastVowel(of: &result)
             default:

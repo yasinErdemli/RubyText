@@ -48,13 +48,30 @@ package enum RubyNumberReadings {
             // Context checks look right after the counter itself.
             let counterEnd = suffix.isEmpty ? end : end - 1
             if let reading = reading(of: number, counter: rule, in: text, end: counterEnd) {
-                return RubyRuleSpans.Match(end: end, reading: reading + suffix)
+                return RubyRuleSpans.Match(end: end, reading: reading + suffix, romajiBreaks: breaks(of: number, in: reading))
             }
         }
         // Kanji numerals without a counter are usually part of a word (第一,
         // 一緒, 万一); digits are always numbers.
         guard number.isDigits, isBoundary(number.end) else { return nil }
-        return RubyRuleSpans.Match(end: number.end, reading: number.spoken.text)
+        let reading = number.spoken.text
+        return RubyRuleSpans.Match(end: number.end, reading: reading, romajiBreaks: breaks(of: number, in: reading))
+    }
+
+    /// Where romaji split a number's reading: after each thousand, hundred,
+    /// and power of ten thousand that something follows, so 2026 is nisen
+    /// nijūroku. Only where the reading still starts with those pieces;
+    /// counters can change the end (二十日, はつか).
+    private static func breaks(of number: ParsedNumber, in reading: String) -> [Int] {
+        var breaks: [Int] = []
+        var offset = 0
+        let pieces = number.spoken.pieces
+        for (index, piece) in pieces.enumerated() {
+            offset += piece.count
+            guard index < pieces.count - 1, Spoken.magnitudes.contains(piece) else { continue }
+            if reading.hasPrefix(pieces[...index].joined()) { breaks.append(offset) }
+        }
+        return breaks
     }
 
     private static func reading(of number: ParsedNumber, counter rule: Counter, in text: [Character], end: Int) -> String? {
@@ -216,6 +233,9 @@ package enum RubyNumberReadings {
         var onesDigit: Int?
 
         var text: String { pieces.joined() }
+
+        /// Pieces naming a thousand, hundred, or power of ten thousand.
+        static let magnitudes: Set<String> = ["せん", "ぜん", "ひゃく", "びゃく", "ぴゃく", "まん", "おく", "ちょう"]
 
         init(pieces: [String], onesDigit: Int? = nil) {
             self.pieces = pieces
