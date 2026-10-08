@@ -57,6 +57,11 @@ let readingBenchmark: [BenchmarkCase] = roadmapCases + numberCases + counterCase
 
 private let date = "2025年3月16日"
 private let stress = "侍の魂と志を胸に、暁の湖で雷を待つ。"
+/// More layout stress tests: readings of up to five kana over one kanji,
+/// some followed by their own kana endings.
+private let edict = "帝の詔を謹んで承る。"
+private let birds = "鶯が曙の頂で囀り、鷲が鬣を弄ぶ。"
+private let armor = "夥しい鎧と兜が掌の上で恭しく並ぶ。"
 private let market = "三月一日、大家さんと人気のない早朝の魚市場へ行き、辛い生物を一日中食べたら寒気がした。"
 private let shop = "あの方は一枚上手で、気に入った店でも今日は止めておくと言った。"
 
@@ -72,6 +77,17 @@ private let roadmapCases = [
     c("湖", "みずうみ", in: stress, .control),
     c("雷", "かみなり", in: stress, .control),
     c("待つ", "まつ", in: stress, .control),
+    c("詔", "みことのり", in: edict, .control),
+    c("謹んで", "つつしんで", in: edict, .control),
+    c("承る", "うけたまわる", in: edict, .control),
+    c("鶯", "うぐいす", in: birds, .control),
+    c("曙", "あけぼの", in: birds, .control),
+    c("囀り", "さえずり", in: birds, .control),
+    c("鬣", "たてがみ", in: birds, .control),
+    c("弄ぶ", "もてあそぶ", in: birds, .control),
+    c("夥しい", "おびただしい", in: armor, .control),
+    c("掌", "てのひら", in: armor, .control),
+    c("恭しく", "うやうやしく", in: armor, .control),
 
     // The twelve traps.
     c("三月一日", "さんがつついたち", in: market, .number),

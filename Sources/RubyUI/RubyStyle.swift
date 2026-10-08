@@ -144,14 +144,14 @@ public enum RubyLineBreaking: Hashable, Sendable {
     /// starting a line with 。 or ゃ.
     case anywhere
 
-    /// The language that selects the text system's line breaking: tagging
-    /// text as Japanese turns on its word-aware Japanese breaking, and the
-    /// line-word option (`lw=phrase`) asks for phrases where it's
-    /// supported. Untagged text breaks between characters.
-    var languageIdentifier: String? {
+    /// The language the text is set in, which also selects its line
+    /// breaking: Japanese breaks between characters, following the rules
+    /// against starting a line with 。 or ゃ, and the line-word option
+    /// (`lw=phrase`) breaks between phrases instead.
+    var languageIdentifier: String {
         switch self {
         case .words: "ja-u-lw-phrase"
-        case .anywhere: nil
+        case .anywhere: "ja"
         }
     }
 }

@@ -138,10 +138,27 @@ struct RubyMetrics {
     func annotationWidth(of string: String) -> CGFloat { Self.width(of: string, font: annotation.ctFont) }
 
     /// Typographic width of `string` set in `font`.
+    /// Annotation text as drawn: in the annotation font, tagged as
+    /// Japanese like the base text.
+    func annotationText(_ string: String) -> Text {
+        var text = AttributedString(string)
+        text.languageIdentifier = RubyMetrics.language
+        return Text(text).font(annotationFont)
+    }
+
+    /// The language text is set in. Tagging it Japanese selects Japanese
+    /// fonts for kanji and kana; untagged, they fall back to a Chinese font
+    /// with different glyph shapes and widths.
+    static let language = "ja"
+
+    /// Typographic width of `string` set in `font`, as Japanese text.
     private static func width(of string: String, font: CTFont) -> CGFloat {
         let attributed = NSAttributedString(
             string: string,
-            attributes: [NSAttributedString.Key(kCTFontAttributeName as String): font]
+            attributes: [
+                NSAttributedString.Key(kCTFontAttributeName as String): font,
+                NSAttributedString.Key(kCTLanguageAttributeName as String): language,
+            ]
         )
         let line = CTLineCreateWithAttributedString(attributed)
         return CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))

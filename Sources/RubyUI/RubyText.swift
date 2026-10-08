@@ -478,6 +478,15 @@ final class RubyMeasurements {
         /// Whether the base starts a paragraph. The reading then starts
         /// with it instead of being centered, so the line isn't indented.
         let startsParagraph: Bool
+        /// Characters that move together when the reading needs more
+        /// space: its word, as far as the reading may overhang, so space
+        /// goes around the word (夥しい), never between a kanji and its
+        /// kana ending (夥|しい).
+        let padded: Range<Int>
+        /// Whether those characters end their paragraph. The reading then
+        /// ends with them and takes its space before them: space after a
+        /// paragraph's last character doesn't widen the text.
+        let endsParagraph: Bool
     }
 
     struct Romaji {
@@ -541,9 +550,9 @@ final class RubyMeasurements {
         }
 
         let widths = characters.map { baseWidth(String($0)) }
-        let readings = content.words.flatMap(\.furigana)
+        let readings = content.words.flatMap { word in word.furigana.map { (reading: $0, word: word.range) } }
         var hasReading = [Bool](repeating: false, count: characters.count)
-        for reading in readings {
+        for (reading, _) in readings {
             for index in characterRange(reading.range) { hasReading[index] = true }
         }
         // How far a reading may extend past its base on one side: over
@@ -553,7 +562,9 @@ final class RubyMeasurements {
         // them apart. When another reading sits beyond that space, the two
         // share it, with a small gap between them.
         let readingGap = annotationWidth("あ") / 4
-        func overhang(from start: Int, step: Int) -> CGFloat {
+        // Also returns where the space it may overhang ends: the index of
+        // the first character past it.
+        func overhang(from start: Int, step: Int) -> (width: CGFloat, end: Int) {
             var allowance: CGFloat = 0
             var index = start
             while characters.indices.contains(index), !hasReading[index], !characters[index].isNewline {
@@ -561,7 +572,7 @@ final class RubyMeasurements {
                 index += step
             }
             let shared = characters.indices.contains(index) && hasReading[index]
-            return shared ? max(0, allowance / 2 - readingGap / 2) : allowance
+            return (shared ? max(0, allowance / 2 - readingGap / 2) : allowance, index)
         }
 
         /// How much to narrow an annotation `width` wide over `indices`, so
@@ -573,12 +584,14 @@ final class RubyMeasurements {
         }
 
         var furigana: [Furigana] = []
-        for (source, reading) in readings.enumerated() {
+        for (source, (reading, word)) in readings.enumerated() {
             let indices = characterRange(reading.range)
             guard !indices.isEmpty else { continue }
             let baseWidth = indices.reduce(0) { $0 + widths[$1] }
-            let leading = overhang(from: indices.lowerBound - 1, step: -1)
-            let trailing = overhang(from: indices.upperBound, step: 1)
+            let (leading, leadingEnd) = overhang(from: indices.lowerBound - 1, step: -1)
+            let (trailing, trailingEnd) = overhang(from: indices.upperBound, step: 1)
+            let wordIndices = characterRange(word)
+            let padded = max(wordIndices.lowerBound, leadingEnd + 1)..<min(wordIndices.upperBound, trailingEnd)
             let natural = annotationWidth(reading.text)
             let scale = scale(natural, over: indices, available: baseWidth + leading + trailing)
             furigana.append(Furigana(
@@ -590,7 +603,9 @@ final class RubyMeasurements {
                 extraWidth: natural * scale - baseWidth,
                 leadingOverhang: leading,
                 trailingOverhang: trailing,
-                startsParagraph: indices.lowerBound == 0 || characters[indices.lowerBound - 1].isNewline
+                startsParagraph: indices.lowerBound == 0 || characters[indices.lowerBound - 1].isNewline,
+                padded: padded,
+                endsParagraph: padded.upperBound == characters.count || characters[padded.upperBound].isNewline
             ))
         }
         var romaji: [Romaji] = []
@@ -765,11 +780,18 @@ struct RubyLayout {
         var tracking = [CGFloat](repeating: 0, count: characters.count)
         var shifts = [CGFloat](repeating: 0, count: characters.count)
 
-        // Moves a run of characters right by `amount`, with the space
-        // before them, keeping everything after it in place relative to it.
+        // Adds space before and after a run of characters. Space before it
+        // goes after the character before it; at the start of a paragraph,
+        // the run's glyphs move right instead.
         func pad(_ indices: Range<Int>, before: CGFloat, after: CGFloat) {
-            for index in indices { shifts[index] += before }
-            tracking[indices.upperBound - 1] += before + after
+            let previous = indices.lowerBound - 1
+            if previous >= 0, !characters[previous].isNewline {
+                tracking[previous] += before
+            } else {
+                for index in indices { shifts[index] += before }
+                tracking[indices.upperBound - 1] += before
+            }
+            tracking[indices.upperBound - 1] += after
         }
 
         // Furigana wider than their base, beyond what neighboring kana can
@@ -779,10 +801,12 @@ struct RubyLayout {
             for reading in measurements.furigana where reading.extraWidth > 0 {
                 let excess = reading.extraWidth * furigana * readingVisibility.value(at: reading.source, default: 1)
                 if reading.startsParagraph {
-                    pad(reading.characters, before: 0, after: max(0, excess - reading.trailingOverhang))
+                    pad(reading.padded, before: 0, after: max(0, excess - reading.trailingOverhang))
+                } else if reading.endsParagraph {
+                    pad(reading.padded, before: max(0, excess - reading.trailingOverhang - reading.leadingOverhang), after: 0)
                 } else {
                     pad(
-                        reading.characters,
+                        reading.padded,
                         before: max(0, excess / 2 - reading.leadingOverhang),
                         after: max(0, excess / 2 - reading.trailingOverhang)
                     )
@@ -816,17 +840,6 @@ struct RubyLayout {
         var paragraph = -1
         var added: CGFloat = 0
         var previousRight: CGFloat?
-        var lastVisibility: CGFloat = 0
-
-        // Room after a paragraph's last character for romaji past its end.
-        func finishParagraph() {
-            guard paragraph >= 0, let right = previousRight else { return }
-            let end = paragraphEnds[paragraph]
-            let start = paragraphEnds.indices.contains(paragraph - 1) ? paragraphEnds[paragraph - 1] + 1 : 0
-            guard end > start else { return }
-            let width = (start..<end).reduce(0) { $0 + widths[$1] + tracking[$1] }
-            if right > width { tracking[end - 1] += (right - width) * lastVisibility }
-        }
 
         for word in measurements.romaji {
             let visibility = romaji * romajiVisibility.value(at: word.source, default: 1)
@@ -834,7 +847,6 @@ struct RubyLayout {
             let first = word.characters.lowerBound
             let last = word.characters.upperBound - 1
             if paragraphOf[first] != paragraph {
-                finishParagraph()
                 paragraph = paragraphOf[first]
                 added = 0
                 previousRight = nil
@@ -844,6 +856,11 @@ struct RubyLayout {
             let right = x[last] + shifts[last] + widths[last] + added
             var center = (left + right) / 2
             let half = word.width / 2
+            // Romaji that would run past the paragraph's end end with it,
+            // since space after its last character doesn't widen the text,
+            // and those that would start before it start with it.
+            let end = x[paragraphEnds[paragraph]] + added
+            center = max(min(center, end - half), half)
             if let previousRight {
                 let overlap = previousRight + romajiSpacing - (center - half)
                 if overlap > 0 {
@@ -851,15 +868,9 @@ struct RubyLayout {
                     added += overlap * visibility
                     center += overlap * visibility
                 }
-            } else if center - half < 0 {
-                // Romaji that would start before the paragraph start with
-                // it instead, as the renderer draws them.
-                center = half
             }
             previousRight = center + half
-            lastVisibility = visibility
         }
-        finishParagraph()
         return (tracking, shifts)
     }
 

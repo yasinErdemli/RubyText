@@ -42,8 +42,11 @@ struct RubyRenderer: TextRenderer {
         // Bounds of the spoken word on each line it appears on.
         var emphasizedLines: [Int: CGRect] = [:]
         // Annotations may extend past their words, but not past the text.
+        // Where the text starts and ends: the line bounds, and the end of
+        // each line's last glyph, since the bounds may extend past it.
         let lineRects = layout.map(\.typographicBounds.rect)
-        let edges = (lineRects.map(\.minX).min() ?? 0)...(lineRects.map(\.maxX).max() ?? 0)
+        let leadingEdge = lineRects.map(\.minX).min() ?? 0
+        var trailingEdge = leadingEdge
 
         for (lineNumber, line, paragraph, start) in layout.rubyParagraphLines {
             guard paragraphs.indices.contains(paragraph) else {
@@ -51,6 +54,10 @@ struct RubyRenderer: TextRenderer {
                 continue
             }
             let data = paragraphs[paragraph]
+            if let run = line.last, run.count > 0, let index = run.characterIndices.last {
+                let box = Self.glyphBox(in: run, at: run.count - 1, offset: start.distance(to: index), tracked: data.tracked)
+                trailingEdge = max(trailingEdge, box.maxX)
+            }
             // Annotations take their vertical position from the line, not
             // from individual glyphs, whose bounds vary (tracked runs, font
             // fallback), so everything on a line shares one baseline.
@@ -119,6 +126,8 @@ struct RubyRenderer: TextRenderer {
             }
         }
 
+        let edges = leadingEdge...max(leadingEdge, trailingEdge)
+
         // While a style change animates, annotations fade with their
         // strength and slide out from behind the base text. Sliding by the
         // full reserved height keeps them inside the space reserved so far,
@@ -149,7 +158,7 @@ struct RubyRenderer: TextRenderer {
                 var annotationContext = layer
                 annotationContext.opacity *= fragment.annotation.opacity
                 let tinted = emphasize(fragment, in: &annotationContext, lines: emphasizedLines)
-                var resolved = annotationContext.resolve(Text(verbatim: text).font(metrics.annotationFont))
+                var resolved = annotationContext.resolve(metrics.annotationText(text))
                 // Romaji use the tertiary foreground style, so
                 // `.foregroundStyle(_:_:_:)` can give them their own color,
                 // unless the word they belong to is colored.
@@ -326,7 +335,7 @@ struct RubyRenderer: TextRenderer {
         in context: GraphicsContext
     ) -> [CGFloat] {
         let widths = pieces.map { text, fragment, isSplit in
-            let natural = context.resolve(Text(verbatim: text).font(metrics.annotationFont))
+            let natural = context.resolve(metrics.annotationText(text))
                 .measure(in: CGSize(width: CGFloat.infinity, height: .infinity)).width * fragment.annotation.scale
             return spreads && !isSplit && text.count > 1 ? max(natural, fragment.rect.width) : natural
         }
@@ -338,13 +347,16 @@ struct RubyRenderer: TextRenderer {
                 pieces[second].1.rect.minX - pieces[first].1.rect.maxX > 0.5 || !spreads ? spacing : 0
             }
             // Left to right, keep each clear of the edge and the one before.
-            var previous: (index: Int, right: CGFloat)?
-            for index in order {
-                let limit = previous.map { $0.right + space($0.index, index) } ?? edges.lowerBound
-                let left = max(centers[index] - widths[index] / 2, limit)
-                centers[index] = left + widths[index] / 2
-                previous = (index, left + widths[index])
+            func clearLeadingEdge() {
+                var previous: (index: Int, right: CGFloat)?
+                for index in order {
+                    let limit = previous.map { $0.right + space($0.index, index) } ?? edges.lowerBound
+                    let left = max(centers[index] - widths[index] / 2, limit)
+                    centers[index] = left + widths[index] / 2
+                    previous = (index, left + widths[index])
+                }
             }
+            clearLeadingEdge()
             // Then right to left, pulling back any past the far edge.
             var next: (index: Int, left: CGFloat)?
             for index in order.reversed() {
@@ -353,6 +365,9 @@ struct RubyRenderer: TextRenderer {
                 centers[index] = right - widths[index] / 2
                 next = (index, right - widths[index])
             }
+            // If they don't fit between the edges, the leading one wins:
+            // there's usually room after the text, never before it.
+            clearLeadingEdge()
         }
         return centers
     }
@@ -371,14 +386,14 @@ struct RubyRenderer: TextRenderer {
         color: Color?,
         in context: inout GraphicsContext
     ) {
-        let natural = context.resolve(Text(verbatim: text).font(metrics.annotationFont))
+        let natural = context.resolve(metrics.annotationText(text))
         let width = natural.measure(in: CGSize(width: CGFloat.infinity, height: .infinity)).width
         var tracking: CGFloat = 0
         if spread, scale == 1, text.count > 1 {
             tracking = max(0, rect.width - width) / CGFloat(text.count)
         }
         var resolved = context.resolve(
-            Text(verbatim: text).font(metrics.annotationFont).tracking(tracking)
+            metrics.annotationText(text).tracking(tracking)
         )
         // Furigana use the secondary foreground style, so
         // `.foregroundStyle(_:_:)` can color them separately from the text,

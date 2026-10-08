@@ -44,8 +44,8 @@ import Testing
     @Test func spaceGoesAroundTheWord() {
         // Two units wider than 東京, between kanji that take none of it.
         let result = spaced("{漢|かん}{東京|あいうえかきくけ}{字|じ}")
-        #expect(result.tracking == [0, 0, 2, 0])
-        #expect(result.shifts == [0, 1, 1, 0])
+        #expect(result.tracking == [1, 0, 1, 0])
+        #expect(result.shifts == [0, 0, 0, 0])
     }
 
     @Test func readingsFlowOverCharactersWithoutReadings() {
@@ -94,27 +94,46 @@ import Testing
         #expect(result.tracking[0] == 2)
     }
 
+    @Test func readingsEndWithTheParagraph() {
+        // The reading ends with 侍, flows over の, and takes the rest of its
+        // space before の: space after the last character doesn't count.
+        let result = spaced("の{侍|さむらいさむらい}")
+        #expect(result.tracking == [2, 0])
+        #expect(result.shifts == [0, 0])
+    }
+
     @Test(arguments: [
         "侍の魂と志を胸に、暁の湖で雷を待つ。",
+        "帝の詔を謹んで承る。",
+        "鶯が曙の頂で囀り、鷲が鬣を弄ぶ。",
+        "夥しい鎧と兜が掌の上で恭しく並ぶ。",
         "今日、政府は新しい経済政策を発表した。\n東京の駅前で記者会見が行われた。",
         "コーヒーを飲みながら日本語を勉強しています。",
     ])
     func spaceIsNeverAddedInsideWords(_ text: String) {
         let result = spaced(text, furigana: 1, romaji: 1)
+        // The visible space between a glyph and the next: the space added
+        // after it, less how much further right the next one is shifted.
+        func gap(after index: Int) -> CGFloat {
+            result.tracking[index] + result.shifts[index + 1] - result.shifts[index]
+        }
         for word in result.measurements.romaji {
             for index in word.characters.dropLast() {
-                #expect(result.tracking[index] == 0, "inside \(word.text)")
+                #expect(abs(gap(after: index)) < 0.0001, "inside \(word.text)")
             }
         }
         for reading in result.measurements.furigana {
             for index in reading.characters.dropLast() {
-                #expect(result.tracking[index] == 0, "inside \(reading.text)")
+                #expect(abs(gap(after: index)) < 0.0001, "inside \(reading.text)")
             }
         }
     }
 
     @Test(arguments: [
         "侍の魂と志を胸に、暁の湖で雷を待つ。",
+        "帝の詔を謹んで承る。",
+        "鶯が曙の頂で囀り、鷲が鬣を弄ぶ。",
+        "夥しい鎧と兜が掌の上で恭しく並ぶ。",
         "今日は東京へ行きたい。コーヒーを飲みながら日本語を勉強しています。",
         "2026年3月3日に出発する。",
     ])
@@ -131,15 +150,16 @@ import Testing
         for word in result.measurements.romaji {
             let first = word.characters.lowerBound
             let last = word.characters.upperBound - 1
-            let center = (x[first] + result.shifts[first] + x[last] + result.shifts[last] + widths[last]) / 2
-            // At the start of the text, romaji start with it.
-            let left = previousRight == nil ? max(center - word.width / 2, 0) : center - word.width / 2
+            var center = (x[first] + result.shifts[first] + x[last] + result.shifts[last] + widths[last]) / 2
+            // Romaji start and end within the text.
+            center = max(min(center, x[characters.count] - word.width / 2), word.width / 2)
+            let left = center - word.width / 2
             if let previousRight {
                 #expect(left >= previousRight + Self.romajiSpacing - 0.001, "\(word.text) collides")
             }
             previousRight = left + word.width
         }
-        // Romaji past the end get room after the last character.
+        // No romaji runs past the end, where space doesn't widen the text.
         #expect(previousRight ?? 0 <= x[characters.count] + 0.001)
     }
 }
