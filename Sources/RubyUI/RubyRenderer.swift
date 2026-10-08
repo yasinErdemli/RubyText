@@ -141,6 +141,7 @@ struct RubyRenderer: TextRenderer {
             layer.translateBy(x: 0, y: -(1 - romaji) * slide)
             for (text, fragment, _) in Self.pieces(of: below) {
                 var annotationContext = layer
+                annotationContext.opacity *= fragment.annotation.opacity
                 let tinted = emphasize(fragment, in: &annotationContext, lines: emphasizedLines)
                 var resolved = annotationContext.resolve(Text(verbatim: text).font(metrics.annotationFont))
                 // Romaji use the tertiary foreground style, so

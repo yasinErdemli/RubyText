@@ -23,8 +23,6 @@ public struct RubyEmphasis: OptionSet, Hashable, Sendable {
     public static let grow = RubyEmphasis(rawValue: 1 << 2)
     /// Sweeps the tint color across the word as it's spoken.
     public static let karaoke = RubyEmphasis(rawValue: 1 << 3)
-
-    public static let all: RubyEmphasis = [.tint, .highlight, .grow, .karaoke]
 }
 
 extension EnvironmentValues {

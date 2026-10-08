@@ -48,6 +48,7 @@ public struct RubyText: View {
     @Environment(\.rubyAnalyzer) private var analyzer
     @Environment(\.rubyStyle) private var style
     @Environment(\.rubyFuriganaFilter) private var furiganaFilter
+    @Environment(\.rubyDigitReadingsHidden) private var digitReadingsHidden
     @Environment(\.rubySpacing) private var spacing
     @Environment(\.rubyWordColoring) private var wordColoring
     /// The tapped word whose details are showing, and where it is.
@@ -89,6 +90,7 @@ public struct RubyText: View {
             furigana: style.contains(.furigana) ? 1 : 0,
             romaji: style.contains(.romaji) ? 1 : 0,
             readingVisibility: readingVisibility(in: content),
+            romajiVisibility: romajiVisibility(in: content),
             wordGaps: wordGaps(in: content),
             // Computed here, not inside the animated content view, so
             // style transitions don't re-run vocabulary and JLPT lookups
@@ -107,6 +109,7 @@ public struct RubyText: View {
         // style switches without animating.
         .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: style)
         .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: furiganaFilter)
+        .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: digitReadingsHidden)
         .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: spacing)
     }
 
@@ -116,8 +119,25 @@ public struct RubyText: View {
     private func readingVisibility(in content: RubyContent) -> RubyAnimatableVector {
         RubyAnimatableVector(values: content.words.flatMap(\.furigana).map { reading in
             let base = RubyReadingUnits.substring(of: content.string, utf16Range: reading.range)
+            if digitReadingsHidden && Self.isDigitNumber(base) { return 0 }
             return furiganaFilter.showsReading(over: base) ? 1 : 0
         })
+    }
+
+    /// Whether each word's romaji shows, one value per word with romaji, in
+    /// content order. Romaji hide over numbers in digits along with their
+    /// furigana, so a number shows both readings or neither.
+    private func romajiVisibility(in content: RubyContent) -> RubyAnimatableVector {
+        RubyAnimatableVector(values: content.words.filter { $0.romaji != nil }.map { word in
+            let base = RubyReadingUnits.substring(of: content.string, utf16Range: word.range)
+            return digitReadingsHidden && Self.isDigitNumber(base) ? 0 : 1
+        })
+    }
+
+    /// Whether `text` is a number written in digits, half or full width,
+    /// such as 2026年 or ３日. Kanji numerals are numeric but not decimal.
+    static func isDigitNumber(_ text: String) -> Bool {
+        text.unicodeScalars.first?.properties.numericType == .decimal
     }
 
     /// The space after each UTF-16 offset in the text, as a fraction of the
@@ -158,6 +178,7 @@ private struct RubyTextContent: View {
     var furigana: CGFloat
     var romaji: CGFloat
     var readingVisibility: RubyAnimatableVector
+    var romajiVisibility: RubyAnimatableVector
     var wordGaps: RubyAnimatableVector
     /// Precomputed by `RubyText`, so word coloring doesn't re-run its
     /// lookups on every frame of a style animation.
@@ -194,6 +215,7 @@ private struct RubyTextContent: View {
                 furigana: furigana,
                 romaji: romaji,
                 readingVisibility: readingVisibility,
+                romajiVisibility: romajiVisibility,
                 wordGaps: wordGaps,
                 fontSize: metrics.fontSize,
                 lineBreaking: lineBreaking,
@@ -445,6 +467,9 @@ private final class RubyMeasurements {
     }
 
     struct Romaji {
+        /// Index among the content's words with romaji, for
+        /// `romajiVisibility`.
+        let source: Int
         let characters: Range<Int>
         let range: Range<Int>
         let text: String
@@ -488,6 +513,7 @@ private final class RubyMeasurements {
         var furigana: [Furigana] = []
         var romaji: [Romaji] = []
         var source = 0
+        var romajiSource = 0
         for word in content.words {
             for reading in word.furigana {
                 defer { source += 1 }
@@ -503,9 +529,11 @@ private final class RubyMeasurements {
                 ))
             }
             if let text = word.romaji {
+                defer { romajiSource += 1 }
                 let indices = characterRange(word.range)
                 guard !indices.isEmpty else { continue }
                 romaji.append(Romaji(
+                    source: romajiSource,
                     characters: indices,
                     range: word.range,
                     text: text,
@@ -550,6 +578,7 @@ private struct RubyLayout {
         furigana: CGFloat,
         romaji: CGFloat,
         readingVisibility: RubyAnimatableVector,
+        romajiVisibility: RubyAnimatableVector,
         wordGaps: RubyAnimatableVector,
         fontSize: CGFloat,
         lineBreaking: RubyLineBreaking,
@@ -585,7 +614,8 @@ private struct RubyLayout {
                 let width = word.baseWidth + word.characters.reduce(0) { $0 + tracking[$1] }
                 let extra = word.width - width
                 guard extra > 0 else { continue }
-                let share = extra * romaji / CGFloat(word.characters.count)
+                let share = extra * romaji * romajiVisibility.value(at: word.source, default: 1)
+                    / CGFloat(word.characters.count)
                 for index in word.characters { tracking[index] += share }
             }
         }
@@ -641,10 +671,13 @@ private struct RubyLayout {
         }
         if romaji > 0 {
             for (id, word) in measurements.romaji.enumerated() {
+                let visibility = romajiVisibility.value(at: word.source, default: 1)
+                guard visibility > 0 else { continue }
                 let placed = Self.place(word.range, paragraphStarts: paragraphStarts)
                 paragraphs[placed.paragraph].below.append(RubyAnnotation(
                     id: id, text: word.text, range: placed.range, baseCount: word.characters.count,
-                    color: colors[word.characters.lowerBound]
+                    color: colors[word.characters.lowerBound],
+                    opacity: visibility
                 ))
             }
         }
@@ -693,7 +726,7 @@ private struct RubyLayout {
             // Manual readings override automatic ones; multiple paragraphs.
             RubyText(verbatim: "{今日|きょう}は{東京|とうきょう}へ{行|い}きたい。\n\nコーヒーを飲みたい。")
                 .font(.title2.bold())
-                .rubyStyle(.all)
+                .rubyStyle([.furigana, .romaji])
 
             // Long word forced to wrap: its reading is split, not duplicated.
             RubyText(verbatim: "きのう日本語能力試験を受けた。")
@@ -726,7 +759,7 @@ private struct RubyLayout {
             .foregroundStyle(.primary, .primary, .primary)
     }
     .font(.title3)
-    .rubyStyle(.all)
+    .rubyStyle([.furigana, .romaji])
     .padding()
 }
 
@@ -742,7 +775,7 @@ private struct RubyLayout {
             Text("None").tag(RubyStyle())
             Text("Furigana").tag(RubyStyle.furigana)
             Text("Romaji").tag(RubyStyle.romaji)
-            Text("Both").tag(RubyStyle.all)
+            Text("Both").tag(RubyStyle([.furigana, .romaji]))
         }
         .pickerStyle(.segmented)
     }
