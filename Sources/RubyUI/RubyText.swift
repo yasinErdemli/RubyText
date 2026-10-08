@@ -465,7 +465,10 @@ final class RubyMeasurements {
         /// UTF-16 range of those characters.
         let range: Range<Int>
         let text: String
-        /// How much wider the reading is than its base text.
+        /// How much the reading is narrowed horizontally, from 1 (natural
+        /// width) down to `RubyMeasurements.minimumScale`.
+        let scale: CGFloat
+        /// How much wider the reading, as narrowed, is than its base text.
         let extraWidth: CGFloat
         /// How far the reading may extend over the kana before and after
         /// its base, which have no readings of their own, before the base
@@ -483,8 +486,17 @@ final class RubyMeasurements {
         let characters: Range<Int>
         let range: Range<Int>
         let text: String
+        /// How much the romaji are narrowed horizontally.
+        let scale: CGFloat
+        /// Width as drawn, after narrowing.
         let width: CGFloat
     }
+
+    /// How narrow readings over numbers in digits may become. Their readings
+    /// are long for their base (にせんにじゅうろく over 2026), so they're
+    /// condensed, as Japanese typesetting does with long ruby, rather than
+    /// spreading the text apart.
+    static let minimumScale: CGFloat = 0.75
 
     let characters: [Character]
     /// Width of each character in the base font.
@@ -558,18 +570,32 @@ final class RubyMeasurements {
             return shared ? allowance * 0.6 : allowance
         }
 
+        /// How much to narrow an annotation `width` wide over `indices`, so
+        /// it fits in `available` where possible: only over numbers in
+        /// digits, and no narrower than `minimumScale`.
+        func scale(_ width: CGFloat, over indices: Range<Int>, available: CGFloat) -> CGFloat {
+            guard width > available, RubyText.isDigitNumber(String(characters[indices])) else { return 1 }
+            return max(Self.minimumScale, available / width)
+        }
+
         var furigana: [Furigana] = []
         for (source, reading) in readings.enumerated() {
             let indices = characterRange(reading.range)
             guard !indices.isEmpty else { continue }
+            let baseWidth = indices.reduce(0) { $0 + widths[$1] }
+            let leading = overhang(from: indices.lowerBound - 1, step: -1)
+            let trailing = overhang(from: indices.upperBound, step: 1)
+            let natural = annotationWidth(reading.text)
+            let scale = scale(natural, over: indices, available: baseWidth + leading + trailing)
             furigana.append(Furigana(
                 source: source,
                 characters: indices,
                 range: reading.range,
                 text: reading.text,
-                extraWidth: annotationWidth(reading.text) - indices.reduce(0) { $0 + widths[$1] },
-                leadingOverhang: overhang(from: indices.lowerBound - 1, step: -1),
-                trailingOverhang: overhang(from: indices.upperBound, step: 1),
+                scale: scale,
+                extraWidth: natural * scale - baseWidth,
+                leadingOverhang: leading,
+                trailingOverhang: trailing,
                 startsParagraph: indices.lowerBound == 0 || characters[indices.lowerBound - 1].isNewline
             ))
         }
@@ -577,12 +603,15 @@ final class RubyMeasurements {
         for (source, word) in content.romajiWords.enumerated() {
             let indices = characterRange(word.range)
             guard !indices.isEmpty else { continue }
+            let natural = annotationWidth(word.text)
+            let scale = scale(natural, over: indices, available: indices.reduce(0) { $0 + widths[$1] })
             romaji.append(Romaji(
                 source: source,
                 characters: indices,
                 range: word.range,
                 text: word.text,
-                width: annotationWidth(word.text)
+                scale: scale,
+                width: natural * scale
             ))
         }
 
@@ -700,7 +729,8 @@ struct RubyLayout {
                 paragraphs[placed.paragraph].above.append(RubyAnnotation(
                     id: id, text: reading.text, range: placed.range, baseCount: reading.characters.count,
                     color: colors[reading.characters.lowerBound],
-                    opacity: visibility
+                    opacity: visibility,
+                    scale: reading.scale
                 ))
             }
         }
@@ -712,7 +742,8 @@ struct RubyLayout {
                 paragraphs[placed.paragraph].below.append(RubyAnnotation(
                     id: id, text: word.text, range: placed.range, baseCount: word.characters.count,
                     color: colors[word.characters.lowerBound],
-                    opacity: visibility
+                    opacity: visibility,
+                    scale: word.scale
                 ))
             }
         }

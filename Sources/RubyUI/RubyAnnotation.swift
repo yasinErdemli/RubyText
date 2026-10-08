@@ -25,6 +25,9 @@ struct RubyAnnotation {
     var color: Color? = nil
     /// How visible it is under the furigana filter, from 0 to 1.
     var opacity: CGFloat = 1
+    /// Horizontal scale it's drawn at; below 1 for long readings over
+    /// numbers in digits.
+    var scale: CGFloat = 1
 }
 
 /// A word drawn with a colored background.

@@ -136,7 +136,7 @@ struct RubyRenderer: TextRenderer {
                 var annotationContext = layer
                 annotationContext.opacity *= fragment.annotation.opacity
                 let tinted = emphasize(fragment, in: &annotationContext, lines: emphasizedLines)
-                drawFurigana(text, over: fragment.rect, at: center, spread: !isSplit, tinted: tinted, color: fragment.annotation.color, in: &annotationContext)
+                drawFurigana(text, over: fragment.rect, at: center, scale: fragment.annotation.scale, spread: !isSplit, tinted: tinted, color: fragment.annotation.color, in: &annotationContext)
             }
         }
         if romaji > 0 {
@@ -160,7 +160,9 @@ struct RubyRenderer: TextRenderer {
                 } else {
                     .style(.tertiary)
                 }
-                annotationContext.draw(resolved, at: CGPoint(x: center, y: fragment.rect.maxY + metrics.gap), anchor: .top)
+                annotationContext.translateBy(x: center, y: fragment.rect.maxY + metrics.gap)
+                annotationContext.scaleBy(x: fragment.annotation.scale, y: 1)
+                annotationContext.draw(resolved, at: .zero, anchor: .top)
             }
         }
     }
@@ -325,7 +327,7 @@ struct RubyRenderer: TextRenderer {
     ) -> [CGFloat] {
         let widths = pieces.map { text, fragment, isSplit in
             let natural = context.resolve(Text(verbatim: text).font(metrics.annotationFont))
-                .measure(in: CGSize(width: CGFloat.infinity, height: .infinity)).width
+                .measure(in: CGSize(width: CGFloat.infinity, height: .infinity)).width * fragment.annotation.scale
             return spreads && !isSplit && text.count > 1 ? max(natural, fragment.rect.width) : natural
         }
         var centers = pieces.map { $0.1.rect.midX }
@@ -363,6 +365,7 @@ struct RubyRenderer: TextRenderer {
         _ text: String,
         over rect: CGRect,
         at center: CGFloat,
+        scale: CGFloat,
         spread: Bool,
         tinted: Bool,
         color: Color?,
@@ -371,7 +374,7 @@ struct RubyRenderer: TextRenderer {
         let natural = context.resolve(Text(verbatim: text).font(metrics.annotationFont))
         let width = natural.measure(in: CGSize(width: CGFloat.infinity, height: .infinity)).width
         var tracking: CGFloat = 0
-        if spread, text.count > 1 {
+        if spread, scale == 1, text.count > 1 {
             tracking = max(0, rect.width - width) / CGFloat(text.count)
         }
         var resolved = context.resolve(
@@ -388,8 +391,10 @@ struct RubyRenderer: TextRenderer {
             .style(.secondary)
         }
         // Offset by half the trailing tracking so the visible glyphs are centered.
-        let point = CGPoint(x: center + tracking / 2, y: rect.minY - metrics.gap)
-        context.draw(resolved, at: point, anchor: .bottom)
+        var drawing = context
+        drawing.translateBy(x: center + tracking / 2, y: rect.minY - metrics.gap)
+        drawing.scaleBy(x: scale, y: 1)
+        drawing.draw(resolved, at: .zero, anchor: .bottom)
     }
 
     private static func add(
