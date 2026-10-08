@@ -48,19 +48,19 @@ import Testing
         #expect(result.shifts == [0, 1, 1, 0])
     }
 
-    @Test func readingsOverhangLettersAndDigits() {
+    @Test func readingsFlowOverCharactersWithoutReadings() {
         // The reading is 3 units wider than 東. It starts with the
-        // paragraph, and m and half of で take 1.5 units of it.
+        // paragraph, and flows over m and で, which take 2 units of it.
         let result = spaced("{東|あいうえおかきく}mで")
         #expect(result.shifts[0] == 0)
-        #expect(result.tracking[0] == 1.5)
+        #expect(result.tracking[0] == 1)
     }
 
     @Test func readingsOverDigitsAreNarrowed() {
-        // さんびゃくさんじゅうさん (6 units) narrows to the 4.5 units of 333,
-        // m, and half of で, so nothing moves.
+        // さんびゃくさんじゅうさん (6 units) narrows to the 5 units of 333,
+        // m, and で, so nothing moves.
         let fitting = spaced("{333|さんびゃくさんじゅうさん}mで")
-        #expect(fitting.measurements.furigana.first?.scale == 0.75)
+        #expect(abs((fitting.measurements.furigana.first?.scale ?? 0) - 5.0 / 6.0) < 0.0001)
         #expect(fitting.tracking.allSatisfy { $0 == 0 })
 
         // Narrowed no further than three quarters: 5 units become 3.75.
@@ -73,17 +73,25 @@ import Testing
     }
 
     @Test func readingsShareTheSpaceBetweenThem() {
-        // The space between 東京 and 大阪 goes to both readings, not just one.
-        let result = spaced("{東京|とうきょうとうきょう}・{大阪|おおさかおおさか}")
-        let gap = result.tracking[1] + result.shifts[3]
-        #expect(gap > 0)
+        // Both readings flow over ・ without meeting.
+        let result = spaced("{東京|あいうえかきくけ}・{大阪|さしすせたちつて}")
+        let widths = result.measurements.widths
+        var x: [CGFloat] = [0]
+        for index in widths.indices { x.append(x[index] + widths[index] + result.tracking[index]) }
+        // The first reading starts with the paragraph; the second is
+        // centered over 大阪. Each is 4 units wide.
+        let firstEnd: CGFloat = 4
+        let secondCenter = x[3] + result.shifts[3] + 1
+        #expect(secondCenter - 2 - firstEnd >= 0.125 - 0.001)
+        #expect(result.tracking[1] < 2, "・ took part of the space")
     }
 
     @Test func readingsStartWithTheParagraph() {
-        // さむらい starts with 侍 instead of indenting it.
-        let result = spaced("{侍|さむらい}の")
+        // The reading starts with 侍 instead of indenting it, flows over
+        // の, and needs 2 more units after it.
+        let result = spaced("{侍|さむらいさむらい}の")
         #expect(result.shifts[0] == 0)
-        #expect(result.tracking[0] == 0.5)
+        #expect(result.tracking[0] == 2)
     }
 
     @Test(arguments: [

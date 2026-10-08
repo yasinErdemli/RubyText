@@ -470,9 +470,9 @@ final class RubyMeasurements {
         let scale: CGFloat
         /// How much wider the reading, as narrowed, is than its base text.
         let extraWidth: CGFloat
-        /// How far the reading may extend over the kana before and after
-        /// its base, which have no readings of their own, before the base
-        /// needs space around it.
+        /// How far the reading may extend over the characters before and
+        /// after its base, which have no readings of their own, before the
+        /// base needs space around it.
         let leadingOverhang: CGFloat
         let trailingOverhang: CGFloat
         /// Whether the base starts a paragraph. The reading then starts
@@ -546,28 +546,22 @@ final class RubyMeasurements {
         for reading in readings {
             for index in characterRange(reading.range) { hasReading[index] = true }
         }
-        // How far a reading may extend past its base on one side, over
-        // characters without readings of their own: half of a kana, as
-        // <ruby> does in Japanese typesetting so the kana still reads as its
-        // own (新しい, 東京の), and all of any Latin letters, digits, spaces,
-        // and punctuation (333m, iOS 27). When another reading sits beyond
-        // that space, each gets part of it, keeping the readings apart.
+        // How far a reading may extend past its base on one side: over
+        // every neighboring character without a reading of its own, such as
+        // kana, letters, digits, and punctuation, so a long reading flows
+        // over them (にせんにじゅうろくねん over 2026年に) instead of pushing
+        // them apart. When another reading sits beyond that space, the two
+        // share it, with a small gap between them.
+        let readingGap = annotationWidth("あ") / 4
         func overhang(from start: Int, step: Int) -> CGFloat {
             var allowance: CGFloat = 0
             var index = start
             while characters.indices.contains(index), !hasReading[index], !characters[index].isNewline {
-                let character = characters[index]
-                if RubyReadings.isKanji(character) { return allowance }
-                if RubyReadings.isJapanese(character) {
-                    allowance += widths[index] / 2
-                    index += step
-                    break
-                }
                 allowance += widths[index]
                 index += step
             }
             let shared = characters.indices.contains(index) && hasReading[index]
-            return shared ? allowance * 0.6 : allowance
+            return shared ? max(0, allowance / 2 - readingGap / 2) : allowance
         }
 
         /// How much to narrow an annotation `width` wide over `indices`, so
