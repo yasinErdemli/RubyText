@@ -81,7 +81,7 @@ package final class RubyContent {
 
         // Tokenize the whole string so manual readings don't cut words apart
         // (行き in "{行|い}きたい" still reads "iki"), then apply them on top.
-        let automatic = Self.words(from: analyzer.segments(in: string))
+        let automatic = Self.words(from: Self.segments(in: string, analyzer: analyzer))
         guard !manual.isEmpty else {
             words = automatic
             return
@@ -144,6 +144,12 @@ package final class RubyContent {
     private init(segments: [RubySegment]) {
         self.string = segments.map(\.base).joined()
         self.words = Self.words(from: segments)
+    }
+
+    /// Segments for `text` from the automatic layers, in priority order:
+    /// rules, then the analyzer's dictionary readings.
+    package static func segments(in text: String, analyzer: any RubyAnalyzer) -> [RubySegment] {
+        RubyNumberReadings.apply(to: analyzer.segments(in: text))
     }
 
     /// Converts segments into ranged words, computing furigana and romaji

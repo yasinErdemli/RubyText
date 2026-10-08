@@ -158,7 +158,7 @@ public final class RubyReader {
             defer { isPreparing = false }
             let analyzer = analyzer
             anchors = try await RubyNarrationAligner.anchors(for: url, units: units) {
-                RubyContent.words(from: analyzer.segments(in: $0))
+                RubyContent.words(from: RubyContent.segments(in: $0, analyzer: analyzer))
             }
             alignments[key] = anchors
         }
