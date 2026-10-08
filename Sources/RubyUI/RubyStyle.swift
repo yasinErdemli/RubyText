@@ -135,21 +135,11 @@ public struct RubySpacing: Hashable, Sendable {
 
 /// Where `RubyText` may break lines.
 public enum RubyLineBreaking: Hashable, Sendable {
-    /// Between words only, so words like 東京 or 勉強 never split across
-    /// lines. On macOS lines break between whole phrases (東京へ, 日本語を),
-    /// like `word-break: auto-phrase` on the web. A word longer than a line
+    /// Between phrases, so words stay with their particles and endings
+    /// (東京へ, 日本語を) and never split across lines, like
+    /// `word-break: auto-phrase` on the web. A phrase longer than a line
     /// still breaks within it.
     case words
-    /// Between reading phrases only, on every platform: a word stays with
-    /// its particles and endings (東京へ, 勉強して), so no line starts with
-    /// a lone を or ends a sentence with a lone す。. Suits learners'
-    /// text with romaji or word spacing. A phrase longer than a line still
-    /// breaks within it.
-    ///
-    /// The text system has no setting for this, so the view joins each
-    /// phrase's characters with invisible word joiners (U+2060). Text
-    /// copied from a selectable view includes them.
-    case phrases
     /// Between almost any two characters, following the rules against
     /// starting a line with 。 or ゃ.
     case anywhere
@@ -157,12 +147,11 @@ public enum RubyLineBreaking: Hashable, Sendable {
     /// The language that selects the text system's line breaking: tagging
     /// text as Japanese turns on its word-aware Japanese breaking, and the
     /// line-word option (`lw=phrase`) asks for phrases where it's
-    /// supported. Untagged text breaks between characters, except where
-    /// word joiners hold them together; Japanese breaking ignores joiners.
+    /// supported. Untagged text breaks between characters.
     var languageIdentifier: String? {
         switch self {
         case .words: "ja-u-lw-phrase"
-        case .phrases, .anywhere: nil
+        case .anywhere: nil
         }
     }
 }

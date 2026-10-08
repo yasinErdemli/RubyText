@@ -42,10 +42,25 @@ import Testing
     }
 
     @Test func spaceGoesAroundTheWord() {
-        // Two units wider than 東京; 。 on each side takes half a unit.
-        let result = spaced("。{東京|あいうえかきくけ}。")
-        #expect(result.tracking == [0, 0, 1, 0])
-        #expect(result.shifts == [0, 0.5, 0.5, 0])
+        // Two units wider than 東京, between kanji that take none of it.
+        let result = spaced("{漢|かん}{東京|あいうえかきくけ}{字|じ}")
+        #expect(result.tracking == [0, 0, 2, 0])
+        #expect(result.shifts == [0, 1, 1, 0])
+    }
+
+    @Test func readingsOverhangLettersAndDigits() {
+        // さんびゃくさんじゅうさん is 3 units wider than 333. It starts with
+        // the paragraph, and m and half of で take 1.5 units of it.
+        let result = spaced("{333|さんびゃくさんじゅうさん}mで")
+        #expect(result.shifts[0] == 0)
+        #expect(result.tracking[2] == 1.5)
+    }
+
+    @Test func readingsShareTheSpaceBetweenThem() {
+        // The space between 東京 and 大阪 goes to both readings, not just one.
+        let result = spaced("{東京|とうきょうとうきょう}・{大阪|おおさかおおさか}")
+        let gap = result.tracking[1] + result.shifts[3]
+        #expect(gap > 0)
     }
 
     @Test func readingsStartWithTheParagraph() {

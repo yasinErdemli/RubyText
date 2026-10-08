@@ -1,6 +1,9 @@
 import RubyCore
 import SwiftUI
 import CoreText
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// An annotation to draw above or below a range of base text.
 ///
@@ -70,6 +73,8 @@ struct RubyMetrics {
 
     /// Annotations use the base font scaled down, so they keep its family and weight.
     let annotationFont: Font
+    /// The base font as the text sets it; see `phraseBreaking(_:)`.
+    let textFont: Font
     private let base: Font.Resolved
     private let annotation: Font.Resolved
 
@@ -77,6 +82,39 @@ struct RubyMetrics {
         annotationFont = font.scaled(by: Self.annotationScale)
         base = font.resolve(in: context)
         annotation = annotationFont.resolve(in: context)
+        textFont = Font(Self.phraseBreaking(base.ctFont))
+    }
+
+    private static let phraseBreakingFonts = NSCache<CTFont, CTFont>()
+
+    /// The same font without its text style.
+    ///
+    /// Japanese text breaks lines between phrases (東京へ|行きたい) only in
+    /// fonts without a Dynamic Type text style; in a text-style font such
+    /// as `.body` it breaks between almost any two characters (東京|へ).
+    /// The font keeps its face, size, weight, and design, so the text looks
+    /// the same, and is resolved again whenever Dynamic Type changes.
+    static func phraseBreaking(_ font: CTFont) -> CTFont {
+        #if canImport(UIKit)
+        if let cached = phraseBreakingFonts.object(forKey: font) { return cached }
+        var attributes = CTFontDescriptorCopyAttributes(CTFontCopyFontDescriptor(font)) as? [CFString: Any] ?? [:]
+        guard attributes.removeValue(forKey: UIFontDescriptor.AttributeName.textStyle.rawValue as CFString) != nil
+        else { return font }
+        // The traits keep the design (rounded, serif); the variation keeps
+        // the exact weight, since an emphasized style reports bold but
+        // draws semibold.
+        var traits = CTFontCopyTraits(font) as? [CFString: Any] ?? [:]
+        traits.removeValue(forKey: kCTFontSymbolicTrait)
+        attributes[kCTFontTraitsAttribute] = traits
+        if let variation = CTFontCopyVariation(font) { attributes[kCTFontVariationAttribute] = variation }
+        let result = CTFontCreateWithFontDescriptor(
+            CTFontDescriptorCreateWithAttributes(attributes as CFDictionary), CTFontGetSize(font), nil
+        )
+        phraseBreakingFonts.setObject(result, forKey: font)
+        return result
+        #else
+        font
+        #endif
     }
 
     /// Identifies the resolved fonts, for caching measurements.
