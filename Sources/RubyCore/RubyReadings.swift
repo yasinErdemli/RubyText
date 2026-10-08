@@ -62,12 +62,19 @@ package nonisolated enum RubyReadings {
     /// Splits a word's reading over its kanji, leaving kana that the reading
     /// repeats (okurigana) unannotated: 食べ物 + たべもの → 食:た, 物:もの.
     ///
+    /// Readings show as written, so katakana stays katakana ({本気|マジ}).
+    /// They're matched against the base in hiragana.
+    ///
     /// - Parameter force: Annotate the whole base even if it has no kanji,
     ///   for readings the author supplied explicitly.
-    package static func furigana(base: String, reading: String, offset: Int, force: Bool) -> [RubyReading] {
-        let reading = hiragana(reading)
+    package static func furigana(base: String, reading written: String, offset: Int, force: Bool) -> [RubyReading] {
+        let reading = hiragana(written)
         guard !reading.isEmpty else { return [] }
-        let whole = [RubyReading(range: offset..<(offset + base.utf16.count), text: reading)]
+        // Converting to hiragana keeps each character in place unless the
+        // reading has half-width kana, which it combines (ｶﾞ → が); then
+        // show the converted reading.
+        let shown = written.utf16.count == reading.utf16.count ? written : reading
+        let whole = [RubyReading(range: offset..<(offset + base.utf16.count), text: shown)]
 
         guard base.contains(where: isKanji) else { return force ? whole : [] }
 
@@ -98,8 +105,8 @@ package nonisolated enum RubyReadings {
         for run in runs {
             let length = run.text.utf16.count
             if run.isKanji {
-                if let range = Range(match.range(at: group), in: reading) {
-                    readings.append(RubyReading(range: position..<(position + length), text: String(reading[range])))
+                if let range = Range(match.range(at: group), in: shown) {
+                    readings.append(RubyReading(range: position..<(position + length), text: String(shown[range])))
                 }
                 group += 1
             }
@@ -119,8 +126,43 @@ package nonisolated enum RubyReadings {
         }
     }
 
+    /// Converts katakana to hiragana, keeping the long-vowel mark:
+    /// コーヒー → こーひー. Half-width katakana is widened first (ｶﾞ → が).
+    ///
+    /// Foundation's hiragana transform isn't used because it spells out
+    /// long vowels (こおひい), which changes how a reading looks.
     package static func hiragana(_ text: String) -> String {
-        text.applyingTransform(.hiraganaToKatakana, reverse: true) ?? text
+        var scalars = String.UnicodeScalarView()
+        for scalar in widened(text).unicodeScalars {
+            switch scalar.value {
+            // ァ through ヴ, and the repetition marks ヽヾ. ヵ and ヶ stay:
+            // they're read か and こ in 3ヶ月, so they act as kanji.
+            case 0x30A1...0x30F4, 0x30FD...0x30FE:
+                scalars.append(Unicode.Scalar(scalar.value - 0x60)!)
+            default:
+                scalars.append(scalar)
+            }
+        }
+        return String(scalars)
+    }
+
+    /// `text` with half-width katakana (U+FF65–U+FF9F) made full width and
+    /// its voicing marks combined; everything else unchanged.
+    private static func widened(_ text: String) -> String {
+        let isHalfWidth = { (scalar: Unicode.Scalar) in (0xFF65...0xFF9F).contains(scalar.value) }
+        guard text.unicodeScalars.contains(where: isHalfWidth) else { return text }
+        var result = ""
+        var run = ""
+        for character in text {
+            if character.unicodeScalars.allSatisfy(isHalfWidth) {
+                run.append(character)
+            } else {
+                result += run.precomposedStringWithCompatibilityMapping
+                run = ""
+                result.append(character)
+            }
+        }
+        return result + run.precomposedStringWithCompatibilityMapping
     }
 
     package static func isKanji(_ character: Character) -> Bool {

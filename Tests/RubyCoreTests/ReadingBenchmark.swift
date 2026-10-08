@@ -346,6 +346,8 @@ private let controlCases = [
     c("経済", "けいざい", in: "経済が成長している。", .control),
     c("自転車", "じてんしゃ", in: "自転車で通勤する。", .control),
     c("携帯電話", "けいたいでんわ", in: "携帯電話を忘れた。", .control),
-    // Katakana in a word with kanji keeps its ー (the ＡＩ bug: ー became い).
-    c("生ビール", "なまびーる", in: "生ビールを一杯ください。", .control, mecab: "なまびいる"),
+    // Katakana keeps its ー (the ＡＩ bug: ー became い).
+    c("生ビール", "なまびーる", in: "生ビールを一杯ください。", .control),
+    c("コーヒー", "こーひー", in: "コーヒーを飲んだ。", .control),
+    c("ラーメン屋", "らーめんや", in: "ラーメン屋に入った。", .control),
 ]
