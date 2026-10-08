@@ -1,0 +1,230 @@
+import RubyCore
+import SwiftUI
+
+/// Colors individual words, to show learners how a sentence is built.
+///
+/// Color by grammar, mark where words begin and end, pick out vocabulary,
+/// or show JLPT levels. Each can color the text or the background behind
+/// it, and a text coloring and a background coloring can be combined:
+///
+///     RubyText("吾輩は猫である。名前はまだ無い。")
+///         .rubyWordColors(.partOfSpeech)
+///         .rubyWordColors(.words(["猫", "名前"]), in: .background)
+///
+/// A colored word's furigana and romaji take its color.
+public struct RubyWordColors: Hashable, Sendable {
+    private enum Rule: Hashable, Sendable {
+        case partOfSpeech([RubyPartOfSpeech: Color])
+        case alternating([Color])
+        case words([String: Color])
+        case jlpt([RubyJLPTLevel: Color], vocabulary: [String: RubyJLPTLevel])
+    }
+
+    private let rule: Rule
+
+    /// Colors each word by its grammatical role: nouns blue, verbs red,
+    /// adjectives green, particles orange, and so on.
+    public static let partOfSpeech = partOfSpeech(defaultPartOfSpeechColors)
+
+    /// Colors each word by its grammatical role, with your own colors.
+    /// Roles without a color stay uncolored.
+    public static func partOfSpeech(_ colors: [RubyPartOfSpeech: Color]) -> RubyWordColors {
+        RubyWordColors(rule: .partOfSpeech(colors))
+    }
+
+    /// The colors `partOfSpeech` uses.
+    public static let defaultPartOfSpeechColors: [RubyPartOfSpeech: Color] = [
+        .noun: .blue,
+        .verb: .red,
+        .adjective: .green,
+        .adverb: .purple,
+        .particle: .orange,
+        .auxiliary: .brown,
+        .adnominal: .teal,
+        .conjunction: .indigo,
+        .prefix: .mint,
+        .interjection: .cyan,
+    ]
+
+    /// Alternates between two colors from word to word, to show where each
+    /// word begins and ends in text without spaces.
+    public static let alternating = alternating([.blue, .orange])
+
+    /// Cycles through `colors` from word to word.
+    public static func alternating(_ colors: [Color]) -> RubyWordColors {
+        RubyWordColors(rule: .alternating(colors))
+    }
+
+    /// Colors chosen words, such as a lesson's vocabulary. Each key matches
+    /// a word as written (名前), a word in any conjugation by its dictionary
+    /// form (生まれる matches 生まれた), or a run of whole words (見当がつく).
+    public static func words(_ colors: [String: Color]) -> RubyWordColors {
+        RubyWordColors(rule: .words(colors))
+    }
+
+    /// Colors chosen words with one color.
+    public static func words(_ words: some Sequence<String>, color: Color = .orange) -> RubyWordColors {
+        RubyWordColors(rule: .words(Dictionary(words.map { ($0, color) }, uniquingKeysWith: { first, _ in first })))
+    }
+
+    /// Colors each word by its JLPT level, from green for N5 to red for N1.
+    public static let jlpt = jlpt(defaultJLPTColors)
+
+    /// Colors each word by its JLPT level, with your own colors. Leave out
+    /// the levels a learner already knows to mark only harder words:
+    ///
+    ///     .jlpt([.n2: .orange, .n1: .red])
+    ///
+    /// A word's level is its hardest kanji's level. Kanji beyond the JLPT
+    /// count as N1, and words without kanji have no level unless
+    /// `vocabulary` gives them one. `vocabulary` maps words, as written or
+    /// in dictionary form, to levels from your own word lists, and takes
+    /// precedence over kanji.
+    public static func jlpt(
+        _ colors: [RubyJLPTLevel: Color] = defaultJLPTColors,
+        vocabulary: [String: RubyJLPTLevel] = [:]
+    ) -> RubyWordColors {
+        RubyWordColors(rule: .jlpt(colors, vocabulary: vocabulary))
+    }
+
+    /// The colors `jlpt` uses.
+    public static let defaultJLPTColors: [RubyJLPTLevel: Color] = [
+        .n5: .green,
+        .n4: .blue,
+        .n3: .purple,
+        .n2: .orange,
+        .n1: .red,
+    ]
+
+    /// The color of each of `words`, which come from `text`.
+    func colors(for words: [RubyWord], in text: String) -> [Color?] {
+        switch rule {
+        case .partOfSpeech(let colors):
+            return words.map { $0.partOfSpeech.flatMap { colors[$0] } }
+        case .alternating(let colors):
+            guard !colors.isEmpty else { return words.map { _ in nil } }
+            return words.indices.map { colors[$0 % colors.count] }
+        case .words(let colors):
+            return Self.vocabularyColors(colors, for: words, in: text)
+        case .jlpt(let colors, let vocabulary):
+            let levels = words.map { word in
+                RubyJLPTLevel.level(
+                    of: RubyReadingUnits.substring(of: text, utf16Range: word.range),
+                    dictionaryForm: word.dictionaryForm,
+                    vocabulary: vocabulary
+                )
+            }
+            return Self.spreadingToEndings(levels.map { $0.flatMap { colors[$0] } }, words: words)
+        }
+    }
+
+    /// Gives a colored verb or adjective's uncolored conjugated endings its
+    /// color, so 生まれた is colored as one word.
+    private static func spreadingToEndings(_ colors: [Color?], words: [RubyWord]) -> [Color?] {
+        var colors = colors
+        for index in words.indices.dropFirst() where colors[index] == nil {
+            guard let previous = colors[index - 1],
+                  words[index].attachesToPrevious == true,
+                  words[index].range.lowerBound == words[index - 1].range.upperBound,
+                  let role = words[index].partOfSpeech, role == .auxiliary || role == .verb || role == .adjective,
+                  let head = words[..<index].last(where: { $0.partOfSpeech != .auxiliary })?.partOfSpeech,
+                  head == .verb || head == .adjective
+            else { continue }
+            colors[index] = previous
+        }
+        return colors
+    }
+
+    private static func vocabularyColors(_ colors: [String: Color], for words: [RubyWord], in text: String) -> [Color?] {
+        let surfaces = words.map { RubyReadingUnits.substring(of: text, utf16Range: $0.range) }
+        var result = [Color?](repeating: nil, count: words.count)
+        var index = 0
+        while index < words.count {
+            guard let (color, count) = match(colors, at: index, words: words, surfaces: surfaces) else {
+                index += 1
+                continue
+            }
+            var end = index + count
+            // Include a verb or adjective's conjugated endings, so 生まれる
+            // marks all of 生まれた, but not the particles after it.
+            if let last = words[end - 1].partOfSpeech, last == .verb || last == .adjective {
+                while end < words.count,
+                      words[end].attachesToPrevious == true,
+                      words[end].range.lowerBound == words[end - 1].range.upperBound,
+                      let role = words[end].partOfSpeech, role == .auxiliary || role == .verb || role == .adjective {
+                    end += 1
+                }
+            }
+            for covered in index..<end { result[covered] = color }
+            index = end
+        }
+        return result
+    }
+
+    /// The color and number of words matched starting at `index`. The
+    /// longest match wins, so 見当がつく takes precedence over 見当.
+    private static func match(
+        _ colors: [String: Color],
+        at index: Int,
+        words: [RubyWord],
+        surfaces: [String]
+    ) -> (Color, Int)? {
+        var best: (color: Color, count: Int)?
+        if let color = colors[surfaces[index]] ?? words[index].dictionaryForm.flatMap({ colors[$0] }) {
+            best = (color, 1)
+        }
+        // Keys spanning several adjacent words, as written or ending in a
+        // dictionary form (見当がつく matches 見当がつか).
+        for (key, color) in colors {
+            var written = surfaces[index]
+            var end = index + 1
+            while end < words.count, written.count < key.count,
+                  words[end].range.lowerBound == words[end - 1].range.upperBound {
+                let lemma = written + (words[end].dictionaryForm ?? surfaces[end])
+                written += surfaces[end]
+                end += 1
+                if written == key || lemma == key, end - index > best?.count ?? 0 {
+                    best = (color, end - index)
+                }
+            }
+        }
+        return best
+    }
+}
+
+/// Where `RubyWordColors` are applied.
+public enum RubyWordColorPlacement: Hashable, Sendable {
+    /// Colors the word's glyphs.
+    case text
+    /// Draws a rounded background behind the word and its annotations,
+    /// lightened so the text stays readable.
+    case background
+}
+
+/// The word colorings in effect: one for text and one for backgrounds.
+struct RubyWordColoring: Hashable, Sendable {
+    var text: RubyWordColors?
+    var background: RubyWordColors?
+
+    var isEmpty: Bool { text == nil && background == nil }
+}
+
+extension EnvironmentValues {
+    /// How `RubyText` colors individual words. None by default.
+    @Entry var rubyWordColoring = RubyWordColoring()
+}
+
+extension View {
+    /// Colors individual words in `RubyText` views in this hierarchy.
+    ///
+    /// Text and background colorings are set independently, so call this
+    /// once for each to combine them. Pass `nil` to remove a coloring.
+    public func rubyWordColors(_ colors: RubyWordColors?, in placement: RubyWordColorPlacement = .text) -> some View {
+        transformEnvironment(\.rubyWordColoring) { coloring in
+            switch placement {
+            case .text: coloring.text = colors
+            case .background: coloring.background = colors
+            }
+        }
+    }
+}

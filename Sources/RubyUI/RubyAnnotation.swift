@@ -1,0 +1,108 @@
+import RubyCore
+import SwiftUI
+import CoreText
+
+/// An annotation to draw above or below a range of base text.
+///
+/// Annotations are handed to `RubyRenderer` directly instead of being
+/// attached to the `Text` with `customAttribute(_:)`: custom attributes travel
+/// with copied text and make the system fail to write the pasteboard, which
+/// breaks Copy for the whole selection.
+struct RubyAnnotation {
+    /// Distinguishes adjacent annotations.
+    let id: Int
+    let text: String
+    /// UTF-16 offsets of the base text within its paragraph, matching the
+    /// paragraph-relative `Text.Layout.Run.characterIndices`.
+    let range: Range<Int>
+    /// Number of characters in the base text, used to split the annotation
+    /// if the base wraps across lines.
+    let baseCount: Int
+    /// The color of the word it annotates, from `rubyWordColors(_:in:)`.
+    var color: Color? = nil
+    /// How visible it is under the furigana filter, from 0 to 1.
+    var opacity: CGFloat = 1
+}
+
+/// A word drawn with a colored background.
+struct RubyColoredRange {
+    /// UTF-16 offsets within the paragraph.
+    let range: Range<Int>
+    let color: Color
+}
+
+/// Tracking added to a range of base text to make room for annotations
+/// and word spacing.
+struct RubyTrackedRange {
+    /// UTF-16 offsets within the paragraph.
+    let range: Range<Int>
+    /// Tracking that widens each glyph's box for annotations; glyphs are
+    /// centered in it.
+    let tracking: CGFloat
+    /// Word spacing after each glyph, which isn't part of its box.
+    var gap: CGFloat = 0
+}
+
+/// Everything the renderer needs for one paragraph, sorted by range.
+struct RubyParagraph {
+    var tracked: [RubyTrackedRange] = []
+    var above: [RubyAnnotation] = []
+    var below: [RubyAnnotation] = []
+    var backgrounds: [RubyColoredRange] = []
+}
+
+/// The word a `RubyReader` is speaking, and how far along it is.
+struct RubyEmphasisState {
+    let options: RubyEmphasis
+    let paragraph: Int
+    /// UTF-16 offsets within the paragraph.
+    let range: Range<Int>
+    /// Eases from 0 to 1 just after the word starts, for grow and highlight.
+    let appear: CGFloat
+    /// Estimated fraction of the word spoken so far, for karaoke.
+    let progress: CGFloat
+}
+
+/// Size relationships between base text and its annotations, derived from
+/// the font in the environment.
+struct RubyMetrics {
+    static let annotationScale: CGFloat = 0.5
+
+    /// Annotations use the base font scaled down, so they keep its family and weight.
+    let annotationFont: Font
+    private let base: Font.Resolved
+    private let annotation: Font.Resolved
+
+    init(font: Font, in context: Font.Context) {
+        annotationFont = font.scaled(by: Self.annotationScale)
+        base = font.resolve(in: context)
+        annotation = annotationFont.resolve(in: context)
+    }
+
+    /// Identifies the resolved fonts, for caching measurements.
+    var cacheKey: String {
+        "\(CTFontCopyPostScriptName(base.ctFont)) \(base.pointSize) \(CTFontCopyPostScriptName(annotation.ctFont)) \(annotation.pointSize)"
+    }
+
+    /// Point size of the base font.
+    var fontSize: CGFloat { base.pointSize }
+    /// Space between the base glyphs and an annotation.
+    var gap: CGFloat { base.pointSize * 0.06 }
+    /// Vertical space reserved above or below every line for annotations.
+    var reservedHeight: CGFloat { (annotation.pointSize * 1.2 + gap).rounded(.up) }
+    /// Minimum horizontal space between neighboring romaji words.
+    var romajiSpacing: CGFloat { annotation.pointSize * 0.4 }
+
+    func baseWidth(of string: String) -> CGFloat { Self.width(of: string, font: base.ctFont) }
+    func annotationWidth(of string: String) -> CGFloat { Self.width(of: string, font: annotation.ctFont) }
+
+    /// Typographic width of `string` set in `font`.
+    private static func width(of string: String, font: CTFont) -> CGFloat {
+        let attributed = NSAttributedString(
+            string: string,
+            attributes: [NSAttributedString.Key(kCTFontAttributeName as String): font]
+        )
+        let line = CTLineCreateWithAttributedString(attributed)
+        return CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
+    }
+}
