@@ -147,9 +147,14 @@ package final class RubyContent {
     }
 
     /// Segments for `text` from the automatic layers, in priority order:
-    /// rules, then the analyzer's dictionary readings.
+    /// rules, then the analyzer's dictionary readings. Each rule only
+    /// replaces segments still read by the analyzer.
     package static func segments(in text: String, analyzer: any RubyAnalyzer) -> [RubySegment] {
-        RubyNumberReadings.apply(to: analyzer.segments(in: text))
+        var segments = analyzer.segments(in: text)
+        segments = RubyPhraseReadings.applyPhrases(to: segments)
+        segments = RubyNumberReadings.apply(to: segments)
+        segments = RubyPhraseReadings.applySuffixes(to: segments)
+        return segments
     }
 
     /// Converts segments into ranged words, computing furigana and romaji

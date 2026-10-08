@@ -15,35 +15,7 @@ import Foundation
 package enum RubyNumberReadings {
     /// `segments` with each number, and the counter after it, read by rule.
     package static func apply(to segments: [RubySegment]) -> [RubySegment] {
-        let characters = segments.flatMap { Array($0.base) }
-        var ends: [Int: Int] = [:] // Character offset of each segment end → its index.
-        var starts: [Int] = []
-        var offset = 0
-        for (index, segment) in segments.enumerated() {
-            starts.append(offset)
-            offset += segment.base.count
-            ends[offset] = index
-        }
-
-        var result: [RubySegment] = []
-        var index = 0
-        while index < segments.count {
-            let start = starts[index]
-            if let match = match(in: characters, at: start, endingAt: { ends[$0] != nil }),
-               let last = ends[match.end] {
-                result.append(RubySegment(
-                    String(characters[start..<match.end]),
-                    reading: match.reading,
-                    word: RubySegment.Word(partOfSpeech: .noun, dictionaryForm: nil, attachesToPrevious: false),
-                    source: .rule
-                ))
-                index = last + 1
-            } else {
-                result.append(segments[index])
-                index += 1
-            }
-        }
-        return result
+        RubyRuleSpans.replacing(segments, match: match)
     }
 
     /// The reading of a number with an optional counter, such as 3 and 日,
@@ -57,14 +29,9 @@ package enum RubyNumberReadings {
 
     // MARK: Matching
 
-    private struct Match {
-        let end: Int
-        let reading: String
-    }
-
     /// A number starting at `start`, with the longest counter after it
     /// whose end `isBoundary` accepts.
-    private static func match(in text: [Character], at start: Int, endingAt isBoundary: (Int) -> Bool) -> Match? {
+    private static func match(in text: [Character], at start: Int, endingAt isBoundary: (Int) -> Bool) -> RubyRuleSpans.Match? {
         guard let number = parseNumber(in: text, at: start) else { return nil }
 
         // Any counter can take 間 for a span of time (六日間, 十分間), which
@@ -81,13 +48,13 @@ package enum RubyNumberReadings {
             // Context checks look right after the counter itself.
             let counterEnd = suffix.isEmpty ? end : end - 1
             if let reading = reading(of: number, counter: rule, in: text, end: counterEnd) {
-                return Match(end: end, reading: reading + suffix)
+                return RubyRuleSpans.Match(end: end, reading: reading + suffix)
             }
         }
         // Kanji numerals without a counter are usually part of a word (第一,
         // 一緒, 万一); digits are always numbers.
         guard number.isDigits, isBoundary(number.end) else { return nil }
-        return Match(end: number.end, reading: number.spoken.text)
+        return RubyRuleSpans.Match(end: number.end, reading: number.spoken.text)
     }
 
     private static func reading(of number: ParsedNumber, counter rule: Counter, in text: [Character], end: Int) -> String? {
