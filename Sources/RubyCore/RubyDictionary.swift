@@ -4,8 +4,9 @@ import Synchronization
 
 /// English definitions of Japanese words, from the bundled JMdict.
 ///
-/// JMdict is the work of the Electronic Dictionaries Research Group
-/// (https://www.edrdg.org/jmdict/j_jmdict.html), used under CC BY-SA 4.0.
+/// JMdict is the work of the Electronic Dictionary Research and
+/// Development Group (https://www.edrdg.org/jmdict/j_jmdict.html), used
+/// under CC BY-SA 4.0.
 /// Apps showing its definitions must credit it; `RubyDictionary.credit`
 /// has suitable wording. Tools/build-dictionary.py builds the database.
 public nonisolated final class RubyDictionary: Sendable {
@@ -13,7 +14,7 @@ public nonisolated final class RubyDictionary: Sendable {
     package static let shared = RubyDictionary(url: Bundle.main.url(forResource: "jmdict", withExtension: "sqlite"))
 
     /// Attribution the JMdict license requires wherever definitions show.
-    public static let credit = "Definitions from JMdict, © Electronic Dictionaries Research Group, CC BY-SA 4.0."
+    public static let credit = "Definitions from JMdict, © Electronic Dictionary Research and Development Group, CC BY-SA 4.0."
 
     /// One dictionary entry: a word with its spellings, readings, and senses.
     public struct Entry: Identifiable, Hashable, Sendable {
