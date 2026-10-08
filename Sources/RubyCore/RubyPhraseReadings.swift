@@ -63,6 +63,9 @@ package enum RubyPhraseReadings {
         ("一足早く", "ひとあしはやく"),
         ("一足先", "ひとあしさき"),
         ("一通り", "ひととおり"),
+        // Analyzers split 振り|仮名 and read 仮名 かめい, "pseudonym".
+        ("振り仮名", "ふりがな"),
+        ("振仮名", "ふりがな"),
         ("一晩", "ひとばん"),
         ("国中", "くにじゅう"),
     ].sorted { $0.0.count > $1.0.count }

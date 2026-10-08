@@ -283,6 +283,7 @@ private let phraseCases = [
 
     // Idioms, several with numerals the number rules must leave alone.
     c("一足先", "ひとあしさき", in: "一足先に帰ります。", .phrase),
+    c("振り仮名", "ふりがな", in: "漢字に振り仮名を付ける。", .phrase),
     c("一通り", "ひととおり", in: "一通り説明した。", .phrase),
     c("七転八倒", "しちてんばっとう", in: "痛みで七転八倒した。", .phrase),
     c("一人旅", "ひとりたび", in: "一人旅が好きだ。", .phrase),
