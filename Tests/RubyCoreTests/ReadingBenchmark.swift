@@ -1,6 +1,11 @@
 import Testing
 
 /// A word whose reading is easy to get wrong, in a sentence that decides it.
+///
+/// Every sentence must make the reading obvious to a person: the word may
+/// be tricky for a dictionary, but the context settles it. Several
+/// readings are accepted only where both are standard (明日 あした or
+/// あす), never because the sentence leaves the meaning open.
 struct BenchmarkCase: Sendable, CustomTestStringConvertible {
     enum Kind: String, CaseIterable, Sendable {
         /// Dates, times, and amounts, which need their own rules.
@@ -208,12 +213,12 @@ private let meaningCases = [
     c("止める", "とめる", in: "車を止める。", .meaning),
     c("行った", "おこなった", in: "会議を行った。", .meaning),
     c("行った", "いった", in: "学校に行った。", .meaning),
-    c("十分", "じゅうぶん", in: "昨日は十分休んだ。", .meaning),
+    c("十分", "じゅうぶん", in: "昨日は十分に休んだので、今日は元気だ。", .meaning),
     c("上手", "じょうず", in: "歌が上手だ。", .meaning),
     c("下手", "へた", in: "絵が下手だ。", .meaning),
     c("大家", "たいか", in: "書道の大家として知られる。", .meaning, mecab: "おおや"),
     c("一日", "いちにち", in: "一日休んだ。", .meaning),
-    c("今日", "こんにち", in: "今日の日本経済は厳しい。", .meaning, mecab: "きょう"),
+    c("今日", "こんにち", in: "明治時代から今日に至るまで、この伝統は続いている。", .meaning, mecab: "きょう"),
     c("色紙", "いろがみ", in: "色紙で鶴を折った。", .meaning),
     c("色紙", "しきし", in: "色紙にサインをもらった。", .meaning, mecab: "いろがみ"),
     c("寒気", "かんき", in: "寒気が南下している。", .meaning, mecab: "さむけ"),
@@ -221,7 +226,7 @@ private let meaningCases = [
     c("最中", "もなか", in: "和菓子の最中を食べた。", .meaning, mecab: "さいちゅう"),
     c("何", "なに", in: "何を食べますか。", .meaning),
     c("何", "なん", in: "これは何ですか。", .meaning, mecab: "なに"),
-    c("開く", "あく", "ひらく", in: "ドアが開く。", .meaning),
+    c("開いた", "あいた", in: "靴下に穴が開いた。", .meaning, mecab: "ひらいた"),
     c("開く", "ひらく", in: "会議を開く。", .meaning),
     c("空いた", "すいた", in: "お腹が空いた。", .meaning, mecab: "あいた"),
     c("空いた", "あいた", in: "席が空いた。", .meaning),
@@ -306,7 +311,6 @@ private let nameCases = [
     c("花子", "はなこ", in: "花子は学生です。", .name),
     c("長谷川", "はせがわ", in: "長谷川さんが来た。", .name),
     c("服部", "はっとり", in: "服部さんは忍者の子孫だ。", .name),
-    c("東海林", "しょうじ", "とうかいりん", in: "東海林さんは営業部です。", .name),
     c("夏目漱石", "なつめそうせき", in: "夏目漱石の小説を読んだ。", .name),
     c("東京", "とうきょう", in: "東京に住んでいる。", .name),
     c("大阪", "おおさか", in: "大阪で生まれた。", .name),

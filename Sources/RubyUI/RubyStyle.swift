@@ -31,11 +31,18 @@ public struct RubyStyle: OptionSet, Hashable, Sendable {
 ///
 /// A reading spanning several kanji, like せいさく over 政策, shows if any
 /// of them is unknown. Changing the filter fades readings in and out.
+///
+/// Numbers are read with their counter, so 3日 shows みっか. Hide readings
+/// over numbers written in digits with `hidingDigits()`:
+///
+///     .rubyFurigana(.all.hidingDigits())   // no furigana over 2026年 or 3日
 public struct RubyFuriganaFilter: Hashable, Sendable {
     /// The hardest JLPT level the learner knows, if any.
     private var knownLevel: RubyJLPTLevel?
     /// Kanji the learner knows regardless of level.
     private var knownKanji: Set<Character> = []
+    /// Whether readings over numbers written in digits are hidden.
+    private var hidesDigits = false
 
     /// Furigana on every kanji.
     public static let all = RubyFuriganaFilter()
@@ -53,9 +60,23 @@ public struct RubyFuriganaFilter: Hashable, Sendable {
         RubyFuriganaFilter(knownKanji: Set(knownKanji))
     }
 
+    /// This filter, without furigana over numbers written in digits, such
+    /// as 2026年, 3日, or 10分. Their romaji and spoken timing stay, and
+    /// numbers in kanji (三日) keep their furigana.
+    public func hidingDigits() -> RubyFuriganaFilter {
+        var filter = self
+        filter.hidesDigits = true
+        return filter
+    }
+
     /// Whether to show the reading of `base`, the text it sits over.
     /// Readings over kana, which only manual markup creates, always show.
     func showsReading(over base: String) -> Bool {
+        // Decimal digits, half or full width; kanji numerals are numeric
+        // but not decimal.
+        if hidesDigits, base.unicodeScalars.first?.properties.numericType == .decimal {
+            return false
+        }
         let kanji = base.filter(RubyJLPTKanji.isGraded)
         guard !kanji.isEmpty else { return true }
         return kanji.contains { !isKnown($0) }

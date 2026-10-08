@@ -41,6 +41,11 @@ let package = Package(
             swiftSettings: swiftSettings + [.defaultIsolation(MainActor.self)]
         ),
         .testTarget(
+            name: "RubyUITests",
+            dependencies: ["RubyCore", "RubyUI"],
+            swiftSettings: swiftSettings + [.defaultIsolation(MainActor.self)]
+        ),
+        .testTarget(
             name: "RubyCoreTests",
             dependencies: ["RubyCore"],
             swiftSettings: swiftSettings
