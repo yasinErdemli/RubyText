@@ -41,6 +41,9 @@ struct RubyRenderer: TextRenderer {
         var below: [Fragment] = []
         // Bounds of the spoken word on each line it appears on.
         var emphasizedLines: [Int: CGRect] = [:]
+        // Annotations may extend past their words, but not past the text.
+        let lineRects = layout.map(\.typographicBounds.rect)
+        let edges = (lineRects.map(\.minX).min() ?? 0)...(lineRects.map(\.maxX).max() ?? 0)
 
         for (lineNumber, line, paragraph, start) in layout.rubyParagraphLines {
             guard paragraphs.indices.contains(paragraph) else {
@@ -57,7 +60,7 @@ struct RubyRenderer: TextRenderer {
             }
 
             let spokenRange = emphasis.flatMap { $0.paragraph == paragraph ? $0.range : nil }
-            var emphasizedSlices: [(slice: Text.Layout.RunSlice, tracking: CGFloat)] = []
+            var emphasizedSlices: [(slice: Text.Layout.RunSlice, shift: CGFloat)] = []
             var wordRect = CGRect.null
 
             for run in line {
@@ -68,9 +71,8 @@ struct RubyRenderer: TextRenderer {
                 }
                 func isSpoken(_ index: Int) -> Bool { spokenRange?.contains(offsets[index]) ?? false }
 
-                // Draw glyphs in slices that share the same tracking. Tracking
-                // pads after every glyph, so shift each slice by half of it
-                // to center the glyphs in their widened boxes. Slices of the
+                // Draw glyphs in slices that share the same spacing, each
+                // shifted right within the space before it. Slices of the
                 // spoken word are drawn afterwards, with emphasis.
                 var lower = 0
                 while lower < run.count {
@@ -83,13 +85,11 @@ struct RubyRenderer: TextRenderer {
                         upper += 1
                     }
                     let slice = run[lower..<upper]
-                    let tracking = tracked?.tracking ?? 0
+                    let shift = tracked?.shift ?? 0
                     if spoken {
-                        emphasizedSlices.append((slice, tracking))
+                        emphasizedSlices.append((slice, shift))
                     } else {
-                        var shifted = context
-                        shifted.translateBy(x: tracking / 2, y: 0)
-                        shifted.draw(slice)
+                        Self.draw(slice, shift: shift, in: context)
                     }
                     lower = upper
                 }
@@ -128,18 +128,24 @@ struct RubyRenderer: TextRenderer {
             var layer = context
             layer.opacity = furigana
             layer.translateBy(x: 0, y: (1 - furigana) * slide)
-            for (text, fragment, isSplit) in Self.pieces(of: above) {
+            let pieces = Self.pieces(of: above)
+            // Readings of neighboring kanji (経済|政策) may touch; others
+            // keep a little space.
+            let centers = placeAnnotations(pieces, spreads: true, spacing: metrics.romajiSpacing / 2, within: edges, in: context)
+            for ((text, fragment, isSplit), center) in zip(pieces, centers) {
                 var annotationContext = layer
                 annotationContext.opacity *= fragment.annotation.opacity
                 let tinted = emphasize(fragment, in: &annotationContext, lines: emphasizedLines)
-                drawFurigana(text, over: fragment.rect, spread: !isSplit, tinted: tinted, color: fragment.annotation.color, in: &annotationContext)
+                drawFurigana(text, over: fragment.rect, at: center, spread: !isSplit, tinted: tinted, color: fragment.annotation.color, in: &annotationContext)
             }
         }
         if romaji > 0 {
             var layer = context
             layer.opacity = romaji
             layer.translateBy(x: 0, y: -(1 - romaji) * slide)
-            for (text, fragment, _) in Self.pieces(of: below) {
+            let pieces = Self.pieces(of: below)
+            let centers = placeAnnotations(pieces, spreads: false, spacing: metrics.romajiSpacing, within: edges, in: context)
+            for ((text, fragment, _), center) in zip(pieces, centers) {
                 var annotationContext = layer
                 annotationContext.opacity *= fragment.annotation.opacity
                 let tinted = emphasize(fragment, in: &annotationContext, lines: emphasizedLines)
@@ -154,8 +160,7 @@ struct RubyRenderer: TextRenderer {
                 } else {
                     .style(.tertiary)
                 }
-                let point = CGPoint(x: fragment.rect.midX, y: fragment.rect.maxY + metrics.gap)
-                annotationContext.draw(resolved, at: point, anchor: .top)
+                annotationContext.draw(resolved, at: CGPoint(x: center, y: fragment.rect.maxY + metrics.gap), anchor: .top)
             }
         }
     }
@@ -205,7 +210,7 @@ struct RubyRenderer: TextRenderer {
 
     /// Draws the spoken word's glyphs on one line with the chosen effects.
     private func drawSpokenWord(
-        _ slices: [(slice: Text.Layout.RunSlice, tracking: CGFloat)],
+        _ slices: [(slice: Text.Layout.RunSlice, shift: CGFloat)],
         in rect: CGRect,
         emphasis: RubyEmphasisState,
         context: GraphicsContext
@@ -236,14 +241,14 @@ struct RubyRenderer: TextRenderer {
 
         let colorsGlyphs = !emphasis.options.isDisjoint(with: [.tint, .karaoke])
         guard colorsGlyphs else {
-            for item in slices { Self.draw(item.slice, tracking: item.tracking, in: context) }
+            for item in slices { Self.draw(item.slice, shift: item.shift, in: context) }
             return
         }
 
         // Draw the glyphs into a layer, then paint the tint only where the
         // glyphs are, using the source-atop blend mode.
         context.drawLayer { layer in
-            for item in slices { Self.draw(item.slice, tracking: item.tracking, in: layer) }
+            for item in slices { Self.draw(item.slice, shift: item.shift, in: layer) }
             layer.blendMode = .sourceAtop
 
             // Generously cover glyph overhang beyond the typographic bounds.
@@ -281,9 +286,9 @@ struct RubyRenderer: TextRenderer {
         context.translateBy(x: -rect.midX, y: -rect.midY)
     }
 
-    /// The box of the glyph at `index`, including tracking added for
-    /// annotations but not word spacing after it, so readings, highlights,
-    /// and backgrounds stay centered on the glyph.
+    /// The box of the glyph at `index` where it's drawn, without the space
+    /// added around it, so readings, highlights, and backgrounds stay
+    /// centered on the glyph.
     private static func glyphBox(
         in run: Text.Layout.Run,
         at index: Int,
@@ -291,16 +296,63 @@ struct RubyRenderer: TextRenderer {
         tracked: [RubyTrackedRange]
     ) -> CGRect {
         var box = run[index..<(index + 1)].typographicBounds.rect
-        if let gap = item(at: offset, in: tracked, range: \.range)?.gap, gap > 0 {
-            box.size.width = max(box.width - gap, 0)
+        if let spacing = item(at: offset, in: tracked, range: \.range) {
+            box.origin.x += spacing.shift
+            box.size.width = max(box.width - spacing.tracking, 0)
         }
         return box
     }
 
-    private static func draw(_ slice: Text.Layout.RunSlice, tracking: CGFloat, in context: GraphicsContext) {
+    private static func draw(_ slice: Text.Layout.RunSlice, shift: CGFloat, in context: GraphicsContext) {
         var context = context
-        context.translateBy(x: tracking / 2, y: 0)
+        context.translateBy(x: shift, y: 0)
         context.draw(slice)
+    }
+
+    /// Where to center each annotation: over its base, unless that would
+    /// put it past the edge of the text, such as at the start of a wrapped
+    /// line; then it moves inside, and neighbors on its line move along so
+    /// none overlap.
+    ///
+    /// - Parameter spreads: Whether readings narrower than their base are
+    ///   spread across it, taking its full width.
+    private func placeAnnotations(
+        _ pieces: [(String, Fragment, Bool)],
+        spreads: Bool,
+        spacing: CGFloat,
+        within edges: ClosedRange<CGFloat>,
+        in context: GraphicsContext
+    ) -> [CGFloat] {
+        let widths = pieces.map { text, fragment, isSplit in
+            let natural = context.resolve(Text(verbatim: text).font(metrics.annotationFont))
+                .measure(in: CGSize(width: CGFloat.infinity, height: .infinity)).width
+            return spreads && !isSplit && text.count > 1 ? max(natural, fragment.rect.width) : natural
+        }
+        var centers = pieces.map { $0.1.rect.midX }
+        for indices in Dictionary(grouping: pieces.indices, by: { pieces[$0].1.line }).values {
+            let order = indices.sorted { centers[$0] < centers[$1] }
+            // Space between two annotations, unless their bases touch.
+            func space(_ first: Int, _ second: Int) -> CGFloat {
+                pieces[second].1.rect.minX - pieces[first].1.rect.maxX > 0.5 || !spreads ? spacing : 0
+            }
+            // Left to right, keep each clear of the edge and the one before.
+            var previous: (index: Int, right: CGFloat)?
+            for index in order {
+                let limit = previous.map { $0.right + space($0.index, index) } ?? edges.lowerBound
+                let left = max(centers[index] - widths[index] / 2, limit)
+                centers[index] = left + widths[index] / 2
+                previous = (index, left + widths[index])
+            }
+            // Then right to left, pulling back any past the far edge.
+            var next: (index: Int, left: CGFloat)?
+            for index in order.reversed() {
+                let limit = next.map { $0.left - space(index, $0.index) } ?? edges.upperBound
+                let right = min(centers[index] + widths[index] / 2, limit)
+                centers[index] = right - widths[index] / 2
+                next = (index, right - widths[index])
+            }
+        }
+        return centers
     }
 
     // MARK: Annotations
@@ -310,15 +362,16 @@ struct RubyRenderer: TextRenderer {
     private func drawFurigana(
         _ text: String,
         over rect: CGRect,
+        at center: CGFloat,
         spread: Bool,
         tinted: Bool,
         color: Color?,
         in context: inout GraphicsContext
     ) {
+        let natural = context.resolve(Text(verbatim: text).font(metrics.annotationFont))
+        let width = natural.measure(in: CGSize(width: CGFloat.infinity, height: .infinity)).width
         var tracking: CGFloat = 0
         if spread, text.count > 1 {
-            let natural = context.resolve(Text(verbatim: text).font(metrics.annotationFont))
-            let width = natural.measure(in: CGSize(width: CGFloat.infinity, height: .infinity)).width
             tracking = max(0, rect.width - width) / CGFloat(text.count)
         }
         var resolved = context.resolve(
@@ -335,7 +388,7 @@ struct RubyRenderer: TextRenderer {
             .style(.secondary)
         }
         // Offset by half the trailing tracking so the visible glyphs are centered.
-        let point = CGPoint(x: rect.midX + tracking / 2, y: rect.minY - metrics.gap)
+        let point = CGPoint(x: center + tracking / 2, y: rect.minY - metrics.gap)
         context.draw(resolved, at: point, anchor: .bottom)
     }
 

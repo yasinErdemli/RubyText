@@ -31,16 +31,16 @@ struct RubyColoredRange {
     let color: Color
 }
 
-/// Tracking added to a range of base text to make room for annotations
-/// and word spacing.
+/// Space added to a range of base text to make room for annotations and
+/// word spacing.
 struct RubyTrackedRange {
     /// UTF-16 offsets within the paragraph.
     let range: Range<Int>
-    /// Tracking that widens each glyph's box for annotations; glyphs are
-    /// centered in it.
+    /// Space after each glyph, which isn't part of its box.
     let tracking: CGFloat
-    /// Word spacing after each glyph, which isn't part of its box.
-    var gap: CGFloat = 0
+    /// How far each glyph is drawn to the right of where the layout puts
+    /// it, so space can sit before a word as well as after it.
+    var shift: CGFloat = 0
 }
 
 /// Everything the renderer needs for one paragraph, sorted by range.
