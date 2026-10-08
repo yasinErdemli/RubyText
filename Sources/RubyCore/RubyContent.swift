@@ -36,27 +36,39 @@ package final class RubyContent {
         return groups.map(\.range)
     }()
 
-    private static let markupCache = NSCache<NSString, RubyContent>()
-    private static let segmentsCache = NSCache<RubySegmentsCacheKey, RubyContent>()
+    private static let markupCache = NSCache<RubyCacheKey<MarkupKey>, RubyContent>()
+    private static let segmentsCache = NSCache<RubyCacheKey<[RubySegment]>, RubyContent>()
 
-    package static func content(for markup: String) -> RubyContent {
-        if let cached = markupCache.object(forKey: markup as NSString) { return cached }
-        let content = RubyContent(markup: markup)
-        markupCache.setObject(content, forKey: markup as NSString)
+    /// Markup analyzed by a particular analyzer.
+    private struct MarkupKey: Hashable {
+        let markup: String
+        let analyzer: AnyHashable
+    }
+
+    /// Content for `markup`, with readings `analyzer` finds wherever the
+    /// markup doesn't supply them.
+    package static func content(
+        for markup: String,
+        analyzer: any RubyAnalyzer = RubyMeCabAnalyzer.shared
+    ) -> RubyContent {
+        let key = RubyCacheKey(MarkupKey(markup: markup, analyzer: AnyHashable(analyzer)))
+        if let cached = markupCache.object(forKey: key) { return cached }
+        let content = RubyContent(markup: markup, analyzer: analyzer)
+        markupCache.setObject(content, forKey: key)
         return content
     }
 
     /// Content built directly from segments the caller supplies, with no
     /// analysis: `RubyText(segments:)`'s way of showing an app's own data.
     package static func content(for segments: [RubySegment]) -> RubyContent {
-        let key = RubySegmentsCacheKey(segments)
+        let key = RubyCacheKey(segments)
         if let cached = segmentsCache.object(forKey: key) { return cached }
         let content = RubyContent(segments: segments)
         segmentsCache.setObject(content, forKey: key)
         return content
     }
 
-    private init(markup: String, analyzer: any RubyAnalyzer = RubyMeCabAnalyzer.shared) {
+    private init(markup: String, analyzer: any RubyAnalyzer) {
         var string = ""
         var manual: [RubyWord] = []
         for piece in RubyMarkup.parse(markup) {
@@ -165,18 +177,18 @@ package final class RubyContent {
     }
 }
 
-/// Identifies a segment array for `RubyContent`'s cache. `NSCache` keys must
-/// be objects, and arrays of a value type aren't.
-private final class RubySegmentsCacheKey: NSObject {
-    let segments: [RubySegment]
+/// Wraps a value as a key for `RubyContent`'s caches. `NSCache` keys must be
+/// objects, and value types aren't.
+private final class RubyCacheKey<Value: Hashable>: NSObject {
+    let value: Value
 
-    init(_ segments: [RubySegment]) {
-        self.segments = segments
+    init(_ value: Value) {
+        self.value = value
     }
 
-    override var hash: Int { segments.hashValue }
+    override var hash: Int { value.hashValue }
 
     override func isEqual(_ object: Any?) -> Bool {
-        (object as? RubySegmentsCacheKey)?.segments == segments
+        (object as? RubyCacheKey<Value>)?.value == value
     }
 }

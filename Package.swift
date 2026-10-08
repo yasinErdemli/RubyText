@@ -40,6 +40,11 @@ let package = Package(
             dependencies: ["RubyCore"],
             swiftSettings: swiftSettings + [.defaultIsolation(MainActor.self)]
         ),
+        .testTarget(
+            name: "RubyCoreTests",
+            dependencies: ["RubyCore"],
+            swiftSettings: swiftSettings
+        ),
     ],
     swiftLanguageModes: [.v5]
 )

@@ -33,6 +33,9 @@ import SwiftUI
 /// Attach a `RubyReader` with `rubyReader(_:)` to emphasize each word as it's
 /// read aloud, styled with `rubyEmphasis(_:)`.
 ///
+/// Readings come from MeCab with IPAdic unless you choose another analyzer
+/// with `rubyAnalyzer(_:)`.
+///
 /// Annotations are drawn by `RubyRenderer` and aren't part of the text
 /// content, so selection, copy, and VoiceOver only see the base text.
 public struct RubyText: View {
@@ -42,6 +45,7 @@ public struct RubyText: View {
     }
     private let input: Input
 
+    @Environment(\.rubyAnalyzer) private var analyzer
     @Environment(\.rubyStyle) private var style
     @Environment(\.rubyFuriganaFilter) private var furiganaFilter
     @Environment(\.rubySpacing) private var spacing
@@ -77,7 +81,7 @@ public struct RubyText: View {
         // Cached per markup or segment array, so this is cheap after the
         // first time.
         let content: RubyContent = switch input {
-        case .markup(let markup): .content(for: markup)
+        case .markup(let markup): .content(for: markup, analyzer: analyzer)
         case .segments(let segments): .content(for: segments)
         }
         RubyTextContent(
@@ -125,6 +129,23 @@ public struct RubyText: View {
         var values = [Double](repeating: 0, count: content.string.utf16.count + 1)
         for offset in boundaries { values[offset] = spacing.width }
         return RubyAnimatableVector(values: values)
+    }
+}
+
+extension EnvironmentValues {
+    /// Finds words and readings for `RubyText` views. MeCab with IPAdic by
+    /// default.
+    @Entry var rubyAnalyzer: any RubyAnalyzer = RubyMeCabAnalyzer.shared
+}
+
+extension View {
+    /// Sets the analyzer `RubyText` views in this hierarchy use to find
+    /// words and readings, such as one backed by another dictionary.
+    ///
+    /// Give a `RubyReader` reading the same text the same analyzer, so the
+    /// phrases it emphasizes match the views' words.
+    public func rubyAnalyzer(_ analyzer: any RubyAnalyzer) -> some View {
+        environment(\.rubyAnalyzer, analyzer)
     }
 }
 

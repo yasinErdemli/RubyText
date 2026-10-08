@@ -26,6 +26,15 @@ public nonisolated final class RubyMeCabAnalyzer: RubyAnalyzer, @unchecked Senda
         state = Mutex(State(recorder: recorder, tokenizer: tokenizer))
     }
 
+    /// There's only one instance, so analyzers compare by identity.
+    public static func == (lhs: RubyMeCabAnalyzer, rhs: RubyMeCabAnalyzer) -> Bool {
+        lhs === rhs
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(ObjectIdentifier(self))
+    }
+
     /// Segments covering all of `text`. Returns only plain segments, so
     /// text shows without annotations, if the dictionary failed to load.
     public func segments(in text: String) -> [RubySegment] {

@@ -24,6 +24,9 @@ import Synchronization
 ///   spoken with on-device speech recognition.
 @Observable
 public final class RubyReader {
+    /// Finds the words and phrases to emphasize. Use the same analyzer as
+    /// the `RubyText` views showing the text.
+    public let analyzer: any RubyAnalyzer
     /// Speech rate relative to the system default, from 0.5 (slow) to 2.
     /// Applies to synthesized speech.
     public var rate: Float = 1
@@ -74,7 +77,10 @@ public final class RubyReader {
     @ObservationIgnored private var interruptionObservers: [NotificationCenter.ObservationToken] = []
     @ObservationIgnored private var routeChangeObserver: Task<Void, Never>?
 
-    public init() {
+    /// Creates a reader that finds phrases with `analyzer`, MeCab with
+    /// IPAdic by default.
+    public init(analyzer: any RubyAnalyzer = RubyMeCabAnalyzer.shared) {
+        self.analyzer = analyzer
         #if os(iOS)
         interruptionObservers = [
             NotificationCenter.default.addObserver(for: AVAudioSession.DidBecomeInactiveMessage.self) { [weak self] message in
@@ -103,7 +109,7 @@ public final class RubyReader {
     /// Starts reading `markup` aloud, replacing anything being read.
     public func speak(_ markup: String) {
         stop()
-        let content = RubyContent.content(for: markup)
+        let content = RubyContent.content(for: markup, analyzer: analyzer)
         let utterance = AVSpeechUtterance(string: content.string)
         utterance.voice = voiceIdentifier.flatMap(AVSpeechSynthesisVoice.init(identifier:))
             ?? Self.japaneseVoices.first
@@ -139,7 +145,7 @@ public final class RubyReader {
     /// speech recognition, which can take a moment; results are cached.
     public func play(narration url: URL, for markup: String) async throws {
         stop()
-        let content = RubyContent.content(for: markup)
+        let content = RubyContent.content(for: markup, analyzer: analyzer)
         let units = RubyReadingUnits.units(in: content.string, words: content.words)
         let key = url.absoluteString + "\n" + content.string
         let token = session
@@ -150,8 +156,9 @@ public final class RubyReader {
         } else {
             isPreparing = true
             defer { isPreparing = false }
+            let analyzer = analyzer
             anchors = try await RubyNarrationAligner.anchors(for: url, units: units) {
-                RubyContent.words(from: RubyMeCabAnalyzer.shared.segments(in: $0))
+                RubyContent.words(from: analyzer.segments(in: $0))
             }
             alignments[key] = anchors
         }
