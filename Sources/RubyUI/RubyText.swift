@@ -34,7 +34,8 @@ import SwiftUI
 /// read aloud, styled with `rubyEmphasis(_:)`.
 ///
 /// Readings come from MeCab with IPAdic unless you choose another analyzer
-/// with `rubyAnalyzer(_:)`.
+/// with `rubyAnalyzer(_:)`. Add `rubyModelReadings()` to have Apple's
+/// on-device model read words whose reading depends on their meaning.
 ///
 /// Annotations are drawn by `RubyRenderer` and aren't part of the text
 /// content, so selection, copy, and VoiceOver only see the base text.
@@ -51,6 +52,10 @@ public struct RubyText: View {
     @Environment(\.rubyDigitReadingsHidden) private var digitReadingsHidden
     @Environment(\.rubySpacing) private var spacing
     @Environment(\.rubyWordColoring) private var wordColoring
+    @Environment(\.rubyModelReadings) private var usesModel
+    /// Content with the model's readings, once it has answered, and the
+    /// input it's for.
+    @State private var modelContent: (key: ModelKey, content: RubyContent)?
     /// The tapped word whose details are showing, and where it is.
     @State private var selectedWord: RubyWordInfo?
     @State private var selectedRect = CGRect.zero
@@ -80,10 +85,15 @@ public struct RubyText: View {
 
     public var body: some View {
         // Cached per markup or segment array, so this is cheap after the
-        // first time.
-        let content: RubyContent = switch input {
-        case .markup(let markup): .content(for: markup, analyzer: analyzer)
-        case .segments(let segments): .content(for: segments)
+        // first time. The dictionary's readings show until the model's
+        // arrive.
+        let content: RubyContent = if let modelContent, modelContent.key == modelKey {
+            modelContent.content
+        } else {
+            switch input {
+            case .markup(let markup): .content(for: markup, analyzer: analyzer)
+            case .segments(let segments): .content(for: segments)
+            }
         }
         RubyTextContent(
             content: content,
@@ -111,6 +121,35 @@ public struct RubyText: View {
         .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: furiganaFilter)
         .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: digitReadingsHidden)
         .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: spacing)
+        .task(id: modelKey) {
+            await loadModelReadings()
+        }
+    }
+
+    /// What the model's readings depend on: the markup, the analyzer, and
+    /// whether they're on.
+    private struct ModelKey: Equatable {
+        let markup: String?
+        let analyzer: AnyHashable
+        let usesModel: Bool
+    }
+
+    private var modelKey: ModelKey {
+        let markup: String? = if case .markup(let markup) = input { markup } else { nil }
+        return ModelKey(markup: markup, analyzer: AnyHashable(analyzer), usesModel: usesModel)
+    }
+
+    /// Asks the model about words whose reading depends on their meaning,
+    /// and shows its readings once it answers. Segments you supply are
+    /// shown as they are.
+    private func loadModelReadings() async {
+        let key = modelKey
+        guard key.usesModel, let markup = key.markup, RubyModelReadings.isAvailable else { return }
+        #if canImport(FoundationModels)
+        let content = await RubyContent.content(for: markup, analyzer: analyzer, chooser: RubyFoundationModelsChooser())
+        guard !Task.isCancelled else { return }
+        modelContent = (key, content)
+        #endif
     }
 
     /// Whether the filter shows each furigana reading, in content order.
@@ -156,6 +195,9 @@ extension EnvironmentValues {
     /// Finds words and readings for `RubyText` views. MeCab with IPAdic by
     /// default.
     @Entry var rubyAnalyzer: any RubyAnalyzer = RubyMeCabAnalyzer.shared
+    /// Whether `RubyText` views ask Apple's on-device model about words
+    /// whose reading depends on their meaning.
+    @Entry var rubyModelReadings = false
 }
 
 extension View {
@@ -166,6 +208,24 @@ extension View {
     /// phrases it emphasizes match the views' words.
     public func rubyAnalyzer(_ analyzer: any RubyAnalyzer) -> some View {
         environment(\.rubyAnalyzer, analyzer)
+    }
+
+    /// Has Apple's on-device model read words whose reading depends on
+    /// their meaning in `RubyText` views in this hierarchy: 辛い is からい
+    /// for spicy food and つらい for a hard parting, 人気 is にんき for
+    /// popularity and ひとけ for people around.
+    ///
+    /// The dictionary reads such words the same way in every sentence.
+    /// With this on, text first shows the dictionary's readings, then
+    /// updates the ones the model judges are meant differently, usually
+    /// within a second. Only words on a built-in list are asked about, and
+    /// the model only chooses among that list's readings. Where Apple
+    /// Intelligence isn't available, the dictionary's readings stay.
+    ///
+    /// Readings you supply with `{base|reading}` markup or as segments are
+    /// never changed.
+    public func rubyModelReadings(_ isEnabled: Bool = true) -> some View {
+        environment(\.rubyModelReadings, isEnabled)
     }
 }
 

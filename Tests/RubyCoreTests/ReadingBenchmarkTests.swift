@@ -6,7 +6,11 @@ import Testing
 /// written, with each kanji run replaced by its furigana. `nil` if `word`
 /// isn't in the sentence or a reading straddles its edges.
 func reading(of word: String, in sentence: String) -> String? {
-    let content = RubyContent.content(for: sentence)
+    reading(of: word, in: RubyContent.content(for: sentence))
+}
+
+/// The reading of `word`'s first occurrence in `content`.
+func reading(of word: String, in content: RubyContent) -> String? {
     guard let found = content.string.range(of: word) else { return nil }
     let utf16 = content.string.utf16
     let lower = utf16.distance(from: utf16.startIndex, to: found.lowerBound)

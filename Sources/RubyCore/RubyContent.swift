@@ -136,8 +136,45 @@ package final class RubyContent {
     ) -> RubyContent {
         let key = RubyCacheKey(MarkupKey(markup: markup, analyzer: AnyHashable(analyzer)))
         if let cached = markupCache.object(forKey: key) { return cached }
-        let content = RubyContent(markup: markup, analyzer: analyzer)
+        let (string, manual) = parse(markup)
+        let content = RubyContent(string: string, manual: manual, segments: segments(in: string, analyzer: analyzer))
         markupCache.setObject(content, forKey: key)
+        return content
+    }
+
+    private static let modelCache = NSCache<RubyCacheKey<ModelKey>, RubyContent>()
+
+    /// Markup analyzed by a particular analyzer, with a chooser's readings.
+    private struct ModelKey: Hashable {
+        let markup: MarkupKey
+        let chooser: AnyHashable
+    }
+
+    /// Content for `markup` with the model layer on top: words whose
+    /// reading depends on their meaning, such as 辛い or 人気, read the way
+    /// `chooser` judges the sentence means them.
+    ///
+    /// The same as `content(for:analyzer:)` where the text has no such
+    /// words or the chooser can't answer. Only readings change, so words
+    /// cover the same ranges in both.
+    package static func content(
+        for markup: String,
+        analyzer: any RubyAnalyzer = RubyMeCabAnalyzer.shared,
+        chooser: some RubyReadingChooser
+    ) async -> RubyContent {
+        let key = RubyCacheKey(ModelKey(
+            markup: MarkupKey(markup: markup, analyzer: AnyHashable(analyzer)),
+            chooser: AnyHashable(chooser)
+        ))
+        if let cached = modelCache.object(forKey: key) { return cached }
+        let (string, manual) = parse(markup)
+        let segments = Self.segments(in: string, analyzer: analyzer)
+        let chosen = await RubyModelReadings.apply(to: segments, excluding: manual.map(\.range), chooser: chooser)
+        // Unchanged, possibly because the chooser couldn't answer yet, so
+        // only changed content is cached.
+        guard chosen != segments else { return Self.content(for: markup, analyzer: analyzer) }
+        let content = RubyContent(string: string, manual: manual, segments: chosen)
+        modelCache.setObject(content, forKey: key)
         return content
     }
 
@@ -151,7 +188,9 @@ package final class RubyContent {
         return content
     }
 
-    private init(markup: String, analyzer: any RubyAnalyzer) {
+    /// The text of `markup` without its markup, and a word for each
+    /// manual reading in it.
+    private static func parse(_ markup: String) -> (string: String, manual: [RubyWord]) {
         var string = ""
         var manual: [RubyWord] = []
         for piece in RubyMarkup.parse(markup) {
@@ -160,11 +199,17 @@ package final class RubyContent {
             }
             string += piece.base
         }
-        self.string = string
+        return (string, manual)
+    }
 
-        // Tokenize the whole string so manual readings don't cut words apart
-        // (行き in "{行|い}きたい" still reads "iki"), then apply them on top.
-        let automatic = Self.words(from: Self.segments(in: string, analyzer: analyzer))
+    /// Content for `string` from the automatic layers' `segments`, which
+    /// cover all of it, with `manual` words on top.
+    ///
+    /// The segments come from the whole string so manual readings don't
+    /// cut words apart: 行き in "{行|い}きたい" still reads "iki".
+    private init(string: String, manual: [RubyWord], segments: [RubySegment]) {
+        self.string = string
+        let automatic = Self.words(from: segments)
         guard !manual.isEmpty else {
             words = automatic
             return
