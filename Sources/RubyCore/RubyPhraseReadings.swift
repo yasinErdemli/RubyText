@@ -38,6 +38,7 @@ package enum RubyPhraseReadings {
                 continue
             }
             result[index].reading = reading
+            result[index].pronunciation = nil
             result[index].source = .rule
         }
         return result

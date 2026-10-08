@@ -124,11 +124,11 @@ public struct RubyText: View {
         })
     }
 
-    /// Whether each word's romaji shows, one value per word with romaji, in
-    /// content order. Romaji hide over numbers in digits along with their
-    /// furigana, so a number shows both readings or neither.
+    /// Whether each romaji word shows, in content order. Romaji hide over
+    /// numbers in digits along with their furigana, so a number shows both
+    /// readings or neither.
     private func romajiVisibility(in content: RubyContent) -> RubyAnimatableVector {
-        RubyAnimatableVector(values: content.words.filter { $0.romaji != nil }.map { word in
+        RubyAnimatableVector(values: content.romajiWords.map { word in
             let base = RubyReadingUnits.substring(of: content.string, utf16Range: word.range)
             return digitReadingsHidden && Self.isDigitNumber(base) ? 0 : 1
         })
@@ -467,8 +467,7 @@ private final class RubyMeasurements {
     }
 
     struct Romaji {
-        /// Index among the content's words with romaji, for
-        /// `romajiVisibility`.
+        /// Index among the content's romaji words, for `romajiVisibility`.
         let source: Int
         let characters: Range<Int>
         let range: Range<Int>
@@ -511,9 +510,7 @@ private final class RubyMeasurements {
         }
 
         var furigana: [Furigana] = []
-        var romaji: [Romaji] = []
         var source = 0
-        var romajiSource = 0
         for word in content.words {
             for reading in word.furigana {
                 defer { source += 1 }
@@ -528,19 +525,19 @@ private final class RubyMeasurements {
                         - metrics.baseWidth(of: String(characters[indices]))
                 ))
             }
-            if let text = word.romaji {
-                defer { romajiSource += 1 }
-                let indices = characterRange(word.range)
-                guard !indices.isEmpty else { continue }
-                romaji.append(Romaji(
-                    source: romajiSource,
-                    characters: indices,
-                    range: word.range,
-                    text: text,
-                    baseWidth: metrics.baseWidth(of: String(characters[indices])),
-                    width: metrics.annotationWidth(of: text) + metrics.romajiSpacing
-                ))
-            }
+        }
+        var romaji: [Romaji] = []
+        for (source, word) in content.romajiWords.enumerated() {
+            let indices = characterRange(word.range)
+            guard !indices.isEmpty else { continue }
+            romaji.append(Romaji(
+                source: source,
+                characters: indices,
+                range: word.range,
+                text: word.text,
+                baseWidth: metrics.baseWidth(of: String(characters[indices])),
+                width: metrics.annotationWidth(of: word.text) + metrics.romajiSpacing
+            ))
         }
 
         var paragraphStarts = [0]

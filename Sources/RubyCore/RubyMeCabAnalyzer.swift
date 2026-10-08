@@ -14,6 +14,10 @@ public nonisolated final class RubyMeCabAnalyzer: RubyAnalyzer, @unchecked Senda
     private struct State {
         let recorder: PartOfSpeechRecorder
         let tokenizer: Tokenizer?
+        /// Reports pronunciations (トーキョー) as readings. The package
+        /// only exposes one of the two, so it's a second tagger over the
+        /// same dictionary.
+        let pronouncer: Tokenizer?
     }
 
     // MeCab's tagger isn't thread-safe, so calls are serialized. The mutex
@@ -23,7 +27,8 @@ public nonisolated final class RubyMeCabAnalyzer: RubyAnalyzer, @unchecked Senda
     private init() {
         let recorder = PartOfSpeechRecorder()
         let tokenizer = try? Tokenizer(dictionary: RecordingIPADic(recorder: recorder))
-        state = Mutex(State(recorder: recorder, tokenizer: tokenizer))
+        let pronouncer = try? Tokenizer(dictionary: PronouncingIPADic())
+        state = Mutex(State(recorder: recorder, tokenizer: tokenizer, pronouncer: pronouncer))
     }
 
     /// There's only one instance, so analyzers compare by identity.
@@ -38,7 +43,7 @@ public nonisolated final class RubyMeCabAnalyzer: RubyAnalyzer, @unchecked Senda
     /// Segments covering all of `text`. Returns only plain segments, so
     /// text shows without annotations, if the dictionary failed to load.
     public func segments(in text: String) -> [RubySegment] {
-        let (annotations, ids) = state.withLock { state in
+        let (annotations, ids, pronunciations) = state.withLock { state in
             let recorder = state.recorder
             recorder.ids.removeAll(keepingCapacity: true)
             let annotations = state.tokenizer?.tokenize(text: text, transliteration: .katakana) ?? []
@@ -48,7 +53,12 @@ public nonisolated final class RubyMeCabAnalyzer: RubyAnalyzer, @unchecked Senda
             let ids: [UInt16]? = recorder.ids.count == annotations.count + 2
                 ? Array(recorder.ids.dropFirst().dropLast())
                 : nil
-            return (annotations, ids)
+            // Same dictionary, so the same tokens; check before pairing them.
+            let spoken = state.pronouncer?.tokenize(text: text, transliteration: .katakana) ?? []
+            let pronunciations: [String]? = spoken.map(\.base) == annotations.map(\.base)
+                ? spoken.map(\.reading)
+                : nil
+            return (annotations, ids, pronunciations)
         }
 
         var segments: [RubySegment] = []
@@ -75,12 +85,15 @@ public nonisolated final class RubyMeCabAnalyzer: RubyAnalyzer, @unchecked Senda
             let katakana = annotation.reading
             let hasReading = isJapanese && !katakana.isEmpty && !katakana.contains(where: RubyReadings.isKanji)
             let id = ids?[index]
+            let reading = hasReading ? RubyReadings.hiragana(katakana) : nil
+            let pronunciation = hasReading ? pronunciations.map { RubyReadings.hiragana($0[index]) } : nil
             // IPAdic writes * for words without a dictionary form.
             let dictionaryForm = annotation.dictionaryForm == "*" ? token : annotation.dictionaryForm
 
             segments.append(RubySegment(
                 token,
-                reading: hasReading ? RubyReadings.hiragana(katakana) : nil,
+                reading: reading,
+                pronunciation: pronunciation,
                 word: RubySegment.Word(
                     partOfSpeech: id.map(Self.partOfSpeech),
                     dictionaryForm: dictionaryForm,
@@ -137,6 +150,20 @@ public nonisolated final class RubyMeCabAnalyzer: RubyAnalyzer, @unchecked Senda
 /// without auxiliaries, conjunctions, or adjective stems.
 private nonisolated final class PartOfSpeechRecorder {
     var ids: [UInt16] = []
+}
+
+/// IPAdic with pronunciations in place of readings.
+private nonisolated struct PronouncingIPADic: DictionaryProviding {
+    private let base = IPADic()
+
+    var url: URL { base.url }
+    var readingIndex: Int { base.pronunciationIndex }
+    var pronunciationIndex: Int { base.pronunciationIndex }
+    var dictionaryFormIndex: Int { base.dictionaryFormIndex }
+
+    func partOfSpeech(posID: UInt16) -> PartOfSpeech {
+        base.partOfSpeech(posID: posID)
+    }
 }
 
 /// IPAdic, recording part-of-speech IDs as the tokenizer asks for them.

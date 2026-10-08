@@ -54,7 +54,7 @@ package nonisolated enum RubyReadings {
         RubyWord(
             range: offset..<(offset + base.utf16.count),
             furigana: furigana(base: base, reading: reading, offset: offset, force: true),
-            romaji: reading.applyingTransform(.toLatin, reverse: false),
+            romaji: RubyRomaji.hepburn(reading),
             source: .manual
         )
     }
@@ -113,17 +113,6 @@ package nonisolated enum RubyReadings {
             position += length
         }
         return readings
-    }
-
-    /// Readings transcribe kana as spelled; particles are pronounced
-    /// differently when they stand alone.
-    package static func romaji(for token: String, transcription: String) -> String {
-        switch token {
-        case "は": "wa"
-        case "へ": "e"
-        case "を": "o"
-        default: transcription
-        }
     }
 
     /// Converts katakana to hiragana, keeping the long-vowel mark:

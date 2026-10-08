@@ -17,6 +17,10 @@ public struct RubySegment: Hashable, Sendable {
     /// Hiragana reading of the whole segment, covering any kanji and
     /// okurigana together. `nil` for kana, punctuation, and numbers.
     public var reading: String?
+    /// How the reading is spoken, if the analyzer knows: とーきょー for
+    /// とうきょう, わ for the particle は, おう for 追う. Romaji use it for
+    /// long vowels; without it, they follow spelling rules.
+    public var pronunciation: String?
     public var word: Word?
     public var source: ReadingSource
 
@@ -36,9 +40,16 @@ public struct RubySegment: Hashable, Sendable {
         }
     }
 
-    public init(_ base: String, reading: String? = nil, word: Word? = nil, source: ReadingSource = .manual) {
+    public init(
+        _ base: String,
+        reading: String? = nil,
+        pronunciation: String? = nil,
+        word: Word? = nil,
+        source: ReadingSource = .manual
+    ) {
         self.base = base
         self.reading = reading
+        self.pronunciation = pronunciation
         self.word = word
         self.source = source
     }
