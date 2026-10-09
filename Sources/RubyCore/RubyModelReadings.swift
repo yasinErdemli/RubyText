@@ -18,6 +18,11 @@ public struct RubyReadingQuestion: Hashable, Sendable {
     public let choices: [RubyReadingChoice]
     /// The reading the dictionary gave the word, one of `choices`.
     public let dictionaryReading: String
+    /// `sentence` with the word in 【】, to show which occurrence is meant.
+    package let markedSentence: String
+    /// The sentences before and after, if any.
+    package let previousSentence: String?
+    package let nextSentence: String?
 }
 
 /// Chooses between the readings of a word whose reading depends on its
@@ -28,31 +33,43 @@ package protocol RubyReadingChooser: Hashable, Sendable {
     /// The index in `question.choices` of the reading that fits, or `nil`
     /// to keep the dictionary's.
     func choose(_ question: RubyReadingQuestion) async throws -> Int?
+    /// Whether to ask about a text's questions together, in as few
+    /// requests as possible, rather than one at a time.
+    var asksTogether: Bool { get }
+    /// The index of the fitting reading for each of `questions`, in order.
+    func choose(_ questions: [RubyReadingQuestion]) async throws -> [Int?]
 }
 
-/// Apple's on-device model as a tie-breaker for words whose reading depends
+extension RubyReadingChooser {
+    package var asksTogether: Bool { false }
+
+    package func choose(_ questions: [RubyReadingQuestion]) async throws -> [Int?] {
+        var choices: [Int?] = []
+        for question in questions {
+            choices.append(try await choose(question))
+        }
+        return choices
+    }
+}
+
+/// Apple's language models as a tie-breaker for words whose reading depends
 /// on their meaning (人気, 辛い, 方), which the dictionary reads the same way
 /// in every sentence. `rubyModelReadings()` turns it on for `RubyText`.
 ///
 /// It runs after the rules, only on words on a built-in list that the
 /// dictionary read, and only changes their readings, never where words
-/// begin and end. The questions it would ask, and asking them one by one,
-/// are public, to see what it does and how long it takes:
+/// begin and end. The questions it would ask, and asking them, are public,
+/// to see what it does and how long it takes:
 ///
-///     for question in RubyModelReadings.questions(in: text, analyzer: analyzer) {
-///         let start = ContinuousClock.now
-///         let choice = try await RubyModelReadings.ask(question)
-///         print(question.word, choice?.reading ?? "-", ContinuousClock.now - start)
-///     }
+///     let questions = RubyModelReadings.questions(in: text, analyzer: analyzer)
+///     let start = ContinuousClock.now
+///     let choices = try await RubyModelReadings.ask(questions)
+///     print(choices.map { $0?.reading }, ContinuousClock.now - start)
 public nonisolated enum RubyModelReadings {
     /// Whether Apple's on-device model is available on this device, with
     /// Apple Intelligence turned on and the model downloaded.
     public static var isAvailable: Bool {
-        #if canImport(FoundationModels)
-        RubyFoundationModelsChooser.isAvailable
-        #else
-        false
-        #endif
+        RubyModelOptions.standard.isAvailable
     }
 
     /// The questions `rubyModelReadings()` asks about `markup`: one for each
@@ -64,45 +81,72 @@ public nonisolated enum RubyModelReadings {
         return questions(in: segments, excluding: manual.map(\.range)).map(\.question)
     }
 
-    /// Asks the model `question` now, and returns the reading it chose, or
-    /// `nil` where the model isn't available.
+    /// Asks the model about `question` now, and returns the reading it
+    /// chose, or `nil` where the model isn't available.
     ///
-    /// Unlike `answer(to:)`, which asks each question once, this always
-    /// asks, so it can be timed. The answer is kept for `RubyText` views
-    /// and `answer(to:)`.
-    public static func ask(_ question: RubyReadingQuestion) async throws -> RubyReadingChoice? {
+    /// Unlike `answer(to:options:)`, which asks each question once, this
+    /// always asks, so it can be timed. The answer is kept for `RubyText`
+    /// views and `answer(to:options:)`.
+    public static func ask(_ question: RubyReadingQuestion, options: RubyModelOptions = .standard) async throws -> RubyReadingChoice? {
+        try await ask([question], options: options)[0]
+    }
+
+    /// Asks the model about `questions` now, as `options` say: together in
+    /// as few requests as possible, or one at a time. Returns the reading
+    /// it chose for each, in order. The answers are kept, as with
+    /// `ask(_:options:)`.
+    public static func ask(_ questions: [RubyReadingQuestion], options: RubyModelOptions = .standard) async throws -> [RubyReadingChoice?] {
         #if canImport(FoundationModels)
-        let chooser = RubyFoundationModelsChooser()
-        guard let index = try await chooser.choose(question),
-              question.choices.indices.contains(index)
-        else { return nil }
-        answers.withLock { $0[AnswerKey(question: question, chooser: AnyHashable(chooser))] = Task { index } }
-        return question.choices[index]
+        let chooser = RubyFoundationModelsChooser(options: options)
+        var indices: [Int?] = []
+        for chunk in chunks(of: questions, chooser: chooser) {
+            indices += try await chooser.choose(chunk)
+        }
+        return zip(questions, indices).map { question, index in
+            guard let index, question.choices.indices.contains(index) else { return nil }
+            let key = AnswerKey(question: question, chooser: AnyHashable(chooser))
+            answers.withLock { $0[key] = Task { index } }
+            return question.choices[index]
+        }
         #else
-        return nil
+        return questions.map { _ in nil }
         #endif
     }
 
     /// The model's answer to `question`, as `RubyText` views get it: asked
     /// once and kept, and asked once even when several views ask at the
     /// same time. `nil` where the model isn't available or can't answer.
-    public static func answer(to question: RubyReadingQuestion) async -> RubyReadingChoice? {
+    public static func answer(to question: RubyReadingQuestion, options: RubyModelOptions = .standard) async -> RubyReadingChoice? {
+        await answers(to: [question], options: options)[0]
+    }
+
+    /// The model's answers to `questions`, as `RubyText` views get them,
+    /// asked together or one at a time as `options` say.
+    public static func answers(to questions: [RubyReadingQuestion], options: RubyModelOptions = .standard) async -> [RubyReadingChoice?] {
         #if canImport(FoundationModels)
-        guard let index = await answer(question, chooser: RubyFoundationModelsChooser()),
-              question.choices.indices.contains(index)
-        else { return nil }
-        return question.choices[index]
+        let chooser = RubyFoundationModelsChooser(options: options)
+        let tasks = chooser.asksTogether ? startAnswering(questions, chooser: chooser) : nil
+        var choices: [RubyReadingChoice?] = []
+        for (position, question) in questions.enumerated() {
+            let index = if let tasks {
+                await finish(tasks[position], for: question, chooser: chooser)
+            } else {
+                await answer(question, chooser: chooser)
+            }
+            choices.append(index.flatMap { question.choices.indices.contains($0) ? question.choices[$0] : nil })
+        }
+        return choices
         #else
-        return nil
+        return questions.map { _ in nil }
         #endif
     }
 
     /// Loads the model and the instructions it's asked with ahead of the
     /// first question, which otherwise waits for them. Call it when a screen
     /// that will show model readings appears, or earlier.
-    public static func prewarm() {
+    public static func prewarm(options: RubyModelOptions = .standard) {
         #if canImport(FoundationModels)
-        RubyFoundationModelsChooser.prewarm()
+        RubyFoundationModelsChooser.prewarm(options: options)
         #endif
     }
 
@@ -117,7 +161,11 @@ public nonisolated enum RubyModelReadings {
             offsets.append(offset)
             offset += segment.base.utf16.count
         }
-        for sentence in sentences(in: segments) {
+        let sentences = sentences(in: segments)
+        let texts = sentences.map { sentence in
+            segments[sentence].map(\.base).joined().trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        for (number, sentence) in sentences.enumerated() {
             let text = segments[sentence].map(\.base).joined()
             for index in sentence where segments[index].source == .dictionary {
                 let segment = segments[index]
@@ -125,12 +173,16 @@ public nonisolated enum RubyModelReadings {
                 guard !excluded.contains(where: { $0.overlaps(range) }),
                       let choices = RubyHomographs.choices(for: segment)
                 else { continue }
+                let marked = segments[sentence].indices.map { $0 == index ? "【\(segments[$0].base)】" : segments[$0].base }
                 result.append((index, RubyReadingQuestion(
                     sentence: text,
                     word: segment.base,
                     context: context(of: index, in: segments, within: sentence),
                     choices: choices,
-                    dictionaryReading: segment.reading ?? ""
+                    dictionaryReading: segment.reading ?? "",
+                    markedSentence: marked.joined().trimmingCharacters(in: .whitespacesAndNewlines),
+                    previousSentence: number > 0 && !texts[number - 1].isEmpty ? texts[number - 1] : nil,
+                    nextSentence: number + 1 < texts.count && !texts[number + 1].isEmpty ? texts[number + 1] : nil
                 )))
             }
         }
@@ -158,8 +210,15 @@ public nonisolated enum RubyModelReadings {
         onChange: (([RubySegment]) async -> Void)? = nil
     ) async -> [RubySegment] {
         var result = segments
-        for (index, question) in questions(in: segments, excluding: excluded) {
-            guard let choice = await answer(question, chooser: chooser),
+        let asked = questions(in: segments, excluding: excluded)
+        let tasks = chooser.asksTogether ? startAnswering(asked.map(\.question), chooser: chooser) : nil
+        for (position, (index, question)) in asked.enumerated() {
+            let answer = if let tasks {
+                await finish(tasks[position], for: question, chooser: chooser)
+            } else {
+                await answer(question, chooser: chooser)
+            }
+            guard let choice = answer,
                   question.choices.indices.contains(choice),
                   question.choices[choice].reading != result[index].reading
             else { continue }
@@ -181,6 +240,16 @@ public nonisolated enum RubyModelReadings {
         let chooser: AnyHashable
     }
 
+    /// The most questions asked about in one request, so a long text's
+    /// prompt fits the on-device model's context.
+    private static let questionsPerRequest = 20
+
+    /// `questions` in groups of as many as `chooser` asks about at once.
+    private static func chunks(of questions: [RubyReadingQuestion], chooser: some RubyReadingChooser) -> [[RubyReadingQuestion]] {
+        let size = chooser.asksTogether ? questionsPerRequest : 1
+        return stride(from: 0, to: questions.count, by: size).map { Array(questions[$0..<min($0 + size, questions.count)]) }
+    }
+
     private static func answer(_ question: RubyReadingQuestion, chooser: some RubyReadingChooser) async -> Int? {
         let key = AnswerKey(question: question, chooser: AnyHashable(chooser))
         let task = answers.withLock { answers in
@@ -190,10 +259,37 @@ public nonisolated enum RubyModelReadings {
             answers[key] = task
             return task
         }
+        return await finish(task, for: question, chooser: chooser)
+    }
+
+    /// Tasks answering each of `questions`: the ones already asked about,
+    /// and requests together for the rest.
+    private static func startAnswering(_ questions: [RubyReadingQuestion], chooser: some RubyReadingChooser) -> [Task<Int?, Never>] {
+        let keys = questions.map { AnswerKey(question: $0, chooser: AnyHashable(chooser)) }
+        return answers.withLock { answers in
+            if answers.count >= 1000 { answers.removeAll() }
+            let unasked = keys.indices.filter { answers[keys[$0]] == nil }
+            for chunk in stride(from: 0, to: unasked.count, by: questionsPerRequest).map({ unasked[$0..<min($0 + questionsPerRequest, unasked.count)] }) {
+                let asked = chunk.map { questions[$0] }
+                let request = Task { (try? await chooser.choose(asked)) ?? [] }
+                for (position, index) in chunk.enumerated() {
+                    answers[keys[index]] = Task {
+                        let choices = await request.value
+                        return position < choices.count ? choices[position] : nil
+                    }
+                }
+            }
+            return keys.map { answers[$0]! }
+        }
+    }
+
+    /// The answer `task` gives. No answer, such as when the model refuses a
+    /// sentence, keeps the dictionary's reading, and isn't kept, so a later
+    /// try can succeed.
+    private static func finish(_ task: Task<Int?, Never>, for question: RubyReadingQuestion, chooser: some RubyReadingChooser) async -> Int? {
         let choice = await task.value
-        // No answer, such as when the model refuses a sentence, keeps the
-        // dictionary's reading, and isn't kept, so a later try can succeed.
         if choice == nil {
+            let key = AnswerKey(question: question, chooser: AnyHashable(chooser))
             answers.withLock { answers in
                 if answers[key] == task { answers[key] = nil }
             }
@@ -230,66 +326,228 @@ public nonisolated enum RubyModelReadings {
     }
 }
 
-#if canImport(FoundationModels)
-/// Asks Apple's on-device language model which meaning a word has in its
-/// sentence.
-///
-/// Each question is its own request with a fresh session, constrained to
-/// the listed meanings, with greedy sampling so the same question always
-/// gets the same answer. Asking about one word at a time is slower than
-/// asking about a whole sentence's at once, but more accurate: with several
-/// words in one request, the model mixes up their meanings.
-package struct RubyFoundationModelsChooser: RubyReadingChooser {
-    package init() {}
+/// How readings by meaning are asked for: which of Apple's models
+/// answers, how, and what it's told. Each option can be turned on
+/// separately, to compare how well the model reads with it.
+public struct RubyModelOptions: Hashable, Sendable {
+    /// Which of Apple's models answers.
+    public enum Model: Hashable, Sendable {
+        /// The model on the device: private, offline, and free, but small.
+        case onDevice
+        /// Apple's larger model on its Private Cloud Compute servers: it
+        /// needs a network connection, takes longer for each request, and
+        /// has a usage quota.
+        ///
+        /// Only for apps with the `com.apple.developer.private-cloud-compute`
+        /// entitlement, which Apple grants to developers in the App Store
+        /// Small Business Program with fewer than two million first-time
+        /// downloads. Without it, the system stops the app as soon as the
+        /// model is asked, and `isAvailable` can't tell beforehand.
+        case privateCloudCompute
+    }
 
-    package static var isAvailable: Bool {
-        SystemLanguageModel.default.isAvailable
+    public var model = Model.onDevice
+    /// Ask about every word in a text together, in one request, rather
+    /// than one word at a time. Fewer requests matter most with Private
+    /// Cloud Compute, where each goes over the network.
+    public var asksTogether = false
+    /// Show each meaning with its reading: からい: spicy, hot or salty.
+    public var showsReadings = false
+    /// Mark the word in the sentence, 夜の公園は【人気】がない, rather than
+    /// quoting the words around it.
+    public var marksWord = false
+    /// Add the sentences before and after the word's. On by default: with
+    /// a reason, it settles words whose own sentence leaves them open,
+    /// such as 本当に辛かった after 激辛のラーメンを食べた.
+    public var includesNeighbors = true
+    /// Give the instructions in Japanese.
+    public var isJapanese = false
+    /// Have the model say in a few words what the word means before it
+    /// chooses. On by default: it picks rarer readings, such as 色紙 as
+    /// しきし, much more often, though each answer takes about twice as
+    /// long.
+    public var reasons = true
+
+    public init(
+        model: Model = .onDevice,
+        asksTogether: Bool = false,
+        showsReadings: Bool = false,
+        marksWord: Bool = false,
+        includesNeighbors: Bool = true,
+        isJapanese: Bool = false,
+        reasons: Bool = true
+    ) {
+        self.model = model
+        self.asksTogether = asksTogether
+        self.showsReadings = showsReadings
+        self.marksWord = marksWord
+        self.includesNeighbors = includesNeighbors
+        self.isJapanese = isJapanese
+        self.reasons = reasons
+    }
+
+    /// How `RubyText` asks by default: the on-device model, one word at a
+    /// time, with the sentences around it and a reason before it chooses.
+    /// On the benchmark's homographs, this reads 71 of 79 right, against
+    /// 60 without the reason and the sentences around it.
+    public static let standard = RubyModelOptions()
+
+    /// Whether the model is available: on this device, with Apple
+    /// Intelligence turned on and the model downloaded, or over Private
+    /// Cloud Compute, which also needs its entitlement.
+    public var isAvailable: Bool {
+        #if canImport(FoundationModels)
+        RubyFoundationModelsChooser.isAvailable(model)
+        #else
+        false
+        #endif
+    }
+
+    /// The instructions the model's session starts with.
+    public var instructions: String {
+        isJapanese
+            ? "あなたは日本語を読みます。挙げた語は文の中にあり、読み方が複数あって、読み方ごとに意味が違います。文に合う意味を選んでください。"
+            : """
+            You read Japanese. Each listed word appears in the sentence and can be read \
+            in more than one way, each reading with a different meaning. For each word, \
+            choose the meaning that fits the sentence.
+            """
+    }
+
+    /// The options the model chooses among for `question`, in order.
+    func options(for question: RubyReadingQuestion) -> [String] {
+        question.choices.map { showsReadings ? "\($0.reading): \($0.meaning)" : $0.meaning }
+    }
+
+    /// Where the word is, as the prompt and schema point to it.
+    func word(in question: RubyReadingQuestion, together: Bool) -> String {
+        switch (marksWord, together) {
+        case (true, false): "【\(question.word)】"
+        case (true, true): "【\(question.word)】 in 「\(question.markedSentence)」"
+        case (false, _): "\(question.word) in 「\(question.context)」"
+        }
+    }
+
+    /// The prompt asking about `questions` together: one sentence and its
+    /// word, or the sentences of a text and each of its words.
+    public func prompt(for questions: [RubyReadingQuestion]) -> String {
+        guard let first = questions.first else { return "" }
+        var lines: [String] = []
+        if questions.count == 1 {
+            if includesNeighbors, let previous = first.previousSentence {
+                lines.append("Before it: \(previous)")
+            }
+            lines.append("Sentence: \(marksWord ? first.markedSentence : first.sentence)")
+            if includesNeighbors, let next = first.nextSentence {
+                lines.append("After it: \(next)")
+            }
+        } else {
+            // The sentences the words are in, and those around them if
+            // asked for, each once and in order.
+            var sentences: [String] = []
+            for question in questions {
+                let around = includesNeighbors ? [question.previousSentence, question.sentence, question.nextSentence] : [question.sentence]
+                for sentence in around.compactMap({ $0?.trimmingCharacters(in: .whitespacesAndNewlines) })
+                where !sentence.isEmpty && !sentences.contains(sentence) {
+                    sentences.append(sentence)
+                }
+            }
+            lines.append("Text: \(sentences.joined())")
+        }
+        lines.append("")
+        lines.append("Words:")
+        for (number, question) in questions.enumerated() {
+            lines.append("\(number + 1). \(word(in: question, together: questions.count > 1)): \(options(for: question).joined(separator: " or "))")
+        }
+        return lines.joined(separator: "\n")
+    }
+}
+
+#if canImport(FoundationModels)
+/// Asks one of Apple's language models which meaning words have in their
+/// sentences.
+///
+/// Each request has a fresh session, constrained to the listed meanings,
+/// with greedy sampling so the same question always gets the same answer.
+/// By default it asks about one word at a time, which is slower than
+/// asking about a whole text at once but more accurate with the on-device
+/// model: with several words in one request, it mixes up their meanings.
+package struct RubyFoundationModelsChooser: RubyReadingChooser {
+    package let options: RubyModelOptions
+
+    package init(options: RubyModelOptions = .standard) {
+        self.options = options
+    }
+
+    package var asksTogether: Bool { options.asksTogether }
+
+    package static var isAvailable: Bool { isAvailable(.onDevice) }
+
+    private static let cloud = PrivateCloudComputeLanguageModel()
+
+    static func isAvailable(_ model: RubyModelOptions.Model) -> Bool {
+        switch model {
+        case .onDevice: SystemLanguageModel.default.isAvailable
+        case .privateCloudCompute: cloud.isAvailable
+        }
+    }
+
+    private static func session(_ options: RubyModelOptions) -> LanguageModelSession {
+        switch options.model {
+        case .onDevice: LanguageModelSession(instructions: options.instructions)
+        case .privateCloudCompute: LanguageModelSession(model: cloud, instructions: options.instructions)
+        }
     }
 
     /// The session `prewarm()` loaded the model with, kept so loading
     /// isn't cancelled.
     private static let warmSession = Mutex<LanguageModelSession?>(nil)
 
-    static func prewarm() {
-        guard isAvailable else { return }
-        let session = LanguageModelSession(instructions: instructions)
+    static func prewarm(options: RubyModelOptions) {
+        guard isAvailable(options.model) else { return }
+        let session = session(options)
         session.prewarm()
         warmSession.withLock { $0 = session }
     }
 
-    private static let instructions = """
-        You read Japanese. Each listed word appears in the sentence and can be read \
-        in more than one way, each reading with a different meaning. For each word, \
-        choose the meaning that fits the sentence.
-        """
-
     package func choose(_ question: RubyReadingQuestion) async throws -> Int? {
-        guard Self.isAvailable else { return nil }
-        let meanings = question.choices.map(\.meaning)
+        try await choose([question]).first ?? nil
+    }
+
+    package func choose(_ questions: [RubyReadingQuestion]) async throws -> [Int?] {
+        guard Self.isAvailable(options.model), !questions.isEmpty else { return questions.map { _ in nil } }
+        let together = questions.count > 1
+        var properties: [DynamicGenerationSchema.Property] = []
+        for (number, question) in questions.enumerated() {
+            // One question keeps the names it has always had.
+            let suffix = together ? "\(number + 1)" : ""
+            let word = options.word(in: question, together: together)
+            if options.reasons {
+                properties.append(DynamicGenerationSchema.Property(
+                    name: "reason" + suffix,
+                    description: "In a few words, what \(word) means in this sentence",
+                    schema: DynamicGenerationSchema(type: String.self)
+                ))
+            }
+            properties.append(DynamicGenerationSchema.Property(
+                name: "meaning" + suffix,
+                description: "The meaning of \(word)",
+                schema: DynamicGenerationSchema(name: "Meaning" + suffix, anyOf: options.options(for: question))
+            ))
+        }
         let schema = try GenerationSchema(
-            root: DynamicGenerationSchema(name: "Readings", properties: [
-                DynamicGenerationSchema.Property(
-                    name: "meaning",
-                    description: "The meaning of \(question.word) in 「\(question.context)」",
-                    schema: DynamicGenerationSchema(name: "Meaning", anyOf: meanings)
-                ),
-            ]),
+            root: DynamicGenerationSchema(name: "Readings", properties: properties),
             dependencies: []
         )
-        let prompt = """
-            Sentence: \(question.sentence)
-
-            Words:
-            1. \(question.word) in 「\(question.context)」: \(meanings.joined(separator: " or "))
-            """
-        let session = LanguageModelSession(instructions: Self.instructions)
-        let response = try await session.respond(
-            to: prompt,
+        let response = try await Self.session(options).respond(
+            to: options.prompt(for: questions),
             schema: schema,
             options: GenerationOptions(samplingMode: .greedy)
         )
-        let meaning = try response.content.value(String.self, forProperty: "meaning")
-        return meanings.firstIndex(of: meaning)
+        return try questions.enumerated().map { number, question in
+            let meaning = try response.content.value(String.self, forProperty: "meaning" + (together ? "\(number + 1)" : ""))
+            return options.options(for: question).firstIndex(of: meaning)
+        }
     }
 }
 #endif

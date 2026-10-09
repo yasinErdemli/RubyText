@@ -49,7 +49,7 @@ package nonisolated enum RubyHomographs {
     private static let senses: [String: [Sense]] = Dictionary(
         grouping: [
             Sense(word: "人気", reading: "にんき", meaning: "popularity with people, customers or fans"),
-            Sense(word: "人気", reading: "ひとけ", meaning: "human presence, people around (a place without it is deserted)"),
+            Sense(word: "人気", reading: "ひとけ", meaning: "human presence, people around, nearly always with a negative: 人気がない, a deserted place"),
             Sense(word: "辛い", reading: "からい", meaning: "spicy, hot or salty (the taste of food)"),
             Sense(word: "辛い", reading: "つらい", meaning: "painful, hard to bear"),
             Sense(word: "生物", reading: "せいぶつ", meaning: "living thing; biology"),

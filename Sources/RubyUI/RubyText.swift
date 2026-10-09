@@ -75,6 +75,7 @@ public struct RubyText: View {
     @Environment(\.rubyWordColoring) private var wordColoring
     @Environment(\.rubyDictionary) private var dictionary
     @Environment(\.rubyModelReadings) private var modelUpdates
+    @Environment(\.rubyModelOptions) private var modelOptions
     @Environment(\.rubySpokenReadings) private var spokenReadings
     @Environment(\.rubyShowsWordDetails) private var showsWordDetails
     @Environment(\.rubyWordTapAction) private var wordTapAction
@@ -182,11 +183,12 @@ public struct RubyText: View {
         let markup: String?
         let analyzer: AnyHashable?
         let updates: RubyModelReadingUpdates?
+        let options: RubyModelOptions
     }
 
     private var modelKey: ModelKey {
         let markup: String? = if case .markup(let markup) = input { markup } else { nil }
-        return ModelKey(markup: markup, analyzer: analyzer.map { AnyHashable($0) }, updates: modelUpdates)
+        return ModelKey(markup: markup, analyzer: analyzer.map { AnyHashable($0) }, updates: modelUpdates, options: modelOptions)
     }
 
     /// Asks the model about words whose reading depends on their meaning,
@@ -194,7 +196,7 @@ public struct RubyText: View {
     /// supply are shown as they are.
     private func loadModelReadings() async {
         let key = modelKey
-        guard let updates = key.updates, let markup = key.markup, analyzer != nil, RubyModelReadings.isAvailable else { return }
+        guard let updates = key.updates, let markup = key.markup, analyzer != nil, key.options.isAvailable else { return }
         #if canImport(FoundationModels)
         let onEachReading: ((RubyContent) async -> Void)? = if updates == .asAnswered {
             { content in
@@ -207,7 +209,7 @@ public struct RubyText: View {
         let content = await RubyContent.content(
             for: markup,
             analyzer: analyzer,
-            chooser: RubyFoundationModelsChooser(),
+            chooser: RubyFoundationModelsChooser(options: key.options),
             onEachReading: onEachReading
         )
         guard !Task.isCancelled else { return }
@@ -265,6 +267,8 @@ extension EnvironmentValues {
     /// for words whose reading depends on their meaning, or `nil` not to
     /// ask it.
     @Entry var rubyModelReadings: RubyModelReadingUpdates? = nil
+    /// How Apple's models are asked for readings by meaning.
+    @Entry var rubyModelOptions = RubyModelOptions.standard
 }
 
 /// When `RubyText` shows the readings Apple's on-device model chooses.
@@ -303,20 +307,35 @@ extension View {
     ///
     /// The dictionary reads such words the same way in every sentence.
     /// With this on, text first shows the dictionary's readings, then
-    /// updates the ones the model judges are meant differently, usually
-    /// within a second. Only words on a built-in list are asked about, and
-    /// the model only chooses among that list's readings. Where Apple
-    /// Intelligence isn't available, the dictionary's readings stay.
+    /// updates the ones the model judges are meant differently. Only words
+    /// on a built-in list are asked about, and the model only chooses among
+    /// that list's readings. Where Apple Intelligence isn't available, the
+    /// dictionary's readings stay.
     ///
-    /// The model answers about one word at a time, in well under a second
-    /// each, so a long text with many such words takes several seconds.
-    /// Pass `.asAnswered` to `updates` to change each reading as soon as
-    /// its answer comes rather than all together at the end.
+    /// By default the model answers about one word at a time, saying in a
+    /// few words what it means before choosing, with the sentences around
+    /// it: about a second for each word on a recent iPhone, so a long text
+    /// with many such words takes a while. Pass `.asAnswered` to `updates`
+    /// to change each reading as soon as its answer comes rather than all
+    /// together at the end, and see `RubyModelOptions` for other ways of
+    /// asking.
     ///
     /// Readings you supply with `{base|reading}` markup or as segments are
     /// never changed.
-    public func rubyModelReadings(_ isEnabled: Bool = true, updates: RubyModelReadingUpdates = .allAtOnce) -> some View {
+    ///
+    /// - Parameters:
+    ///   - isEnabled: Whether to ask the model.
+    ///   - updates: Whether readings change all together or each as soon
+    ///     as it's answered.
+    ///   - options: Which model answers, how it's asked, and what it's
+    ///     told, such as Apple's larger model over Private Cloud Compute.
+    public func rubyModelReadings(
+        _ isEnabled: Bool = true,
+        updates: RubyModelReadingUpdates = .allAtOnce,
+        options: RubyModelOptions = .standard
+    ) -> some View {
         environment(\.rubyModelReadings, isEnabled ? updates : nil)
+            .environment(\.rubyModelOptions, options)
     }
 }
 

@@ -33,6 +33,7 @@ dictionary. Each reading records its layer as a ``ReadingSource``.
 ### Readings by meaning
 
 - ``RubyModelReadings``
+- ``RubyModelOptions``
 - ``RubyReadingQuestion``
 - ``RubyReadingChoice``
 

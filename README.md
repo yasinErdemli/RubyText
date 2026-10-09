@@ -183,11 +183,11 @@ words as a control. It runs with the tests, in
 | Numbers and dates | 29 | 29 | 3 |
 | Counters | 22 | 22 | 8 |
 | Read as a whole (今日, 大人) | 45 | 45 | 45 |
-| Reading depends on meaning (辛い, 人気) | 34 | 20, or 30 with the model | 19 |
+| Reading depends on meaning (辛い, 人気) | 34 | 20, or 33 with the model | 19 |
 | Phrases and compounds (一日中, 本棚) | 62 | 62 | 46 |
 | Names | 21 | 21 | 21 |
 | Everyday words | 42 | 42 | 42 |
-| **All** | **255** | **241, or 251 with the model** | **184** |
+| **All** | **255** | **241, or 254 with the model** | **184** |
 
 kuroshiro is the JavaScript library for furigana, measured at version 1.2.1
 with its Kuromoji analyzer, which also uses IPAdic. RubyText's rules were

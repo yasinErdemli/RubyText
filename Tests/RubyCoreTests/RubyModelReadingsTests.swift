@@ -37,6 +37,31 @@ private final class CountingChooser: RubyReadingChooser {
     func hash(into hasher: inout Hasher) { hasher.combine(ObjectIdentifier(self)) }
 }
 
+/// Asks about all of a text's questions together, picking the choice
+/// whose meaning mentions one of `keywords`, and counts its requests.
+private final class TogetherChooser: RubyReadingChooser {
+    let keywords: [String]
+    let requests = Mutex<[Int]>([])
+
+    init(keywords: [String]) { self.keywords = keywords }
+
+    var asksTogether: Bool { true }
+
+    func choose(_ question: RubyReadingQuestion) async throws -> Int? {
+        try await choose([question])[0]
+    }
+
+    func choose(_ questions: [RubyReadingQuestion]) async throws -> [Int?] {
+        requests.withLock { $0.append(questions.count) }
+        return questions.map { question in
+            question.choices.firstIndex { choice in keywords.contains { choice.meaning.contains($0) } }
+        }
+    }
+
+    static func == (lhs: TogetherChooser, rhs: TogetherChooser) -> Bool { lhs === rhs }
+    func hash(into hasher: inout Hasher) { hasher.combine(ObjectIdentifier(self)) }
+}
+
 @Suite struct RubyModelReadingsTests {
     private func questions(_ text: String) -> [RubyReadingQuestion] {
         let segments = RubyContent.segments(in: text, analyzer: RubyMeCabAnalyzer.ipadic)
@@ -101,6 +126,24 @@ private final class CountingChooser: RubyReadingChooser {
         async let second = RubyModelReadings.apply(to: segments, chooser: chooser)
         _ = await (first, second)
         #expect(chooser.count.withLock { $0 } == 1)
+    }
+
+    @Test func textsAreAskedAboutTogether() async {
+        let chooser = TogetherChooser(keywords: ["deserted", "spicy"])
+        let segments = RubyContent.segments(in: "夜道は人気がない。このカレーは辛い！", analyzer: RubyMeCabAnalyzer.ipadic)
+        let result = await RubyModelReadings.apply(to: segments, chooser: chooser)
+        // One request for both words, in different sentences.
+        #expect(chooser.requests.withLock { $0 } == [2])
+        #expect(result.filter { $0.source == .model }.compactMap(\.reading) == ["ひとけ", "からい"])
+    }
+
+    @Test func togetherPromptListsEachWord() {
+        let segments = RubyContent.segments(in: "夜道は人気がない。このカレーは辛い！", analyzer: RubyMeCabAnalyzer.ipadic)
+        let questions = RubyModelReadings.questions(in: segments).map(\.question)
+        let prompt = RubyModelOptions(asksTogether: true).prompt(for: questions)
+        #expect(prompt.hasPrefix("Text: 夜道は人気がない。このカレーは辛い！"))
+        #expect(prompt.contains("1. 人気 in 「"))
+        #expect(prompt.contains("2. 辛い in 「"))
     }
 
     @Test func forgottenReadingsAreChosenAgain() async {
