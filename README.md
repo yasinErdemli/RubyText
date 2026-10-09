@@ -104,6 +104,10 @@ RubyText("東京へ行きたい。")
 `.rubyFuriganaPosition(.inline)` writes readings in parentheses:
 東京（とうきょう）.
 
+SwiftUI's own text modifiers apply as they do to `Text`: `.font`,
+`.multilineTextAlignment`, `.lineLimit` and `.truncationMode`, with readings
+only over the text shown, and `.textSelection`.
+
 ### Writing the text out
 
 ```swift

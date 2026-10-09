@@ -173,7 +173,7 @@ extension PersonNameComponents: RubyStringConvertible {
     public func rubyString(readings kana: RubyScript.Kana) -> RubyString {
         let parts = [(familyName, phoneticRepresentation?.familyName), (givenName, phoneticRepresentation?.givenName)]
         let written = parts.compactMap(\.0).joined()
-        guard !written.isEmpty, written.allSatisfy(RubyKana.isJapanese) else {
+        guard !written.isEmpty, written.allSatisfy(\.isJapanese) else {
             return "\(formatted())"
         }
         var string = RubyString()

@@ -79,7 +79,7 @@ public nonisolated final class RubyMeCabAnalyzer: RubyAnalyzer, @unchecked Senda
             cursor = annotation.range.upperBound
 
             let token = String(text[annotation.range])
-            let isJapanese = token.contains(where: RubyKana.isJapanese)
+            let isJapanese = token.contains(where: \.isJapanese)
             // Keep numbers and Latin words such as 2026 or iPhone: they're
             // spoken, so they take part in reading phrases and read-aloud
             // timing, but they get no readings. Skip punctuation.
@@ -90,7 +90,7 @@ public nonisolated final class RubyMeCabAnalyzer: RubyAnalyzer, @unchecked Senda
 
             // Unknown words come back with their surface as the reading.
             let katakana = annotation.reading
-            let hasReading = isJapanese && !katakana.isEmpty && !katakana.contains(where: RubyKana.isKanji)
+            let hasReading = isJapanese && !katakana.isEmpty && !katakana.contains(where: \.isKanji)
             let id = ids?[index]
             let reading = hasReading ? RubyKana.hiragana(katakana) : nil
             let pronunciation = hasReading ? pronunciations.map { RubyKana.hiragana($0[index]) } : nil

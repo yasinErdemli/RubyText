@@ -56,7 +56,7 @@ package nonisolated enum RubyReadingUnits {
             // the tokenizer split, like 日本|語.
             // Likewise for letters and digits split apart, like iPhone|15.
             let continuesCompound = !previous.isEmpty
-                && (previous.allSatisfy(RubyKana.isKanji) && token.first.map(RubyKana.isKanji) == true
+                && (previous.allSatisfy(\.isKanji) && token.first.map(\.isKanji) == true
                     || previous.allSatisfy(isAlphanumeric) && token.first.map(isAlphanumeric) == true)
             let weight = spokenWeight(of: token, romaji: word.romaji)
             if let last = groups.indices.last,
@@ -86,7 +86,7 @@ package nonisolated enum RubyReadingUnits {
 
     /// ASCII or full-width letters and digits, which have no readings.
     private static func isAlphanumeric(_ character: Character) -> Bool {
-        (character.isLetter || character.isNumber) && !RubyKana.isJapanese(character)
+        (character.isLetter || character.isNumber) && !character.isJapanese
     }
 
     /// The unit being spoken at `time`, how far through it is, and how long

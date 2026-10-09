@@ -78,7 +78,7 @@ public enum RubyTransliterationValidator {
             if output.isEmpty, phrase.morae.contains(where: { $0.kind == .syllable }) {
                 return Issue(input: input, output: output, problem: "nothing written")
             }
-            if let kana = output.first(where: RubyKana.isKana) {
+            if let kana = output.first(where: \.isKana) {
                 return Issue(input: input, output: output, problem: "\(kana) left as kana")
             }
             return nil

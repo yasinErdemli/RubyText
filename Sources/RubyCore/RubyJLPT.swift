@@ -42,7 +42,7 @@ package nonisolated enum RubyJLPTKanji {
     /// Whether `character` is a kanji that has a difficulty, which excludes
     /// the repetition mark in 時々.
     package static func isGraded(_ character: Character) -> Bool {
-        RubyKana.isKanji(character) && character != "々"
+        character.isKanji && character != "々"
     }
 
     private static let levels: [Character: RubyJLPTLevel] = {

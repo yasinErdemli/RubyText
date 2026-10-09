@@ -1,5 +1,5 @@
 import Foundation
-import RubyCore
+@_spi(Experiments) import RubyCore
 import Testing
 
 /// Readings given in code with string interpolation.

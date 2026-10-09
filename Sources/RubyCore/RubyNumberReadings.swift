@@ -140,7 +140,7 @@ package enum RubyNumberReadings {
     }
 
     private static func isLatinLetter(_ character: Character) -> Bool {
-        character.isLetter && !RubyKana.isJapanese(character)
+        character.isLetter && !character.isJapanese
     }
 
     /// Digits, with optional thousands separators and decimals: 2026,

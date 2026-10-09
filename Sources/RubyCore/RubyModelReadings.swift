@@ -6,7 +6,7 @@ import FoundationModels
 
 /// A word whose reading depends on its meaning, in a sentence, with the
 /// readings it may have: what Apple's on-device model is asked about.
-public struct RubyReadingQuestion: Hashable, Sendable {
+@_spi(Experiments) public struct RubyReadingQuestion: Hashable, Sendable {
     /// The whole sentence the word is in.
     public let sentence: String
     /// The word as written.
@@ -58,31 +58,51 @@ extension RubyReadingChooser {
 ///
 /// It runs after the rules, only on words on a built-in list that the
 /// dictionary read, and only changes their readings, never where words
-/// begin and end. The questions it would ask, and asking them, are public,
-/// to see what it does and how long it takes:
+/// begin and end.
 ///
-///     let questions = RubyModelReadings.questions(in: text, analyzer: analyzer)
-///     let start = ContinuousClock.now
-///     let choices = try await RubyModelReadings.ask(questions)
-///     print(choices.map { $0?.reading }, ContinuousClock.now - start)
+/// To measure the model, the questions it would ask and ways of asking
+/// them are available with `@_spi(Experiments) import RubyCore`.
 public nonisolated enum RubyModelReadings {
+    /// Which of Apple's models reads words by meaning.
+    public enum Model: Hashable, Sendable {
+        /// The model on the device: private, offline, and free, but small.
+        case onDevice
+        /// Apple's larger model on its Private Cloud Compute servers: it
+        /// needs a network connection, takes longer for each request, and
+        /// has a usage quota.
+        ///
+        /// Only for apps with the `com.apple.developer.private-cloud-compute`
+        /// entitlement, which Apple grants to developers in the App Store
+        /// Small Business Program with fewer than two million first-time
+        /// downloads. Without it, the system stops the app as soon as the
+        /// model is asked, and `isAvailable` can't tell beforehand.
+        case privateCloudCompute
+    }
+
     /// Whether Apple's on-device model is available on this device, with
     /// Apple Intelligence turned on and the model downloaded.
     public static var isAvailable: Bool {
         RubyModelOptions.standard.isAvailable
     }
 
+    /// Loads `model` and the instructions it's asked with ahead of the
+    /// first question, which otherwise waits for them. Call it when a
+    /// screen that will show readings by meaning appears, or earlier.
+    public static func prewarm(_ model: Model = .onDevice) {
+        prewarm(options: RubyModelOptions(model: model))
+    }
+
     /// The questions `rubyModelReadings()` asks about `text`, read as it's
     /// written: one for each word on the list whose reading the dictionary
     /// chose, in text order.
     @_disfavoredOverload
-    public static func questions(in text: some StringProtocol, analyzer: some RubyAnalyzer) -> [RubyReadingQuestion] {
+    @_spi(Experiments) public static func questions(in text: some StringProtocol, analyzer: some RubyAnalyzer) -> [RubyReadingQuestion] {
         questions(in: RubyString(text: String(text)), analyzer: analyzer)
     }
 
     /// The questions `rubyModelReadings()` asks about `string`, outside the
     /// readings it gives and its unannotated text, in text order.
-    public static func questions(in string: RubyString, analyzer: some RubyAnalyzer) -> [RubyReadingQuestion] {
+    @_spi(Experiments) public static func questions(in string: RubyString, analyzer: some RubyAnalyzer) -> [RubyReadingQuestion] {
         let (text, manual, unannotated) = RubyContent.parse(string)
         let segments = RubyContent.segments(in: text, analyzer: analyzer)
         return questions(in: segments, excluding: manual.map(\.range) + unannotated).map(\.question)
@@ -94,7 +114,7 @@ public nonisolated enum RubyModelReadings {
     /// Unlike `answer(to:options:)`, which asks each question once, this
     /// always asks, so it can be timed. The answer is kept for `RubyText`
     /// views and `answer(to:options:)`.
-    public static func ask(_ question: RubyReadingQuestion, options: RubyModelOptions = .standard) async throws -> RubyReadingChoice? {
+    @_spi(Experiments) public static func ask(_ question: RubyReadingQuestion, options: RubyModelOptions = .standard) async throws -> RubyReadingChoice? {
         try await ask([question], options: options)[0]
     }
 
@@ -102,7 +122,7 @@ public nonisolated enum RubyModelReadings {
     /// as few requests as possible, or one at a time. Returns the reading
     /// it chose for each, in order. The answers are kept, as with
     /// `ask(_:options:)`.
-    public static func ask(_ questions: [RubyReadingQuestion], options: RubyModelOptions = .standard) async throws -> [RubyReadingChoice?] {
+    @_spi(Experiments) public static func ask(_ questions: [RubyReadingQuestion], options: RubyModelOptions = .standard) async throws -> [RubyReadingChoice?] {
         #if canImport(FoundationModels)
         let chooser = RubyFoundationModelsChooser(options: options)
         var indices: [Int?] = []
@@ -123,13 +143,13 @@ public nonisolated enum RubyModelReadings {
     /// The model's answer to `question`, as `RubyText` views get it: asked
     /// once and kept, and asked once even when several views ask at the
     /// same time. `nil` where the model isn't available or can't answer.
-    public static func answer(to question: RubyReadingQuestion, options: RubyModelOptions = .standard) async -> RubyReadingChoice? {
+    @_spi(Experiments) public static func answer(to question: RubyReadingQuestion, options: RubyModelOptions = .standard) async -> RubyReadingChoice? {
         await answers(to: [question], options: options)[0]
     }
 
     /// The model's answers to `questions`, as `RubyText` views get them,
     /// asked together or one at a time as `options` say.
-    public static func answers(to questions: [RubyReadingQuestion], options: RubyModelOptions = .standard) async -> [RubyReadingChoice?] {
+    @_spi(Experiments) public static func answers(to questions: [RubyReadingQuestion], options: RubyModelOptions = .standard) async -> [RubyReadingChoice?] {
         #if canImport(FoundationModels)
         let chooser = RubyFoundationModelsChooser(options: options)
         let tasks = chooser.asksTogether ? startAnswering(questions, chooser: chooser) : nil
@@ -148,10 +168,9 @@ public nonisolated enum RubyModelReadings {
         #endif
     }
 
-    /// Loads the model and the instructions it's asked with ahead of the
-    /// first question, which otherwise waits for them. Call it when a screen
-    /// that will show model readings appears, or earlier.
-    public static func prewarm(options: RubyModelOptions = .standard) {
+    /// Loads the model and the instructions `options` ask with ahead of
+    /// the first question.
+    @_spi(Experiments) public static func prewarm(options: RubyModelOptions) {
         #if canImport(FoundationModels)
         RubyFoundationModelsChooser.prewarm(options: options)
         #endif
@@ -199,7 +218,7 @@ public nonisolated enum RubyModelReadings {
     /// Forgets every reading the model has chosen, so `RubyText` views ask
     /// again the next time they load: to watch or measure the model, or
     /// after a system update changes it.
-    public static func forgetAnswers() {
+    @_spi(Experiments) public static func forgetAnswers() {
         answers.withLock { $0.removeAll() }
         RubyContent.forgetModelReadings()
     }
@@ -336,22 +355,9 @@ public nonisolated enum RubyModelReadings {
 /// How readings by meaning are asked for: which of Apple's models
 /// answers, how, and what it's told. Each option can be turned on
 /// separately, to compare how well the model reads with it.
-public struct RubyModelOptions: Hashable, Sendable {
+@_spi(Experiments) public struct RubyModelOptions: Hashable, Sendable {
     /// Which of Apple's models answers.
-    public enum Model: Hashable, Sendable {
-        /// The model on the device: private, offline, and free, but small.
-        case onDevice
-        /// Apple's larger model on its Private Cloud Compute servers: it
-        /// needs a network connection, takes longer for each request, and
-        /// has a usage quota.
-        ///
-        /// Only for apps with the `com.apple.developer.private-cloud-compute`
-        /// entitlement, which Apple grants to developers in the App Store
-        /// Small Business Program with fewer than two million first-time
-        /// downloads. Without it, the system stops the app as soon as the
-        /// model is asked, and `isAvailable` can't tell beforehand.
-        case privateCloudCompute
-    }
+    public typealias Model = RubyModelReadings.Model
 
     public var model = Model.onDevice
     /// Ask about every word in a text together, in one request, rather

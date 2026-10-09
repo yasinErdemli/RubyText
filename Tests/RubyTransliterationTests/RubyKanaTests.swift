@@ -24,15 +24,15 @@ import Testing
     }
 
     @Test func charactersAreClassified() {
-        #expect("漢々ヶ".allSatisfy(RubyKana.isKanji))
-        #expect(!RubyKana.isKanji("あ"))
-        #expect("あゝゞ".allSatisfy(RubyKana.isHiragana))
-        #expect(!RubyKana.isHiragana("ア"))
-        #expect("アーヽｱ".allSatisfy(RubyKana.isKatakana))
-        #expect(!RubyKana.isKatakana("・"))
-        #expect("あア".allSatisfy(RubyKana.isKana))
-        #expect(!RubyKana.isKana("漢"))
-        #expect("漢あア".allSatisfy(RubyKana.isJapanese))
-        #expect(!"a1。".contains(where: RubyKana.isJapanese))
+        #expect("漢々ヶ".allSatisfy { $0.isKanji })
+        #expect(!Character("あ").isKanji)
+        #expect("あゝゞ".allSatisfy { $0.isHiragana })
+        #expect(!Character("ア").isHiragana)
+        #expect("アーヽｱ".allSatisfy { $0.isKatakana })
+        #expect(!Character("・").isKatakana)
+        #expect("あア".allSatisfy { $0.isKana })
+        #expect(!Character("漢").isKana)
+        #expect("漢あア".allSatisfy { $0.isJapanese })
+        #expect(!"a1。".contains { $0.isJapanese })
     }
 }

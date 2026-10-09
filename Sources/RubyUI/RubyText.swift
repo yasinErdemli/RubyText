@@ -1,5 +1,5 @@
 import Accessibility
-import RubyCore
+@_spi(Experiments) import RubyCore
 import RubyTransliteration
 import SwiftUI
 
@@ -369,13 +369,12 @@ extension View {
     /// that list's readings. Where Apple Intelligence isn't available, the
     /// dictionary's readings stay.
     ///
-    /// By default the model answers about one word at a time, saying in a
-    /// few words what it means before choosing, with the sentences around
-    /// it: about a second for each word on a recent iPhone, so a long text
-    /// with many such words takes a while. Pass `.asAnswered` to `updates`
-    /// to change each reading as soon as its answer comes rather than all
-    /// together at the end, and see `RubyModelOptions` for other ways of
-    /// asking.
+    /// The model answers about one word at a time, saying in a few words
+    /// what it means before choosing, with the sentences around it: about
+    /// a second for each word on a recent iPhone, so a long text with many
+    /// such words takes a while. Pass `.asAnswered` to `updates` to change
+    /// each reading as soon as its answer comes rather than all together
+    /// at the end.
     ///
     /// Readings you supply with `{base|reading}` markup or as segments are
     /// never changed.
@@ -384,12 +383,23 @@ extension View {
     ///   - isEnabled: Whether to ask the model.
     ///   - updates: Whether readings change all together or each as soon
     ///     as it's answered.
-    ///   - options: Which model answers, how it's asked, and what it's
-    ///     told, such as Apple's larger model over Private Cloud Compute.
+    ///   - model: Which of Apple's models answers: the one on the device,
+    ///     or the larger one over Private Cloud Compute, for apps with its
+    ///     entitlement.
     public func rubyModelReadings(
         _ isEnabled: Bool = true,
         updates: RubyModelReadingUpdates = .allAtOnce,
-        options: RubyModelOptions = .standard
+        model: RubyModelReadings.Model = .onDevice
+    ) -> some View {
+        rubyModelReadings(isEnabled, updates: updates, options: RubyModelOptions(model: model))
+    }
+
+    /// Has Apple's models read words by meaning as `options` ask them, to
+    /// compare ways of asking.
+    @_spi(Experiments) public func rubyModelReadings(
+        _ isEnabled: Bool = true,
+        updates: RubyModelReadingUpdates = .allAtOnce,
+        options: RubyModelOptions
     ) -> some View {
         environment(\.rubyModelReadings, isEnabled ? updates : nil)
             .environment(\.rubyModelOptions, options)
@@ -422,6 +432,7 @@ private struct RubyTextContent: View {
     @AnimatableIgnored @Environment(\.rubyReader) private var reader
     @AnimatableIgnored @Environment(\.rubyEmphasis) private var emphasisOptions
     @AnimatableIgnored @Environment(\.rubyLineBreaking) private var lineBreaking
+    @AnimatableIgnored @Environment(\.truncationMode) private var truncationMode
     @AnimatableIgnored @Environment(\.rubySpacing) private var spacing
     @AnimatableIgnored @Environment(\.rubyShowsWordDetails) private var showsWordDetails
     @AnimatableIgnored @Environment(\.rubyWordTapAction) private var wordTapAction
@@ -509,6 +520,7 @@ private struct RubyTextContent: View {
                 furigana: furigana,
                 romajiAbove: romajiAbove,
                 romajiBelow: romajiBelow,
+                truncationMode: truncationMode,
                 emphasis: emphasis
             ))
             // Over a material, such as a popover's glass, foreground styles

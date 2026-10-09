@@ -13,6 +13,7 @@ RubyRomanization.kunrei.transliterate("しんぶん")                           
 RubyRomanization.polivanov.transliterate("さむらい")                             // самурай
 RubyRomanization.hangul.transliterate("さっぽろ")                                // 삿포로
 RubyKana.katakana("ひらがな")                                                    // ヒラガナ
+"漢字".allSatisfy(\.isKanji)                                                   // true
 ```
 
 To find the readings of kanji, use `RubyCore`.
@@ -46,7 +47,6 @@ with ``RubyTransliterationValidator``.
 ### Writing kana
 
 - ``RubyRomanization``
-- ``RubyRomaji``
 
 ### Styles
 
@@ -63,3 +63,8 @@ with ``RubyTransliterationValidator``.
 ### Kana
 
 - ``RubyKana``
+- ``Swift/Character/isKanji``
+- ``Swift/Character/isKana``
+- ``Swift/Character/isHiragana``
+- ``Swift/Character/isKatakana``
+- ``Swift/Character/isJapanese``

@@ -2,6 +2,7 @@ import CoreGraphics
 import RubyCore
 import RubyTransliteration
 @testable import RubyUI
+import SwiftUI
 import Testing
 
 @Suite struct RubyStyleTests {
@@ -50,5 +51,17 @@ import Testing
         // is asked for in hiragana.
         #expect(furigana("{本気|マジ}で東京") == ["マジ", "とうきょう"])
         #expect(furigana("{本気|マジ}で東京", in: .hiragana(loanwords: .hiragana)) == ["まじ", "とうきょう"])
+    }
+
+    /// Word colorings say which color they give, for keys to the colors.
+    @Test func wordColorsSayTheirColors() {
+        #expect(RubyWordColors.partOfSpeech.color(for: .verb) == .red)
+        #expect(RubyWordColors.jlpt.color(for: .n5) == .green)
+        #expect(RubyWordColors.readingSources.color(for: .model) == .green)
+        // Only levels a learner doesn't know yet.
+        #expect(RubyWordColors.jlpt(above: .n4).color(for: .n4) == nil)
+        #expect(RubyWordColors.jlpt(above: .n4).color(for: .n3) == .purple)
+        // Colorings by something else have none.
+        #expect(RubyWordColors.alternating.color(for: .verb) == nil)
     }
 }

@@ -1,5 +1,5 @@
 import Foundation
-@testable import RubyCore
+@_spi(Experiments) @testable import RubyCore
 import Testing
 
 private func h(_ sentence: String, _ word: String, _ reading: String) -> BenchmarkCase {

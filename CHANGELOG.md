@@ -15,18 +15,17 @@ The first release.
 - Readings that depend on meaning chosen by Apple's on-device model with
   `rubyModelReadings()`, where Apple Intelligence is available: 辛い as からい
   for spicy food, 人気 as ひとけ for people around. It says what the word
-  means before choosing, with the sentences around it, which `RubyModelOptions`
-  can change, along with asking about a text's words together and using
-  Apple's larger model over Private Cloud Compute, for apps with its
-  entitlement. With `updates: .asAnswered`,
-  each reading changes as soon as the model answers, so long texts correct
-  themselves as it works. `RubyModelReadings` lists
-  the questions the model is asked, asks them one at a time to time them,
-  and prewarms the model.
+  means before choosing, with the sentences around it. With
+  `updates: .asAnswered`, each reading changes as soon as the model answers,
+  so long texts correct themselves as it works, and `model:
+  .privateCloudCompute` asks Apple's larger model, for apps with its
+  entitlement. `RubyModelReadings.prewarm()` loads the model ahead of time;
+  the questions it's asked and the ways of asking that the benchmark
+  compares are SPI, with `@_spi(Experiments)`.
 - `{base|reading}` markup and `RubyText(segments:)` for readings you supply.
   Markup is read the way `Text` reads Markdown: in literals and with
   `RubyText(markup:)`, while a `String` is shown as written. Each reading
-  records where it came from, as `ReadingSource`.
+  records where it came from, as `RubyReadingSource`.
 - Readings in code with string interpolation, as `RubyString`:
   `\(base, reading:)`, `\(unannotated:)` for text that's never annotated,
   and `RubyStringConvertible` for your own types, with
@@ -49,7 +48,8 @@ The first release.
   it.
 - Lines break between phrases, or anywhere with `.rubyLineBreaking(.anywhere)`,
   which still keeps each paragraph's last word together so no line holds a
-  single kana (す。).
+  single kana (す。). SwiftUI's `lineLimit(_:)` and `truncationMode(_:)`
+  apply, with readings only over the text shown.
 - Whole text written in hiragana, katakana or romaji with
   `rubyTranscription(_:)`, rolling glyph by glyph into the new text. One
   `RubyScript` type names the script for furigana and for the whole text.
@@ -59,7 +59,9 @@ The first release.
   and places start with a capital, as the dictionary marks them: Tōkyō,
   İbaraki in Turkish.
 - Learner tools: furigana only above a JLPT level, word colors by part of
-  speech, JLPT level or vocabulary, and space between words or phrases.
+  speech, JLPT level (`.jlpt(above: .n4)` for the levels a learner doesn't
+  know yet) or vocabulary, with `color(for:)` for a key to the colors, and
+  space between words or phrases.
 - Word colors by where each reading came from, `.readingSources`, to check
   readings: yours, rules', and the model's.
 - Word details with the reading, dictionary form, part of speech, JLPT
@@ -80,7 +82,8 @@ The first release.
 - `RubyConverter` writes text in kana or romaji, or with inline readings,
   as plain strings.
 - `RubyTransliteration`: kana to romaji, Cyrillic or Hangul, hiragana and
-  katakana, with only the standard library. Kana are read once into a
+  katakana, and `Character` properties such as `isKanji` and `isKana`, with
+  only the standard library. Kana are read once into a
   `RubyPhrase` of `RubyMora`s, settling long vowels, particles, っ and ん, and
   a `RubyTransliterationStyle` writes them: `RubyTableStyle` as data you can
   change, or your own type. `RubyTransliterationValidator` checks a style

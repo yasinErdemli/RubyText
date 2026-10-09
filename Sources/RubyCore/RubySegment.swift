@@ -2,7 +2,7 @@ import Foundation
 
 /// Where a segment's reading came from, in priority order: a manual
 /// override, a rule, Foundation Models as a tie-breaker, or the dictionary.
-public enum ReadingSource: String, Hashable, Sendable, CaseIterable {
+public enum RubyReadingSource: String, Hashable, Sendable, CaseIterable {
     case manual, rule, model, dictionary
 }
 
@@ -22,7 +22,7 @@ public struct RubySegment: Hashable, Sendable {
     /// long vowels; without it, they follow spelling rules.
     public var pronunciation: String?
     public var word: Word?
-    public var source: ReadingSource
+    public var source: RubyReadingSource
     /// Offsets in `reading` where romaji put a space, so long numbers read
     /// in parts: nisen nijūroku.
     package var romajiBreaks: [Int] = []
@@ -57,7 +57,7 @@ public struct RubySegment: Hashable, Sendable {
         reading: String? = nil,
         pronunciation: String? = nil,
         word: Word? = nil,
-        source: ReadingSource = .manual
+        source: RubyReadingSource = .manual
     ) {
         self.base = base
         self.reading = reading

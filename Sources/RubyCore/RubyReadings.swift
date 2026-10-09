@@ -27,7 +27,7 @@ package struct RubyWord: Hashable, Sendable {
     /// vocabulary in any conjugation.
     package var dictionaryForm: String? = nil
     /// Where the word's reading came from.
-    package var source: ReadingSource = .dictionary
+    package var source: RubyReadingSource = .dictionary
 }
 
 extension RubyWord {
@@ -114,12 +114,12 @@ package nonisolated enum RubyReadings {
         let shown = written.utf16.count == reading.utf16.count ? written : reading
         let whole = [RubyReading(range: offset..<(offset + base.utf16.count), text: shown)]
 
-        guard base.contains(where: RubyKana.isKanji) else { return force ? whole : [] }
+        guard base.contains(where: \.isKanji) else { return force ? whole : [] }
 
         // Group the base into alternating runs of kanji and other characters.
         var runs: [(isKanji: Bool, text: String)] = []
         for character in base {
-            let kanji = RubyKana.isKanji(character)
+            let kanji = character.isKanji
             if let last = runs.indices.last, runs[last].isKanji == kanji {
                 runs[last].text.append(character)
             } else {

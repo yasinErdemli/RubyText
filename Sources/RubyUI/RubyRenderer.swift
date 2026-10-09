@@ -14,6 +14,8 @@ struct RubyRenderer: TextRenderer {
     let furigana: CGFloat
     let romajiAbove: CGFloat
     let romajiBelow: CGFloat
+    /// Where text cut short by `lineLimit(_:)` shows its ellipsis.
+    let truncationMode: Text.TruncationMode
     var emphasis: RubyEmphasisState?
 
     /// How much of the reserved height annotations take above and below
@@ -40,6 +42,8 @@ struct RubyRenderer: TextRenderer {
         let line: Int
         var rect: CGRect
         var glyphCount: Int
+        /// Where the first of its glyphs is in the paragraph.
+        var firstOffset: Int
     }
 
     func draw(layout: Text.Layout, in context: inout GraphicsContext) {
@@ -55,6 +59,10 @@ struct RubyRenderer: TextRenderer {
         let lineRects = layout.map(\.typographicBounds.rect)
         let leadingEdge = lineRects.map(\.minX).min() ?? 0
         var trailingEdge = leadingEdge
+        // Text cut short draws an ellipsis in place of a character it
+        // hides, which gets no annotation, and words it cuts show only
+        // their share of their readings.
+        let ellipsis = layout.isTruncated ? Self.ellipsis(in: layout, mode: truncationMode) : nil
 
         for (lineNumber, line, paragraph, start) in layout.rubyParagraphLines {
             guard paragraphs.indices.contains(paragraph) else {
@@ -77,8 +85,11 @@ struct RubyRenderer: TextRenderer {
             let spokenRange = emphasis.flatMap { $0.paragraph == paragraph ? $0.range : nil }
             var emphasizedSlices: [(slice: Text.Layout.RunSlice, shift: CGFloat)] = []
             var wordRect = CGRect.null
+            // Glyphs in the line so far, to find the ellipsis.
+            var glyphsBefore = 0
 
             for run in line {
+                defer { glyphsBefore += run.count }
                 let offsets = run.characterIndices.map { start.distance(to: $0) }
                 guard offsets.count == run.count else {
                     context.draw(run)
@@ -111,6 +122,7 @@ struct RubyRenderer: TextRenderer {
 
                 // Collect the boxes that annotations and emphasis sit around.
                 for index in 0..<run.count {
+                    if let ellipsis, ellipsis.line == lineNumber, ellipsis.glyph == glyphsBefore + index { continue }
                     let reading = Self.item(at: offsets[index], in: data.furigana, range: \.range)
                     let romaji = Self.item(at: offsets[index], in: data.romaji, range: \.range)
                     let spoken = isSpoken(index)
@@ -120,10 +132,10 @@ struct RubyRenderer: TextRenderer {
                     let rect = CGRect(x: glyph.minX, y: lineBounds.minY, width: glyph.width, height: lineBounds.height)
                     if spoken { wordRect = wordRect.union(rect) }
                     if let reading {
-                        Self.add(reading, rect: rect, paragraph: paragraph, line: lineNumber, to: &furiganaFragments)
+                        Self.add(reading, rect: rect, offset: offsets[index], paragraph: paragraph, line: lineNumber, to: &furiganaFragments)
                     }
                     if let romaji {
-                        Self.add(romaji, rect: rect, paragraph: paragraph, line: lineNumber, to: &romajiFragments)
+                        Self.add(romaji, rect: rect, offset: offsets[index], paragraph: paragraph, line: lineNumber, to: &romajiFragments)
                     }
                 }
             }
@@ -145,7 +157,7 @@ struct RubyRenderer: TextRenderer {
             var layer = context
             layer.opacity = furigana
             layer.translateBy(x: 0, y: (1 - furigana) * slide)
-            let pieces = Self.pieces(of: furiganaFragments)
+            let pieces = Self.pieces(of: furiganaFragments, truncated: ellipsis != nil)
             // Readings of neighboring kanji (経済|政策) may touch; others
             // keep a little space.
             let centers = placeAnnotations(pieces, adjoining: true, spacing: metrics.romajiSpacing / 2, within: edges, in: context)
@@ -157,7 +169,7 @@ struct RubyRenderer: TextRenderer {
             }
         }
         guard romajiAbove > 0 || romajiBelow > 0 else { return }
-        let pieces = Self.pieces(of: romajiFragments)
+        let pieces = Self.pieces(of: romajiFragments, truncated: ellipsis != nil)
         let centers = placeAnnotations(pieces, adjoining: false, spacing: metrics.romajiSpacing, within: edges, in: context)
         // Romaji switching sides fade out on one and in on the other.
         for (strength, isAbove) in [(romajiAbove, true), (romajiBelow, false)] where strength > 0 {
@@ -420,6 +432,7 @@ struct RubyRenderer: TextRenderer {
     private static func add(
         _ annotation: RubyAnnotation,
         rect: CGRect,
+        offset: Int,
         paragraph: Int,
         line: Int,
         to fragments: inout [Fragment]
@@ -429,8 +442,32 @@ struct RubyRenderer: TextRenderer {
            fragments[last].line == line {
             fragments[last].rect = fragments[last].rect.union(rect)
             fragments[last].glyphCount += 1
+            fragments[last].firstOffset = min(fragments[last].firstOffset, offset)
         } else {
-            fragments.append(Fragment(annotation: annotation, paragraph: paragraph, line: line, rect: rect, glyphCount: 1))
+            fragments.append(Fragment(annotation: annotation, paragraph: paragraph, line: line, rect: rect, glyphCount: 1, firstOffset: offset))
+        }
+    }
+
+    /// Where truncated text shows its ellipsis: the line, and the glyph
+    /// within it. It stands in for the first character it hides, so it has
+    /// that character's index: at the end of the last line, at its start,
+    /// or before the gap where the middle was cut.
+    static func ellipsis(in layout: Text.Layout, mode: Text.TruncationMode) -> (line: Int, glyph: Int)? {
+        guard let line = layout.indices.last(where: { !layout[$0].isEmpty }) else { return nil }
+        let offsets = layout[line].flatMap(\.characterIndices)
+        guard !offsets.isEmpty else { return nil }
+        switch mode {
+        case .head:
+            return (line, 0)
+        case .middle:
+            var widest = (gap: 0, glyph: 0)
+            for index in offsets.indices.dropFirst() {
+                let gap = offsets[index - 1].distance(to: offsets[index])
+                if gap > widest.gap { widest = (gap, index - 1) }
+            }
+            return widest.gap > 0 ? (line, widest.glyph) : nil
+        default:
+            return (line, offsets.count - 1)
         }
     }
 
@@ -512,7 +549,7 @@ struct RubyRenderer: TextRenderer {
     /// Pairs each fragment with the annotation text to draw for it. When the
     /// base wraps, the text is divided in proportion to how many base
     /// characters each line holds, so it isn't duplicated.
-    private static func pieces(of fragments: [Fragment]) -> [(text: String, fragment: Fragment)] {
+    private static func pieces(of fragments: [Fragment], truncated: Bool) -> [(text: String, fragment: Fragment)] {
         var result: [(text: String, fragment: Fragment)] = []
         var index = 0
         while index < fragments.count {
@@ -520,7 +557,26 @@ struct RubyRenderer: TextRenderer {
             var end = index
             while end + 1 < fragments.count, fragments[end + 1].annotation.id == id { end += 1 }
 
-            if index == end {
+            if truncated, index == end, fragments[index].glyphCount < fragments[index].annotation.baseCount {
+                // Cut short by truncation: the share of the reading for the
+                // characters shown, from the start or the end of the word.
+                let fragment = fragments[index]
+                let text = Array(fragment.annotation.text)
+                let shown = Double(fragment.glyphCount) / Double(max(fragment.annotation.baseCount, 1))
+                if fragment.firstOffset <= fragment.annotation.range.lowerBound {
+                    var stop = Int((Double(text.count) * shown).rounded(.down))
+                    while stop < text.count, stop > 0, Self.attachesToPrevious.contains(text[stop]) || !Self.isRomajiBreak(in: text, at: stop) {
+                        stop += 1
+                    }
+                    result.append((String(text[..<stop]), fragment))
+                } else {
+                    var start = text.count - Int((Double(text.count) * shown).rounded(.down))
+                    while start < text.count, start > 0, Self.attachesToPrevious.contains(text[start]) || !Self.isRomajiBreak(in: text, at: start) {
+                        start += 1
+                    }
+                    result.append((String(text[start...]), fragment))
+                }
+            } else if index == end {
                 result.append((fragments[index].annotation.text, fragments[index]))
             } else {
                 let text = Array(fragments[index].annotation.text)

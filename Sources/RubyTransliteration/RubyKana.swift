@@ -1,5 +1,6 @@
-/// Tells kanji and kana apart and converts between hiragana and katakana,
-/// with no dictionary and nothing beyond the standard library.
+/// Converts between hiragana and katakana, with no dictionary and nothing
+/// beyond the standard library. `Character` tells kanji and kana apart:
+/// `isKanji`, `isKana`, `isHiragana`, `isKatakana`, `isJapanese`.
 public enum RubyKana {
     /// `text` with its katakana as hiragana: トウキョウ is とうきょう.
     ///
@@ -22,47 +23,6 @@ public enum RubyKana {
             // ぁ through ゖ, and the repeat marks ゝ and ゞ.
             (0x3041...0x3096).contains(scalar) || (0x309D...0x309E).contains(scalar)
         }
-    }
-
-    /// Whether `character` is a kanji, including the repeat mark 々, 〆,
-    /// and the small ヵ and ヶ that counters use (3ヶ月).
-    public static func isKanji(_ character: Character) -> Bool {
-        character.unicodeScalars.contains { scalar in
-            scalar.properties.isIdeographic || "々〆ヵヶ".unicodeScalars.contains(scalar)
-        }
-    }
-
-    /// Whether `character` is hiragana, including small kana, the voicing
-    /// marks, and the repeat marks ゝ and ゞ.
-    public static func isHiragana(_ character: Character) -> Bool {
-        character.unicodeScalars.allSatisfy { (0x3041...0x309F).contains($0.value) }
-    }
-
-    /// Whether `character` is katakana, full or half width, including the
-    /// long-vowel mark ー and the repeat marks ヽ and ヾ, but not the
-    /// middle dot ・.
-    public static func isKatakana(_ character: Character) -> Bool {
-        character.unicodeScalars.allSatisfy { scalar in
-            switch scalar.value {
-            case 0x30A1...0x30FA, 0x30FC...0x30FF, // Katakana, without ・
-                 0x31F0...0x31FF,                  // Small katakana for Ainu
-                 0x3099...0x309C,                  // Voicing marks
-                 0xFF66...0xFF9F:                  // Half-width katakana
-                true
-            default:
-                false
-            }
-        }
-    }
-
-    /// Whether `character` is hiragana or katakana.
-    public static func isKana(_ character: Character) -> Bool {
-        isHiragana(character) || isKatakana(character)
-    }
-
-    /// Whether `character` is a kanji or kana.
-    public static func isJapanese(_ character: Character) -> Bool {
-        isKanji(character) || isKana(character)
     }
 
     /// `text` with each scalar `shifts` accepts moved by `offset`.
@@ -136,5 +96,48 @@ public enum RubyKana {
         return Dictionary(uniqueKeysWithValues: stride(from: 0, to: characters.count - 1, by: 2).map {
             (characters[$0], characters[$0 + 1])
         })
+    }
+}
+
+extension Character {
+    /// Whether this is a kanji, including the repeat mark 々, 〆, and the
+    /// small ヵ and ヶ that counters use (3ヶ月).
+    public var isKanji: Bool {
+        unicodeScalars.contains { scalar in
+            scalar.properties.isIdeographic || "々〆ヵヶ".unicodeScalars.contains(scalar)
+        }
+    }
+
+    /// Whether this is hiragana, including small kana, the voicing marks,
+    /// and the repeat marks ゝ and ゞ.
+    public var isHiragana: Bool {
+        unicodeScalars.allSatisfy { (0x3041...0x309F).contains($0.value) }
+    }
+
+    /// Whether this is katakana, full or half width, including the
+    /// long-vowel mark ー and the repeat marks ヽ and ヾ, but not the
+    /// middle dot ・.
+    public var isKatakana: Bool {
+        unicodeScalars.allSatisfy { scalar in
+            switch scalar.value {
+            case 0x30A1...0x30FA, 0x30FC...0x30FF, // Katakana, without ・
+                 0x31F0...0x31FF,                  // Small katakana for Ainu
+                 0x3099...0x309C,                  // Voicing marks
+                 0xFF66...0xFF9F:                  // Half-width katakana
+                true
+            default:
+                false
+            }
+        }
+    }
+
+    /// Whether this is hiragana or katakana.
+    public var isKana: Bool {
+        isHiragana || isKatakana
+    }
+
+    /// Whether this is a kanji or kana.
+    public var isJapanese: Bool {
+        isKanji || isKana
     }
 }

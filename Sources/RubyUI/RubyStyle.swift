@@ -176,7 +176,7 @@ public enum RubyLineBreaking: Hashable, Sendable {
     /// (東京へ, 日本語を) and never split across lines, like
     /// `word-break: auto-phrase` on the web. A phrase longer than a line
     /// still breaks within it.
-    case words
+    case phrases
     /// Between almost any two characters, following the rules against
     /// starting a line with 。 or ゃ. Each paragraph's last word stays
     /// together, so its last line never holds a single kana (す。).
@@ -188,7 +188,7 @@ public enum RubyLineBreaking: Hashable, Sendable {
     /// (`lw=phrase`) breaks between phrases instead.
     var languageIdentifier: String {
         switch self {
-        case .words: "ja-u-lw-phrase"
+        case .phrases: "ja-u-lw-phrase"
         case .anywhere: "ja"
         }
     }
@@ -205,7 +205,7 @@ public enum RubyLineBreaking: Hashable, Sendable {
         for ending in endings() {
             let lower = text.utf16.index(text.startIndex, offsetBy: ending.lowerBound)
             let upper = text.utf16.index(lower, offsetBy: ending.count)
-            text[lower..<upper].languageIdentifier = Self.words.languageIdentifier
+            text[lower..<upper].languageIdentifier = Self.phrases.languageIdentifier
         }
     }
 
@@ -268,8 +268,8 @@ extension EnvironmentValues {
     @Entry var rubyRomanization = RubyRomanization.hepburn
     /// Space `RubyText` views draw between words. None by default.
     @Entry var rubySpacing = RubySpacing.none
-    /// Where `RubyText` views may break lines. Between words by default.
-    @Entry var rubyLineBreaking = RubyLineBreaking.words
+    /// Where `RubyText` views may break lines. Between phrases by default.
+    @Entry var rubyLineBreaking = RubyLineBreaking.phrases
     /// Whether `RubyText` hides readings over numbers written in digits.
     @Entry var rubyDigitReadingsHidden = false
     /// Which readings VoiceOver says in place of the text as written.

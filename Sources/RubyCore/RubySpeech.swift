@@ -38,7 +38,7 @@ public struct RubySpokenReadings: OptionSet, Hashable, Sendable {
     public static let all: Self = [.corrections, .dictionary]
 
     /// Whether readings from `source` are spoken.
-    package func contains(_ source: ReadingSource) -> Bool {
+    package func contains(_ source: RubyReadingSource) -> Bool {
         switch source {
         case .manual: contains(Self.manual)
         case .rule: contains(Self.rule)

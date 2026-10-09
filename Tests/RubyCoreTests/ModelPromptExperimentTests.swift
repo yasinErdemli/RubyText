@@ -1,5 +1,5 @@
 import Foundation
-@testable import RubyCore
+@_spi(Experiments) @testable import RubyCore
 import Testing
 
 /// Two sentences where the second has a word whose reading only the first

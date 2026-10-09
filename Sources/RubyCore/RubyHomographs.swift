@@ -38,7 +38,7 @@ package nonisolated enum RubyHomographs {
     /// `sense`: 止め as やめる is やめ, 辛かっ as からい is からかっ.
     private static func reading(of text: String, as sense: Sense) -> String? {
         let word = Array(sense.word)
-        guard let lastKanji = word.lastIndex(where: RubyKana.isKanji) else { return nil }
+        guard let lastKanji = word.lastIndex(where: \.isKanji) else { return nil }
         let stem = String(word[...lastKanji])
         let ending = String(word[(lastKanji + 1)...])
         guard text.hasPrefix(stem), sense.reading.hasSuffix(ending) else { return nil }
@@ -81,7 +81,7 @@ package nonisolated enum RubyHomographs {
 }
 
 /// A reading a word on the homograph list may have, with its meaning.
-public struct RubyReadingChoice: Hashable, Sendable {
+@_spi(Experiments) public struct RubyReadingChoice: Hashable, Sendable {
     /// The reading of the word as written in the text, in hiragana.
     public let reading: String
     /// What the word means read this way, in English, as the model is told.

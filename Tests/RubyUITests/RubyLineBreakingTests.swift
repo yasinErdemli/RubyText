@@ -29,7 +29,7 @@ import Testing
         let resolved = RubyMetrics.phraseBreaking(font.resolve(in: try Self.fontContext()).ctFont)
         let converted = Font(resolved)
         var text = AttributedString(Self.sentence)
-        text.languageIdentifier = RubyLineBreaking.words.languageIdentifier
+        text.languageIdentifier = RubyLineBreaking.phrases.languageIdentifier
         // From six characters a line, so every phrase fits on one.
         let size = CTFontGetSize(resolved)
         for width in stride(from: size * 6, through: size * 18, by: size) {
@@ -55,7 +55,7 @@ import Testing
         /// after punctuation.
         func phraseShare(_ content: RubyContent, ends: Set<Int>) -> Double {
             var text = AttributedString(content.string)
-            text.languageIdentifier = RubyLineBreaking.words.languageIdentifier
+            text.languageIdentifier = RubyLineBreaking.phrases.languageIdentifier
             let size = CTFontGetSize(font)
             var atEnds = 0
             var total = 0
@@ -98,7 +98,7 @@ import Testing
 
     /// Breaking anywhere, the last line of a paragraph never holds a single
     /// kana (す。), with or without annotations.
-    @Test(arguments: [RubyLineBreaking.words, .anywhere])
+    @Test(arguments: [RubyLineBreaking.phrases, .anywhere])
     func paragraphsNeverEndWithOneKana(_ lineBreaking: RubyLineBreaking) throws {
         let metrics = RubyMetrics(font: .title3, in: try Self.fontContext())
         let texts = [
@@ -130,11 +130,51 @@ import Testing
         }
     }
 
+    /// Text cut short draws an ellipsis in place of the first character it
+    /// hides; annotations skip it.
+    @Test(arguments: [Text.TruncationMode.tail, .middle, .head])
+    func ellipsesAreFound(_ mode: Text.TruncationMode) throws {
+        struct Recorder: TextRenderer {
+            let mode: Text.TruncationMode
+            func draw(layout: Text.Layout, in context: inout GraphicsContext) {
+                guard layout.isTruncated, let ellipsis = RubyRenderer.ellipsis(in: layout, mode: mode) else { return }
+                let base = layout[0].first!.characterIndices.first!
+                let offsets = layout[ellipsis.line].flatMap(\.characterIndices).map { base.distance(to: $0) }
+                RubyLineBreakingTests.recordedEllipsis = (offsets[ellipsis.glyph], offsets.enumerated().filter { $0.offset != ellipsis.glyph }.map(\.element))
+            }
+        }
+        let metrics = RubyMetrics(font: .body, in: try Self.fontContext())
+        let content = RubyContent.content(for: Self.sentence + Self.sentence)
+        let measurements = RubyMeasurements.measurements(for: content, metrics: metrics, furiganaScript: .hiragana, romanization: .hepburn)
+        let layout = RubyLayout(
+            measurements: measurements, furigana: 1, romaji: 1,
+            readingVisibility: .zero, romajiVisibility: .zero, wordGaps: .zero,
+            fontSize: metrics.fontSize, romajiSpacing: metrics.romajiSpacing,
+            lineBreaking: .phrases, insertedSpaceWidth: 0, textColors: [], backgrounds: []
+        )
+        Self.recordedEllipsis = nil
+        let view = Text(layout.text).font(metrics.textFont).lineLimit(2).truncationMode(mode)
+            .textRenderer(Recorder(mode: mode)).frame(width: 300)
+        _ = ImageRenderer(content: view).uiImage
+        let (ellipsis, shown) = try #require(Self.recordedEllipsis)
+        // The ellipsis stands in for the first character hidden: after the
+        // text shown, before it, or after its first part.
+        switch mode {
+        case .head: #expect(ellipsis < shown.min()!)
+        case .middle:
+            let firstPart = shown.prefix { $0 < ellipsis }
+            #expect(ellipsis == firstPart.max()! + 1)
+            #expect(shown.contains { $0 > ellipsis + 1 })
+        default: #expect(ellipsis == shown.max()! + 1)
+        }
+    }
+
     // MARK: Helpers
 
     nonisolated(unsafe) private static var capturedContext: Font.Context?
     nonisolated(unsafe) private static var recordedLines: [String] = []
     nonisolated(unsafe) private static var recordedParagraphs: [[String]] = []
+    nonisolated(unsafe) private static var recordedEllipsis: (offset: Int, shown: [Int])?
 
     private struct ContextCapture: View {
         @Environment(\.fontResolutionContext) private var context

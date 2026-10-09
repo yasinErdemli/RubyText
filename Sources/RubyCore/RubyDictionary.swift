@@ -109,7 +109,7 @@ public nonisolated final class RubyDictionary: Sendable {
             }
             guard !found.isEmpty else { continue }
             let reading = reading.map(RubyKana.hiragana)
-            let termIsKana = term.allSatisfy { RubyKana.isJapanese($0) && !RubyKana.isKanji($0) }
+            let termIsKana = term.allSatisfy { $0.isJapanese && !$0.isKanji }
             // Rank by, in order: a matching part of speech; a matching
             // reading, as the main reading, as another, or sharing the stem
             // of an inflected form (うまれた, うまれる); and, for kana, words

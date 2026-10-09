@@ -18,7 +18,7 @@ converter.annotate("東京へ行きたい。", with: .hiragana)    // 東京（�
 Readings are resolved in layers: readings you supply in `{base|reading}`
 markup or in a ``RubyString``, then rules for numbers, counters and phrases, then optionally Apple's
 on-device model for words whose reading depends on meaning, then the
-dictionary. Each reading records its layer as a ``ReadingSource``.
+dictionary. Each reading records its layer as a ``RubyReadingSource``.
 
 ## Topics
 
@@ -27,7 +27,7 @@ dictionary. Each reading records its layer as a ``ReadingSource``.
 - ``RubyAnalyzer``
 - ``RubyMeCabAnalyzer``
 - ``RubySegment``
-- ``ReadingSource``
+- ``RubyReadingSource``
 
 ### Giving readings
 
@@ -38,9 +38,6 @@ dictionary. Each reading records its layer as a ``ReadingSource``.
 ### Readings by meaning
 
 - ``RubyModelReadings``
-- ``RubyModelOptions``
-- ``RubyReadingQuestion``
-- ``RubyReadingChoice``
 
 ### Writing text out
 

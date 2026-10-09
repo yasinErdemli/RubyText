@@ -61,13 +61,13 @@ import Testing
         ("漢じ", "漢ji"),
     ])
     func kana(_ text: String, _ expected: String) {
-        #expect(RubyRomaji.hepburn(text) == expected)
+        #expect(RubyRomanization.hepburn.transliterate(text) == expected)
     }
 
     @Test func pronunciationDecidesLongVowelsAndParticles() {
-        #expect(RubyRomaji.hepburn("おもう") == "omō")
-        #expect(RubyRomaji.hepburn("おもう", pronunciation: "おもう") == "omou")
-        #expect(RubyRomaji.hepburn("きょうは", pronunciation: "きょーわ") == "kyōwa")
+        #expect(RubyRomanization.hepburn.transliterate("おもう") == "omō")
+        #expect(RubyRomanization.hepburn.transliterate("おもう", pronunciation: "おもう") == "omou")
+        #expect(RubyRomanization.hepburn.transliterate("きょうは", pronunciation: "きょーわ") == "kyōwa")
     }
 
     /// Kana where the systems differ, as Hepburn, Nihon-shiki, and passport
@@ -94,12 +94,8 @@ import Testing
         ("ヴァイオリン", "vaiorin", "vaiorin", "baiorin"),
     ])
     func systems(_ kana: String, _ hepburn: String, _ nippon: String, _ passport: String) {
-        #expect(RubyRomaji.romanize(kana, system: .hepburn) == hepburn)
-        #expect(RubyRomaji.romanize(kana, system: .nippon) == nippon)
-        #expect(RubyRomaji.romanize(kana, system: .passport) == passport)
-    }
-
-    @Test func hepburnIsTheDefault() {
-        #expect(RubyRomaji.hepburn("きょうと") == RubyRomaji.romanize("きょうと", system: .hepburn))
+        #expect(RubyRomanization.hepburn.transliterate(kana) == hepburn)
+        #expect(RubyRomanization.nippon.transliterate(kana) == nippon)
+        #expect(RubyRomanization.passport.transliterate(kana) == passport)
     }
 }

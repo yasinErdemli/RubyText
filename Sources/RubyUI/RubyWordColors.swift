@@ -18,7 +18,7 @@ public struct RubyWordColors: Hashable, Sendable {
         case alternating([Color])
         case words([String: Color])
         case jlpt([RubyJLPTLevel: Color], vocabulary: [String: RubyJLPTLevel])
-        case readingSources([ReadingSource: Color])
+        case readingSources([RubyReadingSource: Color])
     }
 
     private let rule: Rule
@@ -34,7 +34,7 @@ public struct RubyWordColors: Hashable, Sendable {
     }
 
     /// The colors `partOfSpeech` uses.
-    public static let defaultPartOfSpeechColors: [RubyPartOfSpeech: Color] = [
+    static let defaultPartOfSpeechColors: [RubyPartOfSpeech: Color] = [
         .noun: .blue,
         .verb: .red,
         .adjective: .green,
@@ -69,27 +69,32 @@ public struct RubyWordColors: Hashable, Sendable {
     }
 
     /// Colors each word by its JLPT level, from green for N5 to red for N1.
-    public static let jlpt = jlpt(defaultJLPTColors)
+    public static let jlpt = jlpt()
 
-    /// Colors each word by its JLPT level, with your own colors. Leave out
-    /// the levels a learner already knows to mark only harder words:
+    /// Colors each word by its JLPT level, from green for N5 to red for N1,
+    /// only above `level`, to mark the words a learner doesn't know yet:
     ///
-    ///     .jlpt([.n2: .orange, .n1: .red])
+    ///     .jlpt(above: .n4)   // N3, N2 and N1 words
     ///
     /// A word's level is its hardest kanji's level. Kanji beyond the JLPT
     /// count as N1, and words without kanji have no level unless
     /// `vocabulary` gives them one. `vocabulary` maps words, as written or
     /// in dictionary form, to levels from your own word lists, and takes
     /// precedence over kanji.
-    public static func jlpt(
-        _ colors: [RubyJLPTLevel: Color] = defaultJLPTColors,
-        vocabulary: [String: RubyJLPTLevel] = [:]
-    ) -> RubyWordColors {
+    public static func jlpt(above level: RubyJLPTLevel? = nil, vocabulary: [String: RubyJLPTLevel] = [:]) -> RubyWordColors {
+        jlpt(defaultJLPTColors.filter { key, _ in level.map { key > $0 } ?? true }, vocabulary: vocabulary)
+    }
+
+    /// Colors each word by its JLPT level, with your own colors. Levels
+    /// without a color stay uncolored:
+    ///
+    ///     .jlpt([.n2: .orange, .n1: .red])
+    public static func jlpt(_ colors: [RubyJLPTLevel: Color], vocabulary: [String: RubyJLPTLevel] = [:]) -> RubyWordColors {
         RubyWordColors(rule: .jlpt(colors, vocabulary: vocabulary))
     }
 
     /// The colors `jlpt` uses.
-    public static let defaultJLPTColors: [RubyJLPTLevel: Color] = [
+    static let defaultJLPTColors: [RubyJLPTLevel: Color] = [
         .n5: .green,
         .n4: .blue,
         .n3: .purple,
@@ -106,16 +111,34 @@ public struct RubyWordColors: Hashable, Sendable {
     /// colors. Sources without a color stay uncolored.
     ///
     ///     .rubyWordColors(.readingSources([.model: .green]))  // the model's changes
-    public static func readingSources(_ colors: [ReadingSource: Color]) -> RubyWordColors {
+    public static func readingSources(_ colors: [RubyReadingSource: Color]) -> RubyWordColors {
         RubyWordColors(rule: .readingSources(colors))
     }
 
     /// The colors `readingSources` uses.
-    public static let defaultReadingSourceColors: [ReadingSource: Color] = [
+    static let defaultReadingSourceColors: [RubyReadingSource: Color] = [
         .manual: .purple,
         .rule: .orange,
         .model: .green,
     ]
+
+    /// The color this coloring gives words with `role`, if it colors by
+    /// grammar: to show a key to the colors.
+    public func color(for role: RubyPartOfSpeech) -> Color? {
+        if case .partOfSpeech(let colors) = rule { colors[role] } else { nil }
+    }
+
+    /// The color this coloring gives words at `level`, if it colors by
+    /// JLPT level.
+    public func color(for level: RubyJLPTLevel) -> Color? {
+        if case .jlpt(let colors, _) = rule { colors[level] } else { nil }
+    }
+
+    /// The color this coloring gives readings from `source`, if it colors
+    /// by where readings came from.
+    public func color(for source: RubyReadingSource) -> Color? {
+        if case .readingSources(let colors) = rule { colors[source] } else { nil }
+    }
 
     /// The color of each of `words`, which come from `text`.
     func colors(for words: [RubyWord], in text: String) -> [Color?] {
