@@ -1,4 +1,5 @@
 import Accessibility
+import FoundationModels
 @_spi(Experiments) import RubyCore
 import RubyTransliteration
 import SwiftUI
@@ -255,7 +256,6 @@ public struct RubyText: View {
     private func loadModelReadings() async {
         let key = modelKey
         guard let updates = key.updates, let string = key.string, analyzer != nil, key.options.isAvailable else { return }
-        #if canImport(FoundationModels)
         let onEachReading: ((RubyContent) async -> Void)? = if updates == .asAnswered {
             { content in
                 guard !Task.isCancelled else { return }
@@ -267,12 +267,11 @@ public struct RubyText: View {
         let content = await RubyContent.content(
             for: string,
             analyzer: analyzer,
-            chooser: RubyFoundationModelsChooser(options: key.options),
+            chooser: RubyLanguageModelChooser(options: key.options),
             onEachReading: onEachReading
         )
         guard !Task.isCancelled else { return }
         modelContent = (key, content)
-        #endif
     }
 
     /// Whether the filter shows each furigana reading, in content order.
@@ -325,11 +324,11 @@ extension EnvironmentValues {
     /// for words whose reading depends on their meaning, or `nil` not to
     /// ask it.
     @Entry var rubyModelReadings: RubyModelReadingUpdates? = nil
-    /// How Apple's models are asked for readings by meaning.
+    /// Which model is asked for readings by meaning, and how.
     @Entry var rubyModelOptions = RubyModelOptions.standard
 }
 
-/// When `RubyText` shows the readings Apple's on-device model chooses.
+/// When `RubyText` shows the readings a language model chooses.
 public enum RubyModelReadingUpdates: Hashable, Sendable {
     /// All together, once the model has answered about every word in the
     /// text, so the text changes once. The default.
@@ -357,24 +356,39 @@ extension View {
         environment(\.rubyAnalyzer, analyzer)
     }
 
-    /// Has Apple's on-device model read words whose reading depends on
-    /// their meaning in `RubyText` views in this hierarchy: 辛い is からい
-    /// for spicy food and つらい for a hard parting, 人気 is にんき for
+    /// Has a language model read words whose reading depends on their
+    /// meaning in `RubyText` views in this hierarchy: 辛い is からい for
+    /// spicy food and つらい for a hard parting, 人気 is にんき for
     /// popularity and ひとけ for people around.
     ///
     /// The dictionary reads such words the same way in every sentence.
     /// With this on, text first shows the dictionary's readings, then
     /// updates the ones the model judges are meant differently. Only words
     /// on a built-in list are asked about, and the model only chooses among
-    /// that list's readings. Where Apple Intelligence isn't available, the
+    /// that list's readings. Where the model isn't available or fails, the
     /// dictionary's readings stay.
+    ///
+    /// Apple's on-device model answers by default: private, offline and
+    /// free. Pass another FoundationModels `LanguageModel` to `model` to
+    /// have it answer instead:
+    ///
+    ///     RubyText(text)
+    ///         .rubyModelReadings(model: PrivateCloudComputeLanguageModel())
+    ///
+    /// Private Cloud Compute is Apple's larger model, only for apps with
+    /// the `com.apple.developer.private-cloud-compute` entitlement: without
+    /// it, the system stops the app as soon as the model is asked. A model
+    /// from another provider works once it conforms to `LanguageModel`; it
+    /// must support guided generation, as RubyText limits its answer to
+    /// the listed meanings with a schema. Models off the device receive
+    /// each sentence they're asked about.
     ///
     /// The model answers about one word at a time, saying in a few words
     /// what it means before choosing, with the sentences around it: about
-    /// a second for each word on a recent iPhone, so a long text with many
-    /// such words takes a while. Pass `.asAnswered` to `updates` to change
-    /// each reading as soon as its answer comes rather than all together
-    /// at the end.
+    /// a second for each word with the on-device model on a recent iPhone,
+    /// so a long text with many such words takes a while. Pass
+    /// `.asAnswered` to `updates` to change each reading as soon as its
+    /// answer comes rather than all together at the end.
     ///
     /// Readings you supply with `{base|reading}` markup or as segments are
     /// never changed.
@@ -383,18 +397,16 @@ extension View {
     ///   - isEnabled: Whether to ask the model.
     ///   - updates: Whether readings change all together or each as soon
     ///     as it's answered.
-    ///   - model: Which of Apple's models answers: the one on the device,
-    ///     or the larger one over Private Cloud Compute, for apps with its
-    ///     entitlement.
+    ///   - model: The model that answers.
     public func rubyModelReadings(
         _ isEnabled: Bool = true,
         updates: RubyModelReadingUpdates = .allAtOnce,
-        model: RubyModelReadings.Model = .onDevice
+        model: any LanguageModel = SystemLanguageModel.default
     ) -> some View {
         rubyModelReadings(isEnabled, updates: updates, options: RubyModelOptions(model: model))
     }
 
-    /// Has Apple's models read words by meaning as `options` ask them, to
+    /// Has a language model read words by meaning as `options` ask it, to
     /// compare ways of asking.
     @_spi(Experiments) public func rubyModelReadings(
         _ isEnabled: Bool = true,

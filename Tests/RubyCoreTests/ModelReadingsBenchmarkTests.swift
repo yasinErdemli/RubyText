@@ -1,4 +1,5 @@
 import Foundation
+import FoundationModels
 @_spi(Experiments) @testable import RubyCore
 import Testing
 
@@ -72,19 +73,18 @@ let homographCases = [
 
 /// The benchmark with Foundation Models as a tie-breaker. Runs only where
 /// Apple Intelligence is available, such as a Mac with it turned on.
-@Suite(.enabled(if: RubyModelReadings.isAvailable, "Apple Intelligence isn't available"))
+@Suite(.enabled(if: SystemLanguageModel.default.isAvailable, "Apple Intelligence isn't available"))
 struct ModelReadingsBenchmarkTests {
     /// Fails for any reading the dictionary got right and the model
     /// changed, and prints the scores with and without the model.
     @Test func score() async {
-        #if canImport(FoundationModels)
         var lines: [String] = []
         for (name, cases) in [("Benchmark", readingBenchmark), ("Homographs", homographCases)] {
             var dictionaryCorrect = 0
             var modelCorrect = 0
             var details: [String] = []
             for benchmark in cases {
-                let content = await RubyContent.content(for: benchmark.sentence, chooser: RubyFoundationModelsChooser())
+                let content = await RubyContent.content(for: benchmark.sentence, chooser: RubyLanguageModelChooser())
                 let dictionary = benchmark.actual
                 let model = reading(of: benchmark.word, in: content)
                 let wasCorrect = dictionary.map(benchmark.readings.contains) ?? false
@@ -104,6 +104,5 @@ struct ModelReadingsBenchmarkTests {
             lines += details
         }
         print(lines.joined(separator: "\n"))
-        #endif
     }
 }

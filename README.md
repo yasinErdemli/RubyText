@@ -14,9 +14,9 @@ RubyText("{今日|きょう}は日本語を勉強しています。")
 ```
 
 - **Readings found on device:** MeCab with IPAdic, rules for numbers, dates,
-  counters and set phrases, and optionally Apple's on-device model for words
-  whose reading depends on their meaning. `{base|reading}` markup overrides
-  any of them.
+  counters and set phrases, and optionally a language model for words whose
+  reading depends on their meaning: Apple's on-device model, or any
+  provider's. `{base|reading}` markup overrides any of them.
 - **Every way to write a reading:** furigana in hiragana, katakana or romaji;
   romaji above or below; inline readings, 東京（とうきょう）; or the whole text
   in hiragana, katakana or romaji. Romaji in Hepburn, Kunrei-shiki,
@@ -200,8 +200,22 @@ RubyText(segments: [
 ])
 ```
 
-To have Apple's on-device model read words like 辛い (からい or つらい) from
-context, add `.rubyModelReadings()`.
+To have a language model read words like 辛い (からい or つらい) from
+context, add `.rubyModelReadings()`. Apple's on-device model answers by
+default; pass any FoundationModels `LanguageModel` to use another:
+
+```swift
+RubyText(text)
+    .rubyModelReadings(model: PrivateCloudComputeLanguageModel()) // Apple's larger model
+```
+
+A model from another provider, such as Claude, OpenAI or a local server,
+works once it conforms to `LanguageModel`. It must support guided
+generation, since RubyText limits its answer to the listed meanings with a
+schema. The demo app's `Language Models` folder has complete examples for
+Claude and for OpenAI-compatible APIs. Models off the device receive each
+sentence they're asked about, and an app you ship shouldn't contain a
+provider's API key.
 
 ### Word details
 

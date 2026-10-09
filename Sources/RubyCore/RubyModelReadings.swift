@@ -1,11 +1,9 @@
 import Foundation
-import Synchronization
-#if canImport(FoundationModels)
 import FoundationModels
-#endif
+import Synchronization
 
 /// A word whose reading depends on its meaning, in a sentence, with the
-/// readings it may have: what Apple's on-device model is asked about.
+/// readings it may have: what the language model is asked about.
 @_spi(Experiments) public struct RubyReadingQuestion: Hashable, Sendable {
     /// The whole sentence the word is in.
     public let sentence: String
@@ -52,9 +50,16 @@ extension RubyReadingChooser {
     }
 }
 
-/// Apple's language models as a tie-breaker for words whose reading depends
-/// on their meaning (人気, 辛い, 方), which the dictionary reads the same way
+/// A language model as a tie-breaker for words whose reading depends on
+/// their meaning (人気, 辛い, 方), which the dictionary reads the same way
 /// in every sentence. `rubyModelReadings()` turns it on for `RubyText`.
+///
+/// Apple's on-device model answers by default. Any FoundationModels
+/// `LanguageModel` can answer instead: Apple's larger model, as
+/// `PrivateCloudComputeLanguageModel`, or a model from another provider
+/// that conforms to `LanguageModel`. The model is asked through a
+/// `LanguageModelSession`, with a schema that limits its answer to the
+/// listed meanings, so it must support guided generation.
 ///
 /// It runs after the rules, only on words on a built-in list that the
 /// dictionary read, and only changes their readings, never where words
@@ -63,33 +68,22 @@ extension RubyReadingChooser {
 /// To measure the model, the questions it would ask and ways of asking
 /// them are available with `@_spi(Experiments) import RubyCore`.
 public nonisolated enum RubyModelReadings {
-    /// Which of Apple's models reads words by meaning.
-    public enum Model: Hashable, Sendable {
-        /// The model on the device: private, offline, and free, but small.
-        case onDevice
-        /// Apple's larger model on its Private Cloud Compute servers: it
-        /// needs a network connection, takes longer for each request, and
-        /// has a usage quota.
-        ///
-        /// Only for apps with the `com.apple.developer.private-cloud-compute`
-        /// entitlement, which Apple grants to developers in the App Store
-        /// Small Business Program with fewer than two million first-time
-        /// downloads. Without it, the system stops the app as soon as the
-        /// model is asked, and `isAvailable` can't tell beforehand.
-        case privateCloudCompute
-    }
-
-    /// Whether Apple's on-device model is available on this device, with
-    /// Apple Intelligence turned on and the model downloaded.
-    public static var isAvailable: Bool {
-        RubyModelOptions.standard.isAvailable
-    }
-
     /// Loads `model` and the instructions it's asked with ahead of the
     /// first question, which otherwise waits for them. Call it when a
     /// screen that will show readings by meaning appears, or earlier.
-    public static func prewarm(_ model: Model = .onDevice) {
+    public static func prewarm(_ model: any LanguageModel = SystemLanguageModel.default) {
         prewarm(options: RubyModelOptions(model: model))
+    }
+
+    /// Whether `model` can answer now. Apple's models know whether they're
+    /// available here; other models are asked, and the dictionary's
+    /// readings stay if they fail.
+    package static func isAvailable(_ model: any LanguageModel) -> Bool {
+        switch model {
+        case let model as SystemLanguageModel: model.isAvailable
+        case let model as PrivateCloudComputeLanguageModel: model.isAvailable
+        default: true
+        }
     }
 
     /// The questions `rubyModelReadings()` asks about `text`, read as it's
@@ -123,8 +117,7 @@ public nonisolated enum RubyModelReadings {
     /// it chose for each, in order. The answers are kept, as with
     /// `ask(_:options:)`.
     @_spi(Experiments) public static func ask(_ questions: [RubyReadingQuestion], options: RubyModelOptions = .standard) async throws -> [RubyReadingChoice?] {
-        #if canImport(FoundationModels)
-        let chooser = RubyFoundationModelsChooser(options: options)
+        let chooser = RubyLanguageModelChooser(options: options)
         var indices: [Int?] = []
         for chunk in chunks(of: questions, chooser: chooser) {
             indices += try await chooser.choose(chunk)
@@ -135,9 +128,6 @@ public nonisolated enum RubyModelReadings {
             answers.withLock { $0[key] = Task { index } }
             return question.choices[index]
         }
-        #else
-        return questions.map { _ in nil }
-        #endif
     }
 
     /// The model's answer to `question`, as `RubyText` views get it: asked
@@ -150,8 +140,7 @@ public nonisolated enum RubyModelReadings {
     /// The model's answers to `questions`, as `RubyText` views get them,
     /// asked together or one at a time as `options` say.
     @_spi(Experiments) public static func answers(to questions: [RubyReadingQuestion], options: RubyModelOptions = .standard) async -> [RubyReadingChoice?] {
-        #if canImport(FoundationModels)
-        let chooser = RubyFoundationModelsChooser(options: options)
+        let chooser = RubyLanguageModelChooser(options: options)
         let tasks = chooser.asksTogether ? startAnswering(questions, chooser: chooser) : nil
         var choices: [RubyReadingChoice?] = []
         for (position, question) in questions.enumerated() {
@@ -163,17 +152,12 @@ public nonisolated enum RubyModelReadings {
             choices.append(index.flatMap { question.choices.indices.contains($0) ? question.choices[$0] : nil })
         }
         return choices
-        #else
-        return questions.map { _ in nil }
-        #endif
     }
 
     /// Loads the model and the instructions `options` ask with ahead of
     /// the first question.
     @_spi(Experiments) public static func prewarm(options: RubyModelOptions) {
-        #if canImport(FoundationModels)
-        RubyFoundationModelsChooser.prewarm(options: options)
-        #endif
+        RubyLanguageModelChooser.prewarm(options: options)
     }
 
     /// The questions to ask about `segments`, which cover a whole text,
@@ -352,14 +336,18 @@ public nonisolated enum RubyModelReadings {
     }
 }
 
-/// How readings by meaning are asked for: which of Apple's models
-/// answers, how, and what it's told. Each option can be turned on
-/// separately, to compare how well the model reads with it.
+/// How readings by meaning are asked for: which model answers, how, and
+/// what it's told. Each option can be turned on separately, to compare how
+/// well a model reads with it.
 @_spi(Experiments) public struct RubyModelOptions: Hashable, Sendable {
-    /// Which of Apple's models answers.
-    public typealias Model = RubyModelReadings.Model
+    /// The model that answers: Apple's on-device model unless another is
+    /// given.
+    public var model: any LanguageModel {
+        get { identity.model }
+        set { identity = RubyModelIdentity(newValue) }
+    }
 
-    public var model = Model.onDevice
+    private var identity: RubyModelIdentity
     /// Ask about every word in a text together, in one request, rather
     /// than one word at a time. Fewer requests matter most with Private
     /// Cloud Compute, where each goes over the network.
@@ -382,7 +370,7 @@ public nonisolated enum RubyModelReadings {
     public var reasons = true
 
     public init(
-        model: Model = .onDevice,
+        model: any LanguageModel = SystemLanguageModel.default,
         asksTogether: Bool = false,
         showsReadings: Bool = false,
         marksWord: Bool = false,
@@ -390,7 +378,7 @@ public nonisolated enum RubyModelReadings {
         isJapanese: Bool = false,
         reasons: Bool = true
     ) {
-        self.model = model
+        self.identity = RubyModelIdentity(model)
         self.asksTogether = asksTogether
         self.showsReadings = showsReadings
         self.marksWord = marksWord
@@ -405,15 +393,12 @@ public nonisolated enum RubyModelReadings {
     /// 60 without the reason and the sentences around it.
     public static let standard = RubyModelOptions()
 
-    /// Whether the model is available: on this device, with Apple
-    /// Intelligence turned on and the model downloaded, or over Private
-    /// Cloud Compute, which also needs its entitlement.
+    /// Whether the model can answer: Apple's on-device model where Apple
+    /// Intelligence is on and the model downloaded, and Private Cloud
+    /// Compute where it's reachable, though only apps with its entitlement
+    /// can ask it. Other models are assumed to be.
     public var isAvailable: Bool {
-        #if canImport(FoundationModels)
-        RubyFoundationModelsChooser.isAvailable(model)
-        #else
-        false
-        #endif
+        RubyModelReadings.isAvailable(model)
     }
 
     /// The instructions the model's session starts with.
@@ -476,16 +461,42 @@ public nonisolated enum RubyModelReadings {
     }
 }
 
-#if canImport(FoundationModels)
-/// Asks one of Apple's language models which meaning words have in their
-/// sentences.
+/// A language model, the same as another of its type with the same
+/// configuration, so answers can be kept for each model.
+private struct RubyModelIdentity: Hashable, Sendable {
+    let model: any LanguageModel
+
+    init(_ model: any LanguageModel) {
+        self.model = model
+    }
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.model.isSameModel(as: rhs.model)
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(ObjectIdentifier(type(of: model)))
+        hasher.combine(model.executorConfiguration)
+    }
+}
+
+extension LanguageModel {
+    /// Whether `other` is this model: of the same type, configured the
+    /// same way.
+    fileprivate func isSameModel(as other: any LanguageModel) -> Bool {
+        guard let other = other as? Self else { return false }
+        return executorConfiguration == other.executorConfiguration
+    }
+}
+
+/// Asks a language model which meaning words have in their sentences.
 ///
 /// Each request has a fresh session, constrained to the listed meanings,
 /// with greedy sampling so the same question always gets the same answer.
 /// By default it asks about one word at a time, which is slower than
 /// asking about a whole text at once but more accurate with the on-device
 /// model: with several words in one request, it mixes up their meanings.
-package struct RubyFoundationModelsChooser: RubyReadingChooser {
+package struct RubyLanguageModelChooser: RubyReadingChooser {
     package let options: RubyModelOptions
 
     package init(options: RubyModelOptions = .standard) {
@@ -494,22 +505,8 @@ package struct RubyFoundationModelsChooser: RubyReadingChooser {
 
     package var asksTogether: Bool { options.asksTogether }
 
-    package static var isAvailable: Bool { isAvailable(.onDevice) }
-
-    private static let cloud = PrivateCloudComputeLanguageModel()
-
-    static func isAvailable(_ model: RubyModelOptions.Model) -> Bool {
-        switch model {
-        case .onDevice: SystemLanguageModel.default.isAvailable
-        case .privateCloudCompute: cloud.isAvailable
-        }
-    }
-
     private static func session(_ options: RubyModelOptions) -> LanguageModelSession {
-        switch options.model {
-        case .onDevice: LanguageModelSession(instructions: options.instructions)
-        case .privateCloudCompute: LanguageModelSession(model: cloud, instructions: options.instructions)
-        }
+        LanguageModelSession(model: options.model, instructions: options.instructions)
     }
 
     /// The session `prewarm()` loaded the model with, kept so loading
@@ -517,7 +514,7 @@ package struct RubyFoundationModelsChooser: RubyReadingChooser {
     private static let warmSession = Mutex<LanguageModelSession?>(nil)
 
     static func prewarm(options: RubyModelOptions) {
-        guard isAvailable(options.model) else { return }
+        guard options.isAvailable else { return }
         let session = session(options)
         session.prewarm()
         warmSession.withLock { $0 = session }
@@ -528,7 +525,7 @@ package struct RubyFoundationModelsChooser: RubyReadingChooser {
     }
 
     package func choose(_ questions: [RubyReadingQuestion]) async throws -> [Int?] {
-        guard Self.isAvailable(options.model), !questions.isEmpty else { return questions.map { _ in nil } }
+        guard options.isAvailable, !questions.isEmpty else { return questions.map { _ in nil } }
         let together = questions.count > 1
         var properties: [DynamicGenerationSchema.Property] = []
         for (number, question) in questions.enumerated() {
@@ -559,8 +556,9 @@ package struct RubyFoundationModelsChooser: RubyReadingChooser {
         )
         return try questions.enumerated().map { number, question in
             let meaning = try response.content.value(String.self, forProperty: "meaning" + (together ? "\(number + 1)" : ""))
-            return options.options(for: question).firstIndex(of: meaning)
+            // Some models change the capitalization of the meaning they
+            // choose.
+            return options.options(for: question).firstIndex { $0.caseInsensitiveCompare(meaning) == .orderedSame }
         }
     }
 }
-#endif

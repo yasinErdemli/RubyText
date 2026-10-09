@@ -1,4 +1,5 @@
 import Foundation
+import FoundationModels
 @_spi(Experiments) @testable import RubyCore
 import Testing
 
@@ -42,7 +43,7 @@ let diaryReadings = ["きょう", "さむけ", "おおや", "もなか", "ほう
 /// runs only when asked:
 ///
 ///     TEST_RUNNER_RUBY_PROMPT_EXPERIMENT=1 xcodebuild test … -only-testing:RubyCoreTests/ModelPromptExperimentTests
-@Suite(.enabled(if: ProcessInfo.processInfo.environment["RUBY_PROMPT_EXPERIMENT"] != nil && RubyModelReadings.isAvailable))
+@Suite(.enabled(if: ProcessInfo.processInfo.environment["RUBY_PROMPT_EXPERIMENT"] != nil && SystemLanguageModel.default.isAvailable))
 struct ModelPromptExperimentTests {
     private static let prompts: [(name: String, prompt: RubyModelOptions)] = [
         ("plain", RubyModelOptions(includesNeighbors: false, reasons: false)),
@@ -99,7 +100,7 @@ struct ModelPromptExperimentTests {
                 lines.append("| \(name) | unavailable |")
                 continue
             }
-            let chooser = RubyFoundationModelsChooser(options: prompt)
+            let chooser = RubyLanguageModelChooser(options: prompt)
             var correct: [Int] = []
             var times: [Duration] = []
             var misses: [String] = []

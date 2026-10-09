@@ -12,14 +12,16 @@ The first release.
 - Readings found on device: MeCab with IPAdic, behind the `RubyAnalyzer`
   protocol, with rules for numbers, dates and counters (3日 → みっか,
   2026年 → にせんにじゅうろくねん) and for set phrases (一日中, 大家さん).
-- Readings that depend on meaning chosen by Apple's on-device model with
-  `rubyModelReadings()`, where Apple Intelligence is available: 辛い as からい
-  for spicy food, 人気 as ひとけ for people around. It says what the word
-  means before choosing, with the sentences around it. With
-  `updates: .asAnswered`, each reading changes as soon as the model answers,
-  so long texts correct themselves as it works, and `model:
-  .privateCloudCompute` asks Apple's larger model, for apps with its
-  entitlement. `RubyModelReadings.prewarm()` loads the model ahead of time;
+- Readings that depend on meaning chosen by a language model with
+  `rubyModelReadings()`: 辛い as からい for spicy food, 人気 as ひとけ for
+  people around. Apple's on-device model answers by default, where Apple
+  Intelligence is available; `model:` takes any FoundationModels
+  `LanguageModel`, such as `PrivateCloudComputeLanguageModel()` for apps
+  with its entitlement, or a model from another provider that supports
+  guided generation. The model says what the word means before choosing,
+  with the sentences around it. With `updates: .asAnswered`, each reading
+  changes as soon as the model answers, so long texts correct themselves
+  as it works. `RubyModelReadings.prewarm(_:)` loads a model ahead of time;
   the questions it's asked and the ways of asking that the benchmark
   compares are SPI, with `@_spi(Experiments)`.
 - `{base|reading}` markup and `RubyText(segments:)` for readings you supply.
