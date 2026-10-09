@@ -18,6 +18,7 @@ public struct RubyWordColors: Hashable, Sendable {
         case alternating([Color])
         case words([String: Color])
         case jlpt([RubyJLPTLevel: Color], vocabulary: [String: RubyJLPTLevel])
+        case readingSources([ReadingSource: Color])
     }
 
     private let rule: Rule
@@ -96,6 +97,26 @@ public struct RubyWordColors: Hashable, Sendable {
         .n1: .red,
     ]
 
+    /// Colors each word by where its reading came from, to check readings:
+    /// yours purple, rules' orange, and Apple's model's green. The
+    /// dictionary's stay uncolored.
+    public static let readingSources = readingSources(defaultReadingSourceColors)
+
+    /// Colors each word by where its reading came from, with your own
+    /// colors. Sources without a color stay uncolored.
+    ///
+    ///     .rubyWordColors(.readingSources([.model: .green]))  // the model's changes
+    public static func readingSources(_ colors: [ReadingSource: Color]) -> RubyWordColors {
+        RubyWordColors(rule: .readingSources(colors))
+    }
+
+    /// The colors `readingSources` uses.
+    public static let defaultReadingSourceColors: [ReadingSource: Color] = [
+        .manual: .purple,
+        .rule: .orange,
+        .model: .green,
+    ]
+
     /// The color of each of `words`, which come from `text`.
     func colors(for words: [RubyWord], in text: String) -> [Color?] {
         switch rule {
@@ -115,6 +136,8 @@ public struct RubyWordColors: Hashable, Sendable {
                 )
             }
             return Self.spreadingToEndings(levels.map { $0.flatMap { colors[$0] } }, words: words)
+        case .readingSources(let colors):
+            return words.map { colors[$0.source] }
         }
     }
 

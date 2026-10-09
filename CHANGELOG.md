@@ -35,6 +35,8 @@ The first release.
 - Romaji in Hepburn, Nihon-shiki or passport style.
 - Learner tools: furigana only above a JLPT level, word colors by part of
   speech, JLPT level or vocabulary, and space between words or phrases.
+- Word colors by where each reading came from, `.readingSources`, to check
+  readings: yours, rules', and the model's.
 - Word details with the reading, dictionary form, part of speech, JLPT
   levels and JMdict definitions.
 - Read aloud with `RubyReader`, synthesized or from a recording, with the

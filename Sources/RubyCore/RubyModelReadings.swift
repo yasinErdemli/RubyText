@@ -67,11 +67,28 @@ public nonisolated enum RubyModelReadings {
     /// Asks the model `question` now, and returns the reading it chose, or
     /// `nil` where the model isn't available.
     ///
-    /// Unlike `RubyText`, which asks each question once and keeps the
-    /// answer, this always asks, so it can be timed.
+    /// Unlike `answer(to:)`, which asks each question once, this always
+    /// asks, so it can be timed. The answer is kept for `RubyText` views
+    /// and `answer(to:)`.
     public static func ask(_ question: RubyReadingQuestion) async throws -> RubyReadingChoice? {
         #if canImport(FoundationModels)
-        guard let index = try await RubyFoundationModelsChooser().choose(question),
+        let chooser = RubyFoundationModelsChooser()
+        guard let index = try await chooser.choose(question),
+              question.choices.indices.contains(index)
+        else { return nil }
+        answers.withLock { $0[AnswerKey(question: question, chooser: AnyHashable(chooser))] = Task { index } }
+        return question.choices[index]
+        #else
+        return nil
+        #endif
+    }
+
+    /// The model's answer to `question`, as `RubyText` views get it: asked
+    /// once and kept, and asked once even when several views ask at the
+    /// same time. `nil` where the model isn't available or can't answer.
+    public static func answer(to question: RubyReadingQuestion) async -> RubyReadingChoice? {
+        #if canImport(FoundationModels)
+        guard let index = await answer(question, chooser: RubyFoundationModelsChooser()),
               question.choices.indices.contains(index)
         else { return nil }
         return question.choices[index]
@@ -155,8 +172,9 @@ public nonisolated enum RubyModelReadings {
         return result
     }
 
-    /// Answers already given, so each question is asked once per chooser.
-    private static let answers = Mutex<[AnswerKey: Int]>([:])
+    /// Answers given or being given, so each question is asked once per
+    /// chooser, however many views ask about it at the same time.
+    private static let answers = Mutex<[AnswerKey: Task<Int?, Never>]>([:])
 
     private struct AnswerKey: Hashable {
         let question: RubyReadingQuestion
@@ -165,14 +183,20 @@ public nonisolated enum RubyModelReadings {
 
     private static func answer(_ question: RubyReadingQuestion, chooser: some RubyReadingChooser) async -> Int? {
         let key = AnswerKey(question: question, chooser: AnyHashable(chooser))
-        if let cached = answers.withLock({ $0[key] }) { return cached }
-        // Errors, such as the model refusing a sentence, keep the
-        // dictionary's reading, and aren't cached so a later try can
-        // succeed.
-        guard let choice = try? await chooser.choose(question) else { return nil }
-        answers.withLock { answers in
+        let task = answers.withLock { answers in
+            if let task = answers[key] { return task }
             if answers.count >= 1000 { answers.removeAll() }
-            answers[key] = choice
+            let task = Task { try? await chooser.choose(question) }
+            answers[key] = task
+            return task
+        }
+        let choice = await task.value
+        // No answer, such as when the model refuses a sentence, keeps the
+        // dictionary's reading, and isn't kept, so a later try can succeed.
+        if choice == nil {
+            answers.withLock { answers in
+                if answers[key] == task { answers[key] = nil }
+            }
         }
         return choice
     }

@@ -1,5 +1,6 @@
 import Foundation
 @testable import RubyCore
+import Synchronization
 import Testing
 
 /// Picks the choice whose meaning mentions `keyword`, standing in for the
@@ -19,6 +20,21 @@ private struct KeywordsChooser: RubyReadingChooser {
     func choose(_ question: RubyReadingQuestion) async throws -> Int? {
         question.choices.firstIndex { choice in keywords.contains { choice.meaning.contains($0) } }
     }
+}
+
+/// Counts the questions it's asked, answering each with the first choice
+/// after a moment.
+private final class CountingChooser: RubyReadingChooser {
+    let count = Mutex(0)
+
+    func choose(_ question: RubyReadingQuestion) async throws -> Int? {
+        count.withLock { $0 += 1 }
+        try await Task.sleep(for: .milliseconds(100))
+        return 0
+    }
+
+    static func == (lhs: CountingChooser, rhs: CountingChooser) -> Bool { lhs === rhs }
+    func hash(into hasher: inout Hasher) { hasher.combine(ObjectIdentifier(self)) }
 }
 
 @Suite struct RubyModelReadingsTests {
@@ -75,6 +91,16 @@ private struct KeywordsChooser: RubyReadingChooser {
         // One update for each reading changed, each with the ones before.
         #expect(updates == [["ひとけ"], ["ひとけ", "から"]])
         #expect(content.words.filter { $0.source == .model }.flatMap(\.furigana).map(\.text) == ["ひとけ", "から"])
+    }
+
+    @Test func questionsAskedAtOnceAreAskedOnce() async {
+        let chooser = CountingChooser()
+        let segments = RubyContent.segments(in: "海には多くの生物がいる。", analyzer: RubyMeCabAnalyzer.ipadic)
+        // Two views showing the same text, asking at the same time.
+        async let first = RubyModelReadings.apply(to: segments, chooser: chooser)
+        async let second = RubyModelReadings.apply(to: segments, chooser: chooser)
+        _ = await (first, second)
+        #expect(chooser.count.withLock { $0 } == 1)
     }
 
     @Test func forgottenReadingsAreChosenAgain() async {
