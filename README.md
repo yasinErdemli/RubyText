@@ -31,6 +31,10 @@ RubyText("{今日|きょう}は日本語を勉強しています。")
   and opens word details. Dynamic Type and Reduce Motion are respected, and
   copying gives the text without its readings.
 
+To try it first, run the demo app, `Untitled Project.xcodeproj` at the root
+of the repository. Its Try tab shows your own text with any settings, and
+gives you the code for them; Features shows each feature with its code.
+
 ## Requirements
 
 iOS 27, macOS 27 or visionOS 27, and Swift 6.2.
