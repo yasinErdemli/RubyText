@@ -54,8 +54,12 @@ public struct RubyConverter: Sendable {
     /// Readings you supply in markup keep the kana you wrote them in,
     /// unless `script` is katakana or romaji: `{本気|マジ}` is 本気（マジ）.
     ///
-    /// - Parameter parentheses: What the readings are put between. Full
-    ///   width, as Japanese text writes them, by default.
+    /// - Parameters:
+    ///   - markup: The text, with readings you supply in `{base|reading}`
+    ///     markup.
+    ///   - script: The script readings are written in.
+    ///   - parentheses: What the readings are put between. Full width, as
+    ///     Japanese text writes them, by default.
     public func annotate(_ markup: String, with script: RubyScript, parentheses: (open: String, close: String) = ("（", "）")) -> String {
         content(for: markup).withInlineReadings(in: script, parentheses: parentheses).string
     }

@@ -21,10 +21,6 @@ let package = Package(
         /// Kana to romaji, hiragana to katakana and back, with no
         /// dictionary and only the standard library.
         .library(name: "RubyTransliteration", targets: ["RubyTransliteration"]),
-        /// Readings as plain data: analysis, markup, dictionary lookups.
-        .library(name: "RubyCore", targets: ["RubyCore"]),
-        /// SwiftUI views that draw furigana and romaji.
-        .library(name: "RubyUI", targets: ["RubyUI"]),
     ],
     dependencies: [
         .package(url: "https://github.com/shinjukunian/Mecab-Swift", from: "0.8.0"),
@@ -32,40 +28,6 @@ let package = Package(
     targets: [
         .target(
             name: "RubyTransliteration",
-            swiftSettings: swiftSettings
-        ),
-        .target(
-            name: "RubyCore",
-            dependencies: [
-                "RubyTransliteration",
-                .product(name: "Mecab-Swift", package: "Mecab-Swift"),
-            ],
-            swiftSettings: swiftSettings
-        ),
-        .target(
-            name: "RubyUI",
-            dependencies: ["RubyCore", "RubyTransliteration"],
-            swiftSettings: swiftSettings + [.defaultIsolation(MainActor.self)]
-        ),
-        .testTarget(
-            name: "RubyUITests",
-            dependencies: [
-                "RubyCore",
-                "RubyTransliteration",
-                "RubyUI",
-                // Apps bundle their own dictionary; tests read with this one.
-                .product(name: "IPADic", package: "Mecab-Swift"),
-            ],
-            swiftSettings: swiftSettings + [.defaultIsolation(MainActor.self)]
-        ),
-        .testTarget(
-            name: "RubyCoreTests",
-            dependencies: [
-                "RubyCore",
-                "RubyTransliteration",
-                // Apps bundle their own dictionary; tests read with this one.
-                .product(name: "IPADic", package: "Mecab-Swift"),
-            ],
             swiftSettings: swiftSettings
         ),
         .testTarget(
@@ -76,3 +38,51 @@ let package = Package(
     ],
     swiftLanguageModes: [.v5]
 )
+
+// RubyCore reads with Mecab-Swift, whose tokenizer uses CoreFoundation's,
+// and RubyUI draws with SwiftUI, so they're on Apple platforms only.
+// RubyTransliteration builds anywhere Swift does, Linux included.
+#if canImport(Darwin)
+package.products += [
+    /// Readings as plain data: analysis, markup, dictionary lookups.
+    .library(name: "RubyCore", targets: ["RubyCore"]),
+    /// SwiftUI views that draw furigana and romaji.
+    .library(name: "RubyUI", targets: ["RubyUI"]),
+]
+package.targets += [
+    .target(
+        name: "RubyCore",
+        dependencies: [
+            "RubyTransliteration",
+            .product(name: "Mecab-Swift", package: "Mecab-Swift"),
+        ],
+        swiftSettings: swiftSettings
+    ),
+    .target(
+        name: "RubyUI",
+        dependencies: ["RubyCore", "RubyTransliteration"],
+        swiftSettings: swiftSettings + [.defaultIsolation(MainActor.self)]
+    ),
+    .testTarget(
+        name: "RubyCoreTests",
+        dependencies: [
+            "RubyCore",
+            "RubyTransliteration",
+            // Apps bundle their own dictionary; tests read with this one.
+            .product(name: "IPADic", package: "Mecab-Swift"),
+        ],
+        swiftSettings: swiftSettings
+    ),
+    .testTarget(
+        name: "RubyUITests",
+        dependencies: [
+            "RubyCore",
+            "RubyTransliteration",
+            "RubyUI",
+            // Apps bundle their own dictionary; tests read with this one.
+            .product(name: "IPADic", package: "Mecab-Swift"),
+        ],
+        swiftSettings: swiftSettings + [.defaultIsolation(MainActor.self)]
+    ),
+]
+#endif
