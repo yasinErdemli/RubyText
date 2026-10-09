@@ -1,4 +1,5 @@
 import RubyCore
+import RubyTransliteration
 import SwiftUI
 
 /// Japanese text that can show furigana or romaji above its words, or
@@ -61,6 +62,7 @@ public struct RubyText: View {
     @Environment(\.rubyFuriganaScript) private var furiganaScript
     @Environment(\.rubyFuriganaPosition) private var furiganaPosition
     @Environment(\.rubyTranscription) private var transcription
+    @Environment(\.rubyRomanization) private var romanization
     @Environment(\.rubyFuriganaFilter) private var furiganaFilter
     @Environment(\.rubyDigitReadingsHidden) private var digitReadingsHidden
     @Environment(\.rubySpacing) private var spacing
@@ -139,6 +141,7 @@ public struct RubyText: View {
         .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: furiganaScript)
         .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: furiganaPosition)
         .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: transcription)
+        .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: romanization)
         .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: furiganaFilter)
         .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: digitReadingsHidden)
         .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: spacing)
@@ -151,9 +154,11 @@ public struct RubyText: View {
     private func rewritten(_ content: RubyContent) -> RubyContent {
         if let transcription {
             // Spacing in kana text is real spaces, so lines break at them.
-            return content.transcribed(to: transcription, spacedAt: spacing.boundaries(in: content))
+            return content.transcribed(to: transcription.resolved(romanization), spacedAt: spacing.boundaries(in: content))
         }
-        if style.contains(.furigana), furiganaPosition == .inline { return content.withInlineReadings(in: furiganaScript) }
+        if style.contains(.furigana), furiganaPosition == .inline {
+            return content.withInlineReadings(in: furiganaScript.resolved(romanization))
+        }
         return content
     }
 
@@ -198,7 +203,7 @@ public struct RubyText: View {
     /// numbers in digits along with their furigana, so a number shows both
     /// readings or neither.
     private func romajiVisibility(in content: RubyContent) -> RubyAnimatableVector {
-        RubyAnimatableVector(values: content.romajiWords.map { word in
+        RubyAnimatableVector(values: content.romajiWords(in: romanization).map { word in
             let base = RubyReadingUnits.substring(of: content.string, utf16Range: word.range)
             return digitReadingsHidden && Self.isDigitNumber(base) ? 0 : 1
         })
@@ -298,6 +303,7 @@ private struct RubyTextContent: View {
     @AnimatableIgnored @Environment(\.rubyShowsWordDetails) private var showsWordDetails
     @AnimatableIgnored @Environment(\.rubyWordTapAction) private var wordTapAction
     @AnimatableIgnored @Environment(\.rubyFuriganaScript) private var furiganaScript
+    @AnimatableIgnored @Environment(\.rubyRomanization) private var romanization
     @AnimatableIgnored @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AnimatableIgnored @Environment(\.font) private var font
     // Carries Dynamic Type and other traits needed to resolve `font`.
@@ -328,7 +334,12 @@ private struct RubyTextContent: View {
         } else {
             let metrics = RubyMetrics(font: font ?? .body, in: fontResolutionContext)
             let layout = RubyLayout(
-                measurements: .measurements(for: content, metrics: metrics, furiganaScript: furiganaScript),
+                measurements: .measurements(
+                    for: content,
+                    metrics: metrics,
+                    furiganaScript: furiganaScript.resolved(romanization),
+                    romanization: romanization
+                ),
                 furigana: furigana,
                 romaji: romaji,
                 readingVisibility: readingVisibility,
@@ -404,7 +415,7 @@ private struct RubyTextContent: View {
         // Details describe the word as written, even in rewritten text,
         // whose words match the original's one to one.
         let source = content.original ?? content
-        let word = RubyWordInfo.info(for: source.dictionaryWords[index], in: source)
+        let word = RubyWordInfo.info(for: source.dictionaryWords[index], in: source, romanization: romanization)
         wordTapAction?(word)
         if showsWordDetails {
             selectedRect.wrappedValue = wordRect(range, in: geometry, layout: layout, metrics: metrics) ?? .zero
@@ -649,14 +660,20 @@ final class RubyMeasurements {
 
     private static let cache = NSCache<NSString, RubyMeasurements>()
 
-    static func measurements(for content: RubyContent, metrics: RubyMetrics, furiganaScript: RubyScript) -> RubyMeasurements {
+    static func measurements(
+        for content: RubyContent,
+        metrics: RubyMetrics,
+        furiganaScript: RubyScript,
+        romanization: RubyRomanization
+    ) -> RubyMeasurements {
         // Content objects are cached too, so the same text read by another
         // analyzer is a different object.
-        let key = "\(metrics.cacheKey) \(furiganaScript) \(ObjectIdentifier(content).hashValue)\n\(content.string)" as NSString
+        let key = "\(metrics.cacheKey) \(furiganaScript) \(romanization) \(ObjectIdentifier(content).hashValue)\n\(content.string)" as NSString
         if let cached = cache.object(forKey: key) { return cached }
         let measurements = RubyMeasurements(
             content: content,
             furiganaScript: furiganaScript,
+            romanization: romanization,
             baseWidth: metrics.baseWidth(of:),
             annotationWidth: metrics.annotationWidth(of:)
         )
@@ -669,6 +686,7 @@ final class RubyMeasurements {
     init(
         content: RubyContent,
         furiganaScript: RubyScript = .hiragana,
+        romanization: RubyRomanization = .hepburn,
         baseWidth: (String) -> CGFloat,
         annotationWidth: (String) -> CGFloat
     ) {
@@ -749,7 +767,7 @@ final class RubyMeasurements {
             ))
         }
         var romaji: [Romaji] = []
-        for (source, word) in content.romajiWords.enumerated() {
+        for (source, word) in content.romajiWords(in: romanization).enumerated() {
             let indices = characterRange(word.range)
             guard !indices.isEmpty else { continue }
             let natural = annotationWidth(word.text)

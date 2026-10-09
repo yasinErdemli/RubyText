@@ -13,8 +13,10 @@ package struct RubyWord: Hashable, Sendable {
     package let range: Range<Int>
     /// Hiragana readings for the kanji parts of the word.
     package let furigana: [RubyReading]
-    /// Romaji for the whole word, if it's Japanese.
+    /// Hepburn romaji for the whole word, if it's Japanese.
     package let romaji: String?
+    /// What the romaji are made from, to write them in other systems.
+    package var romajiSources: [RubyRomajiSource] = []
     /// Whether the word grammatically attaches to the one before it, like a
     /// particle or verb ending. `nil` lets reading phrases fall back to a
     /// list of common particles and endings.
@@ -26,6 +28,35 @@ package struct RubyWord: Hashable, Sendable {
     package var dictionaryForm: String? = nil
     /// Where the word's reading came from.
     package var source: ReadingSource = .dictionary
+}
+
+extension RubyWord {
+    /// The word's romaji in `system`.
+    package func romaji(in system: RubyRomanization) -> String? {
+        guard system != .hepburn, romaji != nil, !romajiSources.isEmpty else { return romaji }
+        return romajiSources.map { $0.romaji(in: system) }.joined()
+    }
+}
+
+/// A reading and what romaji need to know about it, so they can be
+/// written in any system.
+package struct RubyRomajiSource: Hashable, Sendable {
+    let reading: String
+    let pronunciation: String?
+    /// The next word's reading, for a final っ.
+    let next: String?
+    let breaks: [Int]
+
+    package init(reading: String, pronunciation: String? = nil, next: String? = nil, breaks: [Int] = []) {
+        self.reading = reading
+        self.pronunciation = pronunciation
+        self.next = next
+        self.breaks = breaks
+    }
+
+    func romaji(in system: RubyRomanization) -> String {
+        RubyRomaji.romanize(reading, system: system, pronunciation: pronunciation, next: next, breaks: breaks)
+    }
 }
 
 /// Grammatical roles, in the categories learners are usually taught.
@@ -52,10 +83,12 @@ public enum RubyPartOfSpeech: String, CaseIterable, Hashable, Sendable {
 package nonisolated enum RubyReadings {
     /// A word whose reading was supplied with `{base|reading}` markup.
     package static func word(manualBase base: String, reading: String, offset: Int) -> RubyWord {
-        RubyWord(
+        let source = RubyRomajiSource(reading: reading)
+        return RubyWord(
             range: offset..<(offset + base.utf16.count),
             furigana: furigana(base: base, reading: reading, offset: offset, force: true),
-            romaji: RubyRomaji.hepburn(reading),
+            romaji: source.romaji(in: .hepburn),
+            romajiSources: [source],
             source: .manual
         )
     }

@@ -20,6 +20,9 @@ package final class RubyContent {
     /// UTF-16 offsets of the spaces kana text was given between phrases
     /// or words, which aren't in the original.
     package private(set) var spaces: [Int] = []
+    /// Whether rewritten text keeps the original's romaji, which romaji
+    /// text doesn't need.
+    private var keepsRomaji = true
 
     /// Words as a dictionary lists them, for word details: a verb or
     /// adjective with its conjugated endings (生まれ|た), a noun with its
@@ -49,15 +52,32 @@ package final class RubyContent {
         return groups.map(\.range)
     }()
 
-    /// Words as romaji writes them, each one annotation below the text.
+    /// Words as Hepburn romaji writes them.
+    package var romajiWords: [RubyRomajiWord] { romajiWords(in: .hepburn) }
+
+    private var romajiWordsBySystem: [RubyRomanization: [RubyRomajiWord]] = [:]
+
+    /// Words as romaji in `system` write them, each one annotation.
     /// Verb and adjective endings join their word (読ん|だ → yonda,
     /// し|て → shite, 行き|たい → ikitai); particles, です and helper verbs
     /// stay separate (benkyō shite imasu, kōhī o), except は and も after
     /// another particle (demo, niwa).
-    package private(set) lazy var romajiWords: [RubyRomajiWord] = {
+    package func romajiWords(in system: RubyRomanization) -> [RubyRomajiWord] {
+        if let cached = romajiWordsBySystem[system] { return cached }
+        let romajiWords: [RubyRomajiWord] = if let original, let offsetMap {
+            // Rewritten text keeps the original's romaji, moved with it.
+            keepsRomaji ? original.romajiWords(in: system).map { RubyRomajiWord(range: offsetMap.range($0.range), text: $0.text) } : []
+        } else {
+            groupingRomaji(in: system)
+        }
+        romajiWordsBySystem[system] = romajiWords
+        return romajiWords
+    }
+
+    private func groupingRomaji(in system: RubyRomanization) -> [RubyRomajiWord] {
         var groups: [(range: Range<Int>, text: String, isVerbal: Bool, lastWord: RubyWord)] = []
         for word in words {
-            guard let romaji = word.romaji, !romaji.isEmpty else { continue }
+            guard let romaji = word.romaji(in: system), !romaji.isEmpty else { continue }
             let base = RubyReadingUnits.substring(of: string, utf16Range: word.range)
             if let last = groups.last, last.range.upperBound == word.range.lowerBound,
                Self.joinsRomaji(word, base: base, after: last.lastWord, in: last.range, isVerbal: last.isVerbal, string: string) {
@@ -66,7 +86,7 @@ package final class RubyContent {
                 // deshō, 行こ|う ikō.
                 if word.partOfSpeech == .auxiliary, romaji == "u", last.text.hasSuffix("o") {
                     groups[groups.count - 1].text.removeLast()
-                    groups[groups.count - 1].text += "ō"
+                    groups[groups.count - 1].text += RubyRomaji.long("o", in: system)
                 } else {
                     groups[groups.count - 1].text += romaji
                 }
@@ -77,7 +97,7 @@ package final class RubyContent {
             groups.append((word.range, romaji, isVerbal, word))
         }
         return groups.map { RubyRomajiWord(range: $0.range, text: $0.text) }
-    }()
+    }
 
     /// Whether `word` continues the romaji word before it.
     private static func joinsRomaji(
@@ -260,6 +280,7 @@ package final class RubyContent {
                     range: word.range,
                     furigana: furigana.sorted { $0.range.lowerBound < $1.range.lowerBound },
                     romaji: coversToken ? overlapping.compactMap(\.romaji).joined() : word.romaji,
+                    romajiSources: coversToken ? overlapping.flatMap(\.romajiSources) : word.romajiSources,
                     attachesToPrevious: word.attachesToPrevious,
                     partOfSpeech: word.partOfSpeech,
                     dictionaryForm: word.dictionaryForm,
@@ -302,6 +323,7 @@ package final class RubyContent {
                 range: offsets.range(word.range),
                 furigana: [],
                 romaji: keepsRomaji ? word.romaji : nil,
+                romajiSources: keepsRomaji ? word.romajiSources : [],
                 attachesToPrevious: word.attachesToPrevious,
                 partOfSpeech: word.partOfSpeech,
                 dictionaryForm: word.dictionaryForm,
@@ -311,7 +333,7 @@ package final class RubyContent {
         self.original = original
         offsetMap = offsets
         self.spaces = spaces
-        romajiWords = keepsRomaji ? original.romajiWords.map { RubyRomajiWord(range: offsets.range($0.range), text: $0.text) } : []
+        self.keepsRomaji = keepsRomaji
         dictionaryWords = original.dictionaryWords.map(offsets.range)
     }
 
@@ -362,9 +384,9 @@ package final class RubyContent {
             } ?? []
             // The next word's reading resolves a final っ (入っ|た → itta).
             let next = index + 1 < segments.count ? segments[index + 1].reading : nil
-            let romaji = segment.reading.map {
-                RubyRomaji.hepburn(
-                    $0,
+            let source = segment.reading.map {
+                RubyRomajiSource(
+                    reading: $0,
                     pronunciation: segment.pronunciation ?? particlePronunciation[segment.base],
                     next: next,
                     breaks: segment.romajiBreaks
@@ -373,7 +395,8 @@ package final class RubyContent {
             words.append(RubyWord(
                 range: range,
                 furigana: furigana,
-                romaji: romaji,
+                romaji: source?.romaji(in: .hepburn),
+                romajiSources: source.map { [$0] } ?? [],
                 attachesToPrevious: segment.word?.attachesToPrevious,
                 partOfSpeech: segment.word?.partOfSpeech,
                 dictionaryForm: segment.word?.dictionaryForm,

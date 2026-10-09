@@ -1,4 +1,5 @@
 import Foundation
+import RubyTransliteration
 
 /// What's known about a word in a `RubyText`, passed to word tap handlers.
 public struct RubyWordInfo: Identifiable, Hashable, Sendable {
@@ -24,8 +25,9 @@ public struct RubyWordInfo: Identifiable, Hashable, Sendable {
 
     public var id: Range<Int> { range }
 
-    /// The details of the dictionary word covering `range` in `content`.
-    package static func info(for range: Range<Int>, in content: RubyContent) -> RubyWordInfo {
+    /// The details of the dictionary word covering `range` in `content`,
+    /// with romaji in `romanization`.
+    package static func info(for range: Range<Int>, in content: RubyContent, romanization: RubyRomanization = .hepburn) -> RubyWordInfo {
         let text = RubyReadingUnits.substring(of: content.string, utf16Range: range)
         let tokens = content.words.filter { range.contains($0.range.lowerBound) }
 
@@ -56,7 +58,7 @@ public struct RubyWordInfo: Identifiable, Hashable, Sendable {
             range: range,
             text: text,
             reading: reading,
-            romaji: tokens.compactMap(\.romaji).joined(),
+            romaji: tokens.compactMap { $0.romaji(in: romanization) }.joined(),
             dictionaryForm: dictionaryForm == text ? nil : dictionaryForm,
             partOfSpeech: isSuruVerb ? .verb : head?.partOfSpeech,
             jlptLevel: RubyJLPTLevel.level(of: text, dictionaryForm: nil, vocabulary: [:]),

@@ -38,7 +38,7 @@ import Testing
         ("こんにちは", "こんにちわ", nil, "konnichiwa"),
     ] as [(String, String?, String?, String)])
     func hepburn(_ reading: String, _ pronunciation: String?, _ next: String?, _ expected: String) {
-        #expect(RubyRomaji.hepburn(reading, pronunciation: pronunciation, next: next) == expected)
+        #expect(RubyRomaji.romanize(reading, system: .hepburn, pronunciation: pronunciation, next: next) == expected)
     }
 
     /// Text written in kana, with no dictionary to say what's a word.
@@ -67,5 +67,38 @@ import Testing
         #expect(RubyRomaji.hepburn("おもう") == "omō")
         #expect(RubyRomaji.hepburn("おもう", pronunciation: "おもう") == "omou")
         #expect(RubyRomaji.hepburn("きょうは", pronunciation: "きょーわ") == "kyōwa")
+    }
+
+    /// Kana where the systems differ, as Hepburn, Nihon-shiki, and passport
+    /// style write them.
+    @Test(arguments: [
+        ("きょうと", "kyōto", "kyôto", "kyoto"),
+        ("さとう", "satō", "satô", "sato"),
+        ("おおの", "ōno", "ôno", "ono"),
+        ("コーヒー", "kōhī", "kôhî", "kohi"),
+        ("けいたい", "keitai", "keitai", "keitai"),
+        ("ふじさん", "fujisan", "huzisan", "fujisan"),
+        ("しんぶん", "shinbun", "sinbun", "shimbun"),
+        ("ほんま", "honma", "honma", "homma"),
+        ("なんば", "nanba", "nanba", "namba"),
+        ("てんぷら", "tenpura", "tenpura", "tempura"),
+        ("げんいん", "gen'in", "gen'in", "genin"),
+        ("まっちゃ", "matcha", "mattya", "matcha"),
+        ("ちゃ じゃ しゅ", "cha ja shu", "tya zya syu", "cha ja shu"),
+        ("つづく", "tsuzuku", "tuduku", "tsuzuku"),
+        ("はなぢ", "hanaji", "hanadi", "hanaji"),
+        ("を", "o", "wo", "o"),
+        ("ファイル", "fairu", "hwairu", "fairu"),
+        ("シェフ", "shefu", "syehu", "shefu"),
+        ("ヴァイオリン", "vaiorin", "vaiorin", "baiorin"),
+    ])
+    func systems(_ kana: String, _ hepburn: String, _ nippon: String, _ passport: String) {
+        #expect(RubyRomaji.romanize(kana, system: .hepburn) == hepburn)
+        #expect(RubyRomaji.romanize(kana, system: .nippon) == nippon)
+        #expect(RubyRomaji.romanize(kana, system: .passport) == passport)
+    }
+
+    @Test func hepburnIsTheDefault() {
+        #expect(RubyRomaji.hepburn("きょうと") == RubyRomaji.romanize("きょうと", system: .hepburn))
     }
 }

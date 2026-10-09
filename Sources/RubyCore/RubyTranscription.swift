@@ -1,12 +1,49 @@
 import Foundation
 import RubyTransliteration
 
-/// A writing system for Japanese text or its readings.
-public enum RubyScript: Hashable, Sendable, CaseIterable {
-    case hiragana
-    case katakana
-    /// Hepburn romaji, with long vowels written with macrons (tōkyō).
-    case romaji
+/// A writing system for Japanese readings: hiragana, katakana, or romaji
+/// in a romanization system.
+///
+///     .hiragana                     // とうきょう
+///     .katakana                     // トウキョウ
+///     .romaji                       // tōkyō, or as `rubyRomanization(_:)` sets
+///     .romaji(system: .nippon)      // tôkyô
+public struct RubyScript: Hashable, Sendable {
+    package enum Form: Hashable, Sendable {
+        case hiragana
+        case katakana
+        /// Romaji in a system, or in the one the environment sets for `nil`.
+        case romaji(RubyRomanization?)
+    }
+
+    package let form: Form
+
+    public static let hiragana = RubyScript(form: .hiragana)
+    public static let katakana = RubyScript(form: .katakana)
+
+    /// Romaji in the system `rubyRomanization(_:)` sets, Hepburn by
+    /// default.
+    public static let romaji = RubyScript(form: .romaji(nil))
+
+    /// Romaji in `system`, whatever `rubyRomanization(_:)` sets.
+    public static func romaji(system: RubyRomanization) -> RubyScript {
+        RubyScript(form: .romaji(system))
+    }
+
+    /// Whether this is romaji, in any system.
+    public var isRomaji: Bool {
+        if case .romaji = form { true } else { false }
+    }
+
+    /// This script with romaji in `system` unless it names its own.
+    package func resolved(_ system: RubyRomanization) -> RubyScript {
+        form == .romaji(nil) ? .romaji(system: system) : self
+    }
+
+    /// The romanization system, for romaji: Hepburn unless named.
+    package var romanization: RubyRomanization {
+        if case .romaji(let system?) = form { system } else { .hepburn }
+    }
 }
 
 /// How Japanese text is written out without kanji: in hiragana, katakana,
@@ -42,9 +79,21 @@ public struct RubyTranscription: Hashable, Sendable {
     /// Katakana throughout: キョウハコーヒーヲノンダ。
     public static let katakana = RubyTranscription(script: .katakana, keepsKatakana: false)
 
-    /// Hepburn romaji, with spaces between words and Japanese punctuation
-    /// made Latin: kyō wa kōhī o nonda.
+    /// Romaji, with spaces between words and Japanese punctuation made
+    /// Latin: kyō wa kōhī o nonda. In the system `rubyRomanization(_:)`
+    /// sets, Hepburn by default.
     public static let romaji = RubyTranscription(script: .romaji, keepsKatakana: false)
+
+    /// Romaji in `system`, whatever `rubyRomanization(_:)` sets: kyô wa
+    /// kôhî wo nonda in Nihon-shiki.
+    public static func romaji(system: RubyRomanization) -> RubyTranscription {
+        RubyTranscription(script: .romaji(system: system), keepsKatakana: false)
+    }
+
+    /// This transcription with romaji in `system` unless it names its own.
+    package func resolved(_ system: RubyRomanization) -> RubyTranscription {
+        RubyTranscription(script: script.resolved(system), keepsKatakana: keepsKatakana)
+    }
 }
 
 extension RubyContent {
@@ -58,7 +107,7 @@ extension RubyContent {
     ///   written without kanji often does (分かち書き). Their offsets in
     ///   the transcribed text are its `spaces`.
     package func transcribed(to transcription: RubyTranscription, spacedAt spaces: [Int] = []) -> RubyContent {
-        rewritten(.transcribed(transcription, spaces: transcription.script == .romaji ? [] : spaces))
+        rewritten(.transcribed(transcription, spaces: transcription.script.isRomaji ? [] : spaces))
     }
 
     /// This content with each kanji's reading in parentheses after it, in
@@ -71,10 +120,10 @@ extension RubyContent {
     /// The reading `reading` shows in `script`, as furigana or inline:
     /// readings in markup keep their kana in hiragana ({本気|マジ}).
     package static func text(of reading: RubyReading, in script: RubyScript) -> String {
-        switch script {
+        switch script.form {
         case .hiragana: reading.text
         case .katakana: RubyKana.katakana(reading.text)
-        case .romaji: RubyRomaji.hepburn(reading.text)
+        case .romaji: RubyRomaji.romanize(reading.text, system: script.romanization)
         }
     }
 
@@ -97,10 +146,10 @@ extension RubyContent {
     private func rewritten(_ rewrite: Rewrite) -> RubyContent {
         let key = RubyCacheKey(RewriteKey(content: ObjectIdentifier(self), rewrite: rewrite))
         if let cached = Self.rewrites.object(forKey: key), cached.original === self { return cached }
-        let isRomaji = if case .transcribed(let transcription, _) = rewrite { transcription.script == .romaji } else { false }
+        let isRomaji = if case .transcribed(let transcription, _) = rewrite { transcription.script.isRomaji } else { false }
         let pieces = switch rewrite {
         case .transcribed(let transcription, let spaces):
-            isRomaji ? romajiPieces() : kanaPieces(transcription, spacedAt: Set(spaces))
+            isRomaji ? romajiPieces(transcription.script.romanization) : kanaPieces(transcription, spacedAt: Set(spaces))
         case .inlineReadings(let script, let open, let close):
             inlinePieces(script, open: open, close: close)
         }
@@ -150,23 +199,23 @@ extension RubyContent {
         return pieces
     }
 
-    /// Each word in romaji, as `RubyText` writes it below the text, and
+    /// Each word in romaji in `system`, as `RubyText` annotates it, and
     /// the text between words, such as punctuation, transliterated.
-    private func romajiPieces() -> [RubyRewritePiece] {
+    private func romajiPieces(_ system: RubyRomanization) -> [RubyRewritePiece] {
         var pieces: [RubyRewritePiece] = []
         var offset = 0
         func addText(upTo end: Int) {
             guard offset < end else { return }
             let text = RubyReadingUnits.substring(of: string, utf16Range: offset..<end)
-            pieces.append(RubyRewritePiece(range: offset..<end, text: RubyRomaji.hepburn(text)))
+            pieces.append(RubyRewritePiece(range: offset..<end, text: RubyRomaji.romanize(text, system: system)))
         }
-        for group in romajiWords {
+        for group in romajiWords(in: system) {
             addText(upTo: group.range.lowerBound)
             // Romaji joining several words (読ん|だ, yonda) are divided
             // between them where they're simply each word's romaji
             // together, so each word keeps its own.
             let inside = words.filter { group.range.contains($0.range.lowerBound) }
-            let parts = inside.compactMap(\.romaji)
+            let parts = inside.compactMap { $0.romaji(in: system) }
             if parts.count == inside.count, parts.joined() == group.text {
                 for (index, (word, part)) in zip(inside, parts).enumerated() {
                     pieces.append(RubyRewritePiece(range: word.range, text: part, joinsPrevious: index > 0))

@@ -36,6 +36,8 @@ public struct RubyConverter: Sendable {
     ///     converter.convert("今日はコーヒーを飲んだ。", to: .hiragana)  // きょうはコーヒーをのんだ。
     ///     converter.convert("今日はコーヒーを飲んだ。", to: .katakana)  // キョウハコーヒーヲノンダ。
     ///     converter.convert("今日はコーヒーを飲んだ。", to: .romaji)    // kyō wa kōhī o nonda.
+    ///     converter.convert("今日はコーヒーを飲んだ。", to: .romaji(system: .nippon))
+    ///     // kyô wa kôhî wo nonda.
     ///
     /// Words without a known reading, such as kanji without an analyzer,
     /// stay as they're written.

@@ -1,11 +1,26 @@
-/// Converts kana to Hepburn romaji, with no dictionary and nothing beyond
-/// the standard library.
+/// A system for writing Japanese in the Latin alphabet.
+public enum RubyRomanization: Hashable, Sendable, CaseIterable {
+    /// Modified Hepburn, the most widely used: shi, chi, tsu, fu, ji, and
+    /// long vowels with macrons (tōkyō, kōhī), except えい and いい, which
+    /// are spelled out (sensei, ii).
+    case hepburn
+    /// Nihon-shiki (ISO 3602 Strict), which follows the kana table: si, ti,
+    /// tu, hu, zi, di, du, sya, wo for を, and long vowels with circumflexes
+    /// (tôkyô).
+    case nippon
+    /// Hepburn as Japanese passports write names: long vowels unmarked
+    /// (tokyo, sato), m before b, m, and p (namba, homma), and no apostrophe
+    /// after n (junichi).
+    case passport
+}
+
+/// Converts kana to romaji, with no dictionary and nothing beyond the
+/// standard library.
 ///
-/// Long vowels are written with macrons (kyōto, kōhī, jū), except えい and
-/// いい, which Hepburn spells out (sensei, ii). Kana alone can't tell
-/// whether おう is one long vowel or two (東京 is tōkyō but 思う omou), or
-/// whether は is the particle wa: pass a pronunciation where you know it,
-/// or use RubyCore, which finds both with its dictionary.
+/// Kana alone can't tell whether おう is one long vowel or two (東京 is
+/// tōkyō but 思う omou), or whether は is the particle wa: pass a
+/// pronunciation where you know it, or use RubyCore, which finds both with
+/// its dictionary.
 public enum RubyRomaji {
     /// Hepburn romaji for text written in kana: きょうと is kyōto, まっちゃ
     /// matcha, しんぶん shinbun.
@@ -20,22 +35,37 @@ public enum RubyRomaji {
     ///     とーきょー for とうきょう or わ for the particle は. Without one,
     ///     おう, おお and うう are read as long vowels.
     public static func hepburn(_ kana: String, pronunciation: String? = nil) -> String {
-        hepburn(kana, pronunciation: pronunciation, next: nil)
+        romanize(kana, system: .hepburn, pronunciation: pronunciation)
     }
 
-    /// Hepburn romaji for a word's `reading`.
+    /// Romaji in `system` for text written in kana: きょうと is kyōto in
+    /// Hepburn, kyôto in Nihon-shiki, and kyoto in passport style.
+    ///
+    /// Punctuation and kanji are treated as `hepburn(_:pronunciation:)`
+    /// treats them.
+    public static func romanize(_ kana: String, system: RubyRomanization, pronunciation: String? = nil) -> String {
+        romanize(kana, system: system, pronunciation: pronunciation, next: nil)
+    }
+
+    /// Romaji in `system` for a word's `reading`.
     ///
     /// - Parameters:
     ///   - next: The following word's reading, so a final っ doubles the
     ///     consonant after it: 入っ before た is it, making itta.
     ///   - breaks: Offsets in the reading where romaji put a space.
-    package static func hepburn(_ reading: String, pronunciation: String?, next: String?, breaks: [Int] = []) -> String {
+    package static func romanize(
+        _ reading: String,
+        system: RubyRomanization,
+        pronunciation: String?,
+        next: String?,
+        breaks: [Int] = []
+    ) -> String {
         if !breaks.isEmpty {
             let characters = Array(reading)
             let bounds = [0] + breaks.filter { 0 < $0 && $0 < characters.count } + [characters.count]
             let parts = zip(bounds, bounds.dropFirst()).map { String(characters[$0..<$1]) }
             return parts.enumerated().map { index, part in
-                hepburn(part, pronunciation: nil, next: index + 1 < parts.count ? parts[index + 1] : next)
+                romanize(part, system: system, pronunciation: nil, next: index + 1 < parts.count ? parts[index + 1] : next)
             }.joined(separator: " ")
         }
         let kana = spellingOutRepeatMarks(Array(RubyKana.hiragana(reading)))
@@ -55,8 +85,8 @@ public enum RubyRomaji {
             effective = markingLongVowels(kana)
         }
 
-        let pieces = morae(in: effective)
-        let following = next.flatMap { morae(in: Array(RubyKana.hiragana($0))).first }
+        let pieces = morae(in: effective, system: system)
+        let following = next.flatMap { morae(in: Array(RubyKana.hiragana($0)), system: system).first }
         var result = ""
         // After a comma or full stop, the next word is spaced from it.
         var spacesNext = false
@@ -79,15 +109,22 @@ public enum RubyRomaji {
                 guard case .syllable(let syllable)? = after, let first = syllable.first, !vowels.contains(first) else { continue }
                 append(syllable.hasPrefix("ch") ? "t" : String(first))
             case .n:
-                // ん before a vowel or y in the same word takes an
-                // apostrophe: gen'in, kin'yōbi, but gohan o.
-                append("n")
-                if index + 1 < pieces.count, case .syllable(let syllable) = pieces[index + 1],
-                   let first = syllable.first, vowels.contains(first) || first == "y" {
-                    result += "'"
+                let first: Character? = if index + 1 < pieces.count, case .syllable(let syllable) = pieces[index + 1] {
+                    syllable.first
+                } else {
+                    nil
+                }
+                if system == .passport {
+                    // Passports write m before b, m, and p: namba, homma.
+                    append(first.map { "bmp".contains($0) } == true ? "m" : "n")
+                } else {
+                    // ん before a vowel or y in the same word takes an
+                    // apostrophe: gen'in, kin'yōbi, but gohan o.
+                    append("n")
+                    if let first, vowels.contains(first) || first == "y" { result += "'" }
                 }
             case .long:
-                lengthenLastVowel(of: &result)
+                lengthenLastVowel(of: &result, system: system)
             case .other(let character):
                 if let mark = clauseEnds[character] {
                     result += mark
@@ -160,9 +197,9 @@ public enum RubyRomaji {
     }
 
     /// Splits kana into morae, combining small kana with the one before
-    /// (きゃ is kya, ふぁ fa). っ, ん and ー stay as markers for `hepburn`
+    /// (きゃ is kya, ふぁ fa). っ, ん and ー stay as markers for `romanize`
     /// to resolve against their neighbors.
-    private static func morae(in kana: [Character]) -> [Mora] {
+    private static func morae(in kana: [Character], system: RubyRomanization) -> [Mora] {
         var result: [Mora] = []
         var index = 0
         while index < kana.count {
@@ -181,7 +218,7 @@ public enum RubyRomaji {
             default:
                 break
             }
-            guard let romaji = single[character] else {
+            guard let romaji = syllable(character, in: system) else {
                 result.append(.other(character))
                 continue
             }
@@ -194,7 +231,7 @@ public enum RubyRomaji {
                 result.append(.syllable(romaji))
                 result.append(.long)
                 index += 1
-            } else if let combined = combine(character, romaji, with: small) {
+            } else if let combined = combine(character, romaji, with: small, in: system) {
                 result.append(.syllable(combined))
                 index += 1
             } else {
@@ -206,7 +243,7 @@ public enum RubyRomaji {
 
     /// A kana followed by a small one: き + ゃ is kya, し + ゃ sha, て + ぃ
     /// ti, う + ぇ we. `nil` if they don't combine, such as あぉ.
-    private static func combine(_ kana: Character, _ romaji: String, with small: String) -> String? {
+    private static func combine(_ kana: Character, _ romaji: String, with small: String, in system: RubyRomanization) -> String? {
         let consonant = String(romaji.dropLast())
         guard let vowel = romaji.last, vowels.contains(vowel) else { return nil }
         switch kana {
@@ -216,6 +253,12 @@ public enum RubyRomaji {
         default: break
         }
         guard !consonant.isEmpty else { return nil }
+        // Nihon-shiki keeps the kana's consonant and adds y or w: しぇ is
+        // sye, ふぁ hwa, つぁ twa.
+        if system == .nippon, small.count == 1 {
+            if vowel == "i" { return consonant + "y" + small }
+            if vowel == "u", "ふつ".contains(kana) { return consonant + "w" + small }
+        }
         if small.hasPrefix("y") {
             // しゃ, ちゃ and じゃ drop the y: sha, cha, ja.
             if vowel == "i" && ["sh", "ch", "j"].contains(consonant) { return consonant + small.dropFirst() }
@@ -224,12 +267,31 @@ public enum RubyRomaji {
         return consonant + small
     }
 
-    private static func lengthenLastVowel(of romaji: inout String) {
-        guard let index = romaji.lastIndex(where: { vowels.contains($0) }),
-              index == romaji.index(before: romaji.endIndex),
-              let long = macrons[romaji[index]]
-        else { return }
-        romaji.replaceSubrange(index...index, with: String(long))
+    /// Marks the vowel `romaji` ends with as long: with a macron in
+    /// Hepburn, a circumflex in Nihon-shiki, and not at all in passport
+    /// style.
+    private static func lengthenLastVowel(of romaji: inout String, system: RubyRomanization) {
+        guard let vowel = romaji.last, vowels.contains(vowel) else { return }
+        romaji.removeLast()
+        romaji += long(vowel, in: system)
+    }
+
+    /// `vowel` long, as `system` writes it: ō, ô, or o.
+    package static func long(_ vowel: Character, in system: RubyRomanization) -> String {
+        switch system {
+        case .hepburn: macrons[vowel].map(String.init) ?? String(vowel)
+        case .nippon: circumflexes[vowel].map(String.init) ?? String(vowel)
+        case .passport: String(vowel)
+        }
+    }
+
+    /// The romaji for one kana in `system`.
+    private static func syllable(_ kana: Character, in system: RubyRomanization) -> String? {
+        switch system {
+        case .hepburn: single[kana]
+        case .nippon: nihonShiki[kana] ?? single[kana]
+        case .passport: passport[kana] ?? single[kana]
+        }
     }
 
     /// ASCII for a full-width letter, digit or symbol (Ａ, ３, ！), or the
@@ -253,6 +315,18 @@ public enum RubyRomaji {
 
     private static let vowels: Set<Character> = ["a", "i", "u", "e", "o"]
     private static let macrons: [Character: Character] = ["a": "ā", "i": "ī", "u": "ū", "e": "ē", "o": "ō"]
+    private static let circumflexes: [Character: Character] = ["a": "â", "i": "î", "u": "û", "e": "ê", "o": "ô"]
+
+    /// Kana Nihon-shiki writes differently from Hepburn, following the
+    /// rows of the kana table.
+    private static let nihonShiki: [Character: String] = [
+        "し": "si", "ち": "ti", "つ": "tu", "ふ": "hu",
+        "じ": "zi", "ぢ": "di", "づ": "du",
+        "を": "wo", "ゐ": "wi", "ゑ": "we",
+    ]
+
+    /// Kana passports write differently from Hepburn: ヴ as b.
+    private static let passport: [Character: String] = ["ゔ": "bu"]
 
     /// Hiragana and the voiced kana ゞ repeats them as.
     private static let voiced = RubyKana.pairs("かがきぎくぐけげこごさざしじすずせぜそぞただちぢつづてでとどはばひびふぶへべほぼうゔ")

@@ -1,4 +1,5 @@
 import RubyCore
+import RubyTransliteration
 import Testing
 
 /// Content rewritten in another script or with inline readings, and where
@@ -81,6 +82,16 @@ import Testing
         #expect(words(of: content) == ["きょう", "は", "とうきょう", "へ", "いき", "たい"])
         // Romaji are spaced as words regardless.
         #expect(original.transcribed(to: .romaji, spacedAt: [3, 6]).spaces.isEmpty)
+    }
+
+    @Test func romajiWordsInEachSystem() {
+        let content = RubyContent.content(for: "新聞を読もう。")
+        #expect(content.romajiWords(in: .hepburn).map(\.text) == ["shinbun", "o", "yomō"])
+        #expect(content.romajiWords(in: .nippon).map(\.text) == ["sinbun", "wo", "yomô"])
+        #expect(content.romajiWords(in: .passport).map(\.text) == ["shimbun", "o", "yomo"])
+        // Hiragana text keeps romaji in every system over its words.
+        let hiragana = content.transcribed(to: .hiragana)
+        #expect(hiragana.romajiWords(in: .nippon).map(\.text) == ["sinbun", "wo", "yomô"])
     }
 
     @Test func rewritingIsCached() {

@@ -44,13 +44,14 @@ let package = Package(
         ),
         .target(
             name: "RubyUI",
-            dependencies: ["RubyCore"],
+            dependencies: ["RubyCore", "RubyTransliteration"],
             swiftSettings: swiftSettings + [.defaultIsolation(MainActor.self)]
         ),
         .testTarget(
             name: "RubyUITests",
             dependencies: [
                 "RubyCore",
+                "RubyTransliteration",
                 "RubyUI",
                 // Apps bundle their own dictionary; tests read with this one.
                 .product(name: "IPADic", package: "Mecab-Swift"),

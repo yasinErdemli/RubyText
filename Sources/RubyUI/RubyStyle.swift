@@ -1,4 +1,5 @@
 import RubyCore
+import RubyTransliteration
 import SwiftUI
 
 /// Which annotations `RubyText` draws around Japanese text.
@@ -51,7 +52,7 @@ extension RubyPlacement {
         // furigana are part of the text.
         let furigana = style.contains(.furigana) && furiganaPosition == .above && transcription == nil
         // Romaji text needs no romaji.
-        let romaji = style.contains(.romaji) && transcription?.script != .romaji
+        let romaji = style.contains(.romaji) && transcription?.script.isRomaji != true
         self.init(furigana: furigana, romajiAbove: romaji && !furigana, romajiBelow: romaji && furigana)
     }
 }
@@ -203,6 +204,8 @@ extension EnvironmentValues {
     @Entry var rubyFuriganaPosition = RubyFuriganaPosition.above
     /// How `RubyText` views write their text out, if not as it's written.
     @Entry var rubyTranscription: RubyTranscription? = nil
+    /// The system `RubyText` views write romaji in. Hepburn by default.
+    @Entry var rubyRomanization = RubyRomanization.hepburn
     /// Space `RubyText` views draw between words. None by default.
     @Entry var rubySpacing = RubySpacing.none
     /// Where `RubyText` views may break lines. Between words by default.
@@ -233,6 +236,21 @@ extension View {
     /// kana you wrote them in: {本気|マジ}.
     public func rubyFuriganaScript(_ script: RubyScript) -> some View {
         environment(\.rubyFuriganaScript, script)
+    }
+
+    /// Sets the system `RubyText` views in this hierarchy write romaji in,
+    /// wherever they show: as annotations, as furigana, inline, or as the
+    /// whole text.
+    ///
+    ///     RubyText("東京へ行こう。")
+    ///         .rubyStyle(.romaji)
+    ///         .rubyRomanization(.nippon)   // tôkyô e ikô
+    ///
+    /// A transcription or furigana script naming its own system, such as
+    /// `.romaji(system: .passport)`, uses that one instead, as a font
+    /// naming its design ignores `fontDesign(_:)`.
+    public func rubyRomanization(_ system: RubyRomanization) -> some View {
+        environment(\.rubyRomanization, system)
     }
 
     /// Sets where `RubyText` views in this hierarchy put furigana: above

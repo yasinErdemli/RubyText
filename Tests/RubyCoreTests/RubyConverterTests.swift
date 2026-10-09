@@ -1,4 +1,5 @@
 import RubyCore
+import RubyTransliteration
 import Testing
 
 @Suite struct RubyConverterTests {
@@ -21,6 +22,15 @@ import Testing
     @Test func romaji() {
         #expect(converter.convert(Self.sentence, to: .romaji) == "kanjitoretara te o tsunagō")
         #expect(converter.convert("今日はコーヒーを飲んだ。", to: .romaji) == "kyō wa kōhī o nonda.")
+    }
+
+    @Test func romanizationSystems() {
+        let sentence = "東京へ行こう。お茶を飲む。"
+        #expect(converter.convert(sentence, to: .romaji) == "tōkyō e ikō. ocha o nomu.")
+        #expect(converter.convert(sentence, to: .romaji(system: .hepburn)) == "tōkyō e ikō. ocha o nomu.")
+        #expect(converter.convert(sentence, to: .romaji(system: .nippon)) == "tôkyô e ikô. otya wo nomu.")
+        #expect(converter.convert(sentence, to: .romaji(system: .passport)) == "tokyo e iko. ocha o nomu.")
+        #expect(converter.annotate("東京へ行きたい。", with: .romaji(system: .nippon)) == "東京（tôkyô）へ行（i）きたい。")
     }
 
     @Test func romajiPunctuation() {
