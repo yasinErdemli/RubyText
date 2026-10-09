@@ -178,13 +178,13 @@ package final class RubyContent {
     }
 
     /// Content for `string`, analyzed as one text, with the readings it
-    /// gives and those `analyzer` finds for the rest. Its verbatim text
+    /// gives and those `analyzer` finds for the rest. Its unannotated text
     /// isn't annotated.
     package static func content(for string: RubyString, analyzer: (any RubyAnalyzer)?) -> RubyContent {
         let key = RubyCacheKey(StringKey(string: string, analyzer: analyzer))
         if let cached = stringCache.object(forKey: key) { return cached }
-        let (text, manual, verbatim) = parse(string)
-        let segments = unannotated(segments(in: text, analyzer: analyzer), in: verbatim)
+        let (text, manual, unannotated) = parse(string)
+        let segments = Self.unannotated(segments(in: text, analyzer: analyzer), in: unannotated)
         let content = RubyContent(string: text, manual: manual, segments: segments)
         stringCache.setObject(content, forKey: key)
         return content
@@ -235,14 +235,14 @@ package final class RubyContent {
             chooser: AnyHashable(chooser)
         ))
         if let cached = modelCache.object(forKey: key) { return cached }
-        let (text, manual, verbatim) = parse(string)
-        let segments = unannotated(Self.segments(in: text, analyzer: analyzer), in: verbatim)
+        let (text, manual, unannotated) = parse(string)
+        let segments = Self.unannotated(Self.segments(in: text, analyzer: analyzer), in: unannotated)
         let onChange: (([RubySegment]) async -> Void)? = onEachReading.map { update in
             { segments in await update(RubyContent(string: text, manual: manual, segments: segments)) }
         }
         let chosen = await RubyModelReadings.apply(
             to: segments,
-            excluding: manual.map(\.range) + verbatim,
+            excluding: manual.map(\.range) + unannotated,
             chooser: chooser,
             onChange: onChange
         )
@@ -272,11 +272,11 @@ package final class RubyContent {
     }
 
     /// The text of `string`, a word for each reading it gives, and the
-    /// UTF-16 ranges of its verbatim text.
-    package static func parse(_ string: RubyString) -> (string: String, manual: [RubyWord], verbatim: [Range<Int>]) {
+    /// UTF-16 ranges of its unannotated text.
+    package static func parse(_ string: RubyString) -> (string: String, manual: [RubyWord], unannotated: [Range<Int>]) {
         var text = ""
         var manual: [RubyWord] = []
-        var verbatim: [Range<Int>] = []
+        var unannotated: [Range<Int>] = []
         for piece in string.pieces {
             switch piece {
             case .markup(let markup):
@@ -291,13 +291,13 @@ package final class RubyContent {
             case .ruby(let base, let reading):
                 manual.append(RubyReadings.word(manualBase: base, reading: reading, offset: text.utf16.count))
                 text += base
-            case .verbatim(let plain):
+            case .unannotated(let plain):
                 let start = text.utf16.count
                 text += plain
-                verbatim.append(start..<text.utf16.count)
+                unannotated.append(start..<text.utf16.count)
             }
         }
-        return (text, manual, verbatim)
+        return (text, manual, unannotated)
     }
 
     /// `segments` without readings or grammar where they touch `ranges`,

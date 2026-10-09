@@ -16,11 +16,12 @@ import Testing
         #expect(RubyPlacement(style: [.furigana, .romaji], furiganaPosition: .inline) == placement(romajiAbove: true))
     }
 
-    @Test func romajiNamingASystemOverridesTheEnvironment() {
-        #expect(RubyScript.romaji.resolved(.nippon) == .romaji(system: .nippon))
-        #expect(RubyScript.romaji(system: .passport).resolved(.nippon) == .romaji(system: .passport))
+    @Test func romajiTakeTheEnvironmentsSystem() {
+        #expect(RubyScript.romaji.resolved(.nippon).romanization == .nippon)
+        #expect(RubyScript.romaji.romanization == .hepburn)
+        // Kana scripts have no system to set.
         #expect(RubyScript.katakana.resolved(.nippon) == .katakana)
-        #expect(RubyTranscription.romaji.resolved(.passport) == .romaji(system: .passport))
+        #expect(RubyScript.hiragana(loanwords: .hiragana).resolved(.passport) == .hiragana(loanwords: .hiragana))
     }
 
     @Test func transcribedTextHasNoFurigana() {
@@ -44,8 +45,10 @@ import Testing
         }
         #expect(furigana("東京で{本気|まじ}に{歩|ある}く", in: .katakana) == ["トウキョウ", "マジ", "アル"])
         #expect(furigana("東京で{本気|まじ}に{歩|ある}く", in: .romaji) == ["tōkyō", "maji", "aru"])
-        #expect(furigana("東京で{本気|まじ}に{歩|ある}く", in: .romaji(system: .nippon)) == ["tôkyô", "mazi", "aru"])
-        // In hiragana, markup readings keep their kana.
+        #expect(furigana("東京で{本気|まじ}に{歩|ある}く", in: RubyScript.romaji.resolved(.nippon)) == ["tôkyô", "mazi", "aru"])
+        // In hiragana, markup readings keep their kana, unless everything
+        // is asked for in hiragana.
         #expect(furigana("{本気|マジ}で東京") == ["マジ", "とうきょう"])
+        #expect(furigana("{本気|マジ}で東京", in: .hiragana(loanwords: .hiragana)) == ["まじ", "とうきょう"])
     }
 }

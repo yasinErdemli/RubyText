@@ -5,8 +5,9 @@ Show Japanese text with furigana and romaji in SwiftUI.
 ## Overview
 
 ``RubyText`` shows Japanese text with readings above its kanji, romaji above
-or below, or both, and finds the readings on device. Use it like `Text`, and
-set annotations through the environment, on the text or any view above it:
+or below, or both, and finds the readings on device. Use it like `Text`:
+furigana show by default, and other annotations are set through the
+environment, on the text or any view above it:
 
 ```swift
 RubyText("{今日|きょう}は日本語を勉強しています。")

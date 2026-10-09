@@ -12,15 +12,18 @@ import RubyTransliteration
 /// - `\(text)` adds a string or a number as text to analyze. Markup in it
 ///   is shown as written, so text from people using your app can't add
 ///   readings.
-/// - `\(verbatim:)` adds text that's never annotated, such as a product
-///   name.
+/// - `\(unannotated:)` adds text that's never annotated, such as a
+///   product name.
 /// - `\(value)` adds anything `RubyStringConvertible`, such as
 ///   `PersonNameComponents`, read with its phonetic name.
 ///
 /// The pieces are analyzed together, as one text, so words and phrases
-/// read across them, and readings you give always win. For text you load
-/// at run time, such as from JSON, use `{base|reading}` markup with
-/// `init(markup:)` or `RubyText(verbatim:)`.
+/// read across them, and readings you give always win.
+///
+/// As `Text` treats Markdown, markup only counts where you opt in: in a
+/// literal, or in text you load at run time, such as from JSON, with
+/// `init(markup:)` or `RubyText(markup:)`. A `String` passed where a
+/// `RubyString` is expected is shown as written.
 public struct RubyString: Hashable, Sendable, ExpressibleByStringInterpolation, RubyStringConvertible {
     package enum Piece: Hashable, Sendable {
         /// Text with `{base|reading}` markup.
@@ -30,7 +33,7 @@ public struct RubyString: Hashable, Sendable, ExpressibleByStringInterpolation, 
         /// Text with a reading you gave.
         case ruby(base: String, reading: String)
         /// Text that's never annotated.
-        case verbatim(String)
+        case unannotated(String)
     }
 
     package private(set) var pieces: [Piece]
@@ -54,9 +57,14 @@ public struct RubyString: Hashable, Sendable, ExpressibleByStringInterpolation, 
         pieces = markup.isEmpty ? [] : [.markup(markup)]
     }
 
-    /// Text that's never annotated.
-    public init(verbatim text: String) {
-        pieces = text.isEmpty ? [] : [.verbatim(text)]
+    /// Text that's never annotated, such as a product name.
+    public init(unannotated text: String) {
+        pieces = text.isEmpty ? [] : [.unannotated(text)]
+    }
+
+    /// Text to analyze, shown as written: markup in it isn't read.
+    package init(text: String) {
+        pieces = text.isEmpty ? [] : [.text(text)]
     }
 
     /// The text without readings or markup.
@@ -64,7 +72,7 @@ public struct RubyString: Hashable, Sendable, ExpressibleByStringInterpolation, 
         pieces.map { piece in
             switch piece {
             case .markup(let markup): RubyMarkup.plainText(markup)
-            case .text(let text), .verbatim(let text): text
+            case .text(let text), .unannotated(let text): text
             case .ruby(let base, _): base
             }
         }.joined()
@@ -118,8 +126,8 @@ public struct RubyString: Hashable, Sendable, ExpressibleByStringInterpolation, 
         }
 
         /// Text that's never annotated, such as a product name.
-        public mutating func appendInterpolation(verbatim text: some StringProtocol) {
-            if !text.isEmpty { pieces.append(.verbatim(String(text))) }
+        public mutating func appendInterpolation(unannotated text: some StringProtocol) {
+            if !text.isEmpty { pieces.append(.unannotated(String(text))) }
         }
 
         /// `value` as a `RubyString`, with the readings it gives.
@@ -162,7 +170,7 @@ extension PersonNameComponents: RubyStringConvertible {
     /// Names written in Japanese put the family name first with no space
     /// between. Names in other scripts read as they're formatted for the
     /// current locale.
-    public func rubyString(readings kana: RubyTranscription.Kana) -> RubyString {
+    public func rubyString(readings kana: RubyScript.Kana) -> RubyString {
         let parts = [(familyName, phoneticRepresentation?.familyName), (givenName, phoneticRepresentation?.givenName)]
         let written = parts.compactMap(\.0).joined()
         guard !written.isEmpty, written.allSatisfy(RubyKana.isJapanese) else {

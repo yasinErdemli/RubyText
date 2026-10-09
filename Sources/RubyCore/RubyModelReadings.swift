@@ -72,19 +72,20 @@ public nonisolated enum RubyModelReadings {
         RubyModelOptions.standard.isAvailable
     }
 
-    /// The questions `rubyModelReadings()` asks about `markup`: one for each
-    /// word on the list whose reading the dictionary chose, outside
-    /// readings you supply in `{base|reading}` markup, in text order.
-    public static func questions(in markup: String, analyzer: some RubyAnalyzer) -> [RubyReadingQuestion] {
-        questions(in: RubyString(markup: markup), analyzer: analyzer)
+    /// The questions `rubyModelReadings()` asks about `text`, read as it's
+    /// written: one for each word on the list whose reading the dictionary
+    /// chose, in text order.
+    @_disfavoredOverload
+    public static func questions(in text: some StringProtocol, analyzer: some RubyAnalyzer) -> [RubyReadingQuestion] {
+        questions(in: RubyString(text: String(text)), analyzer: analyzer)
     }
 
     /// The questions `rubyModelReadings()` asks about `string`, outside the
-    /// readings it gives and its verbatim text, in text order.
+    /// readings it gives and its unannotated text, in text order.
     public static func questions(in string: RubyString, analyzer: some RubyAnalyzer) -> [RubyReadingQuestion] {
-        let (text, manual, verbatim) = RubyContent.parse(string)
+        let (text, manual, unannotated) = RubyContent.parse(string)
         let segments = RubyContent.segments(in: text, analyzer: analyzer)
-        return questions(in: segments, excluding: manual.map(\.range) + verbatim).map(\.question)
+        return questions(in: segments, excluding: manual.map(\.range) + unannotated).map(\.question)
     }
 
     /// Asks the model about `question` now, and returns the reading it

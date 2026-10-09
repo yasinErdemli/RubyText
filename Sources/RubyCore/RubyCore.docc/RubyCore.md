@@ -45,7 +45,6 @@ dictionary. Each reading records its layer as a ``ReadingSource``.
 ### Writing text out
 
 - ``RubyConverter``
-- ``RubyTranscription``
 - ``RubyScript``
 
 ### Words

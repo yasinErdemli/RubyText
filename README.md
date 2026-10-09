@@ -62,8 +62,7 @@ analyzer once, near the root of your app:
 
 ```swift
 import IPADic
-import RubyCore
-import RubyUI
+import RubyUI   // also imports RubyCore and RubyTransliteration
 
 let analyzer = RubyMeCabAnalyzer(dictionary: IPADic().url)
 
@@ -113,8 +112,8 @@ RubyText("今日はコーヒーを飲んだ。")
 ```
 
 `.hiragana(loanwords: .hiragana)` writes loanwords in hiragana too,
-`.katakana` everything in katakana, and `.romaji(system: .passport)` gives
-kyo wa kohi o nonda.
+`.katakana` everything in katakana, and `.romaji` with
+`.rubyRomanization(.passport)` gives kyo wa kohi o nonda.
 
 `rubyRomanization(_:)` chooses how romaji are written: `.hepburn` by
 default, `.kunrei`, `.nippon`, `.passport`, `.wapuro` (as typed: toukyou),
@@ -147,13 +146,19 @@ Markup sets a reading where the automatic one is wrong, or for names:
 
 ```swift
 RubyText("{宇宙|そら}を見上げた。")
+RubyText(markup: json)   // markup you load at run time
+RubyText(comment)        // a String: shown as written
 ```
+
+Markup is read the way `Text` reads Markdown: in literals, and where you ask
+for it with `RubyText(markup:)`. A `String` you pass, such as a comment
+someone typed, is shown as written, so it can't add readings.
 
 In code, give readings with string interpolation:
 
 ```swift
 RubyText("\("今日", reading: "きょう")は\(user.name)さんと話した。")
-RubyText("\(verbatim: "無印良品")で本を\(count)冊買った。") // 無印良品 is never annotated
+RubyText("\(unannotated: "無印良品")で本を\(count)冊買った。") // 無印良品 is never annotated
 ```
 
 `\(base, reading:)` takes an optional reading, so a missing one falls back to
@@ -176,7 +181,7 @@ struct User: RubyStringConvertible {
 
 Unlike `Text`, a literal isn't localized. For localized text, pass a
 `LocalizedStringResource`, such as `RubyText(.welcome)` with the symbols your
-String Catalog generates, or `String(localized:)`. Both can use markup.
+String Catalog generates; its translations can use markup.
 
 To show readings from your own data with no analysis, pass segments:
 
@@ -201,13 +206,16 @@ RubyText(text)
 ### Reading aloud
 
 ```swift
-@State private var reader = RubyReader(analyzer: analyzer)
+@State private var reader = RubyReader()
 
 RubyText(text)
     .rubyReader(reader)
     .rubyEmphasis([.tint, .grow])
 Button("Read Aloud") { reader.speak(text) }
 ```
+
+The reader reads with the analyzer and spoken readings of the views it's
+attached to, so it emphasizes the words they show.
 
 ### VoiceOver
 

@@ -6,9 +6,10 @@ import SwiftUI
 /// Japanese text that can show furigana or romaji above its words, or
 /// furigana above and romaji below.
 ///
-/// Use it like `Text`, and choose annotations with `rubyStyle(_:)` on it or
-/// any parent view. Readings are generated on device; supply your own with
-/// `{base|reading}` markup where the automatic one is wrong:
+/// Use it like `Text`. Furigana show by default; choose other annotations
+/// with `rubyStyle(_:)` on it or any parent view. Readings are generated on
+/// device; supply your own with `{base|reading}` markup where the automatic
+/// one is wrong:
 ///
 ///     RubyText("{今日|きょう}は日本語を勉強しています。")
 ///         .font(.title)
@@ -19,6 +20,13 @@ import SwiftUI
 /// interpolate, such as from people using your app, can't add readings:
 ///
 ///     RubyText("\("今日", reading: "きょう")は\(user.name)さんと話した。")
+///
+/// As `Text` reads Markdown, markup is only read where you opt in: in a
+/// literal, or with `init(markup:)` for markup you load at run time. A
+/// `String` you pass is shown as written:
+///
+///     RubyText(comment)          // as written, with readings found for it
+///     RubyText(markup: json)     // {base|reading} markup read
 ///
 /// Readings can also be written into the text itself: in parentheses
 /// after each kanji with `rubyFuriganaPosition(.inline)`, or as the whole
@@ -84,6 +92,7 @@ public struct RubyText: View {
     @Environment(\.rubySpokenReadings) private var spokenReadings
     @Environment(\.rubyShowsWordDetails) private var showsWordDetails
     @Environment(\.rubyWordTapAction) private var wordTapAction
+    @Environment(\.rubyReader) private var reader
     /// Content with the model's readings, once it has answered, and the
     /// input it's for.
     @State private var modelContent: (key: ModelKey, content: RubyContent)?
@@ -100,13 +109,13 @@ public struct RubyText: View {
     ///
     /// See `RubyString` for what it can hold. Unlike `Text`, a literal isn't
     /// localized; for localized text, pass a `LocalizedStringResource`, such
-    /// as a symbol your String Catalog generates, or `String(localized:)`.
+    /// as a symbol your String Catalog generates.
     public init(_ string: RubyString) {
         input = .string(string)
     }
 
-    /// Creates ruby text from a localized string, which can use
-    /// `{base|reading}` markup:
+    /// Creates ruby text from a localized string, whose translations can
+    /// use `{base|reading}` markup:
     ///
     ///     RubyText(.welcome)
     @_disfavoredOverload
@@ -114,17 +123,26 @@ public struct RubyText: View {
         input = .string(RubyString(markup: String(localized: resource)))
     }
 
-    /// Creates ruby text from a string without localizing it, which can use
-    /// `{base|reading}` markup.
+    /// Creates ruby text from a string, shown as written, as `Text` shows a
+    /// string: markup in it isn't read, so text from people using your app
+    /// can't add readings.
     @_disfavoredOverload
     public init<S: StringProtocol>(_ content: S) {
-        input = .string(RubyString(markup: String(content)))
+        input = .string(RubyString(text: String(content)))
     }
 
-    /// Creates ruby text from a string without localizing it, which can use
-    /// `{base|reading}` markup, such as text you load at run time.
+    /// Creates ruby text from a string, shown as written, even a literal:
+    /// markup in it isn't read.
     public init(verbatim content: String) {
-        input = .string(RubyString(markup: content))
+        input = .string(RubyString(text: content))
+    }
+
+    /// Creates ruby text from `{base|reading}` markup you load at run time,
+    /// such as from JSON:
+    ///
+    ///     RubyText(markup: "{宇宙|そら}を見上げた。")
+    public init(markup: String) {
+        input = .string(RubyString(markup: markup))
     }
 
     /// Creates ruby text from segments you supply, such as readings from
@@ -187,6 +205,22 @@ public struct RubyText: View {
         .task(id: modelKey) {
             await loadModelReadings()
         }
+        // An attached reader reads with this view's analyzer and spoken
+        // readings, so it finds the same words and says what VoiceOver says.
+        .onChange(of: readerSettings, initial: true) {
+            reader?.adopt(analyzer: analyzer, spokenReadings: spokenReadings)
+        }
+    }
+
+    /// What an attached reader takes from this view.
+    private struct ReaderSettings: Equatable {
+        let reader: ObjectIdentifier?
+        let analyzer: AnyHashable?
+        let spokenReadings: RubySpokenReadings
+    }
+
+    private var readerSettings: ReaderSettings {
+        ReaderSettings(reader: reader.map(ObjectIdentifier.init), analyzer: analyzer.map { AnyHashable($0) }, spokenReadings: spokenReadings)
     }
 
     /// `content` as the transcription or inline furigana write it.
@@ -318,8 +352,7 @@ extension View {
     ///         .rubyAnalyzer(analyzer)
     ///
     /// Without an analyzer, only readings in `{base|reading}` markup show.
-    /// Give a `RubyReader` reading the same text the same analyzer, so the
-    /// phrases it emphasizes match the views' words.
+    /// A `RubyReader` attached to the views reads with the same analyzer.
     public func rubyAnalyzer(_ analyzer: some RubyAnalyzer) -> some View {
         environment(\.rubyAnalyzer, analyzer)
     }
@@ -1265,25 +1298,25 @@ struct RubyLayout {
 
     ScrollView {
         VStack(alignment: .leading, spacing: 28) {
-            RubyText(verbatim: sentence)
+            RubyText(markup: sentence)
                 .rubyStyle()
 
-            RubyText(verbatim: sentence)
+            RubyText(markup: sentence)
                 .rubyStyle(.romaji)
 
-            RubyText(verbatim: sentence)
+            RubyText(markup: sentence)
                 .rubyStyle([.furigana, .romaji])
 
-            RubyText(verbatim: sentence)
+            RubyText(markup: sentence)
                 .rubyStyle([])
 
             // Multiple paragraphs.
-            RubyText(verbatim: "{今日|きょう}は{東京|とうきょう}へ{行|い}きたい。\n\nコーヒーを{飲|の}みたい。")
+            RubyText("{今日|きょう}は{東京|とうきょう}へ{行|い}きたい。\n\nコーヒーを{飲|の}みたい。")
                 .font(.title2.bold())
                 .rubyStyle([.furigana, .romaji])
 
             // Long word forced to wrap: its reading is split, not duplicated.
-            RubyText(verbatim: "きのう{日本語能力試験|にほんごのうりょくしけん}を{受|う}けた。")
+            RubyText("きのう{日本語能力試験|にほんごのうりょくしけん}を{受|う}けた。")
                 .frame(width: 160, alignment: .leading)
                 .rubyStyle()
         }
@@ -1298,18 +1331,18 @@ struct RubyLayout {
 
     VStack(alignment: .leading, spacing: 28) {
         // Default: furigana in secondary, romaji in tertiary.
-        RubyText(verbatim: sentence)
+        RubyText(markup: sentence)
 
         // Furigana and romaji colored separately from the text.
-        RubyText(verbatim: sentence)
+        RubyText(markup: sentence)
             .foregroundStyle(.primary, .red, .blue)
 
         // A single style tints everything; the levels derive from it.
-        RubyText(verbatim: sentence)
+        RubyText(markup: sentence)
             .foregroundStyle(.indigo)
 
         // Everything in the text color, like printed books.
-        RubyText(verbatim: sentence)
+        RubyText(markup: sentence)
             .foregroundStyle(.primary, .primary, .primary)
     }
     .font(.title3)
@@ -1321,7 +1354,7 @@ struct RubyLayout {
     @Previewable @State var style: RubyStyle = .furigana
 
     VStack(alignment: .leading, spacing: 24) {
-        RubyText(verbatim: "{吾輩|わがはい}は{猫|ねこ}である。{名前|なまえ}はまだ{無|な}い。")
+        RubyText("{吾輩|わがはい}は{猫|ねこ}である。{名前|なまえ}はまだ{無|な}い。")
             .font(.title2)
             .rubyStyle(style)
 

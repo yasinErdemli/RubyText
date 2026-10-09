@@ -1,103 +1,73 @@
 import Foundation
 import RubyTransliteration
 
-/// A writing system for Japanese readings: hiragana, katakana, or romaji
-/// in a romanization system.
+/// A writing system for Japanese: hiragana, katakana, or romaji. It sets
+/// how furigana are written, and how text is written out without kanji.
 ///
-///     .hiragana                     // とうきょう
-///     .katakana                     // トウキョウ
-///     .romaji                       // tōkyō, or as `rubyRomanization(_:)` sets
-///     .romaji(system: .nippon)      // tôkyô
+///     .hiragana                         // とうきょう; きょうはコーヒーをのんだ。
+///     .hiragana(loanwords: .hiragana)   // こーひー, in hiragana too
+///     .katakana                         // トウキョウ; キョウハコーヒーヲノンダ。
+///     .romaji                           // tōkyō; kyō wa kōhī o nonda.
+///
+/// Romaji are written in the system `rubyRomanization(_:)` sets, Hepburn by
+/// default; `RubyConverter` takes the system as a parameter.
 public struct RubyScript: Hashable, Sendable {
     package enum Form: Hashable, Sendable {
         case hiragana
         case katakana
-        /// Romaji in a system, or in the one the environment sets for `nil`.
-        case romaji(RubyRomanization?)
+        case romaji
     }
 
     package let form: Form
+    /// Whether katakana stays katakana, in hiragana: loanwords such as
+    /// コーヒー, and readings you supply in katakana, such as {本気|マジ}.
+    package let keepsKatakana: Bool
+    /// The system romaji are written in.
+    package private(set) var romanization = RubyRomanization.hepburn
 
-    public static let hiragana = RubyScript(form: .hiragana)
-    public static let katakana = RubyScript(form: .katakana)
-
-    /// Romaji in the system `rubyRomanization(_:)` sets, Hepburn by
-    /// default.
-    public static let romaji = RubyScript(form: .romaji(nil))
-
-    /// Romaji in `system`, whatever `rubyRomanization(_:)` sets.
-    public static func romaji(system: RubyRomanization) -> RubyScript {
-        RubyScript(form: .romaji(system))
-    }
-
-    /// Whether this is romaji, in any system.
-    public var isRomaji: Bool {
-        if case .romaji = form { true } else { false }
-    }
-
-    /// This script with romaji in `system` unless it names its own.
-    package func resolved(_ system: RubyRomanization) -> RubyScript {
-        form == .romaji(nil) ? .romaji(system: system) : self
-    }
-
-    /// The romanization system, for romaji: Hepburn unless named.
-    package var romanization: RubyRomanization {
-        if case .romaji(let system?) = form { system } else { .hepburn }
-    }
-}
-
-/// How Japanese text is written out without kanji: in hiragana, katakana,
-/// or romaji.
-///
-///     .hiragana                         // きょうはコーヒーをのんだ。
-///     .hiragana(loanwords: .hiragana)   // きょうはこーひーをのんだ。
-///     .katakana                         // キョウハコーヒーヲノンダ。
-///     .romaji                           // kyō wa kōhī o nonda.
-public struct RubyTranscription: Hashable, Sendable {
-    /// The script the text is written in.
-    public let script: RubyScript
-    /// Whether katakana stays katakana, in hiragana text.
-    let keepsKatakana: Bool
-
-    /// Kana loanwords can be written in.
+    /// Kana that loanwords can be written in.
     public enum Kana: Hashable, Sendable {
         case hiragana
         case katakana
     }
 
-    /// Hiragana, with loanwords left in katakana as children's books
-    /// write them: きょうはコーヒーをのんだ。
-    public static let hiragana = hiragana(loanwords: .katakana)
+    /// Hiragana, with katakana left as it's written, as children's books
+    /// write loanwords: きょうはコーヒーをのんだ。
+    public static let hiragana = RubyScript(form: .hiragana, keepsKatakana: true)
 
     /// Hiragana, with loanwords and other words written in katakana, such
     /// as コーヒー, in `loanwords`: `.hiragana` writes everything in
     /// hiragana, こーひー.
-    public static func hiragana(loanwords: Kana) -> RubyTranscription {
-        RubyTranscription(script: .hiragana, keepsKatakana: loanwords == .katakana)
+    public static func hiragana(loanwords: Kana) -> RubyScript {
+        RubyScript(form: .hiragana, keepsKatakana: loanwords == .katakana)
     }
 
     /// Katakana throughout: キョウハコーヒーヲノンダ。
-    public static let katakana = RubyTranscription(script: .katakana, keepsKatakana: false)
+    public static let katakana = RubyScript(form: .katakana, keepsKatakana: false)
 
-    /// Romaji, with spaces between words and Japanese punctuation made
-    /// Latin: kyō wa kōhī o nonda. In the system `rubyRomanization(_:)`
-    /// sets, Hepburn by default.
-    public static let romaji = RubyTranscription(script: .romaji, keepsKatakana: false)
+    /// Romaji. Text written out in romaji has spaces between words and
+    /// Japanese punctuation made Latin: kyō wa kōhī o nonda.
+    public static let romaji = RubyScript(form: .romaji, keepsKatakana: false)
 
-    /// Romaji in `system`, whatever `rubyRomanization(_:)` sets: kyô wa
-    /// kôhî wo nonda in Nihon-shiki.
-    public static func romaji(system: RubyRomanization) -> RubyTranscription {
-        RubyTranscription(script: .romaji(system: system), keepsKatakana: false)
+    /// Whether this is romaji.
+    public var isRomaji: Bool { form == .romaji }
+
+    /// This script with romaji written in `system`.
+    package func resolved(_ system: RubyRomanization) -> RubyScript {
+        guard isRomaji else { return self }
+        var script = self
+        script.romanization = system
+        return script
     }
 
-    /// This transcription with romaji in `system` unless it names its own.
-    package func resolved(_ system: RubyRomanization) -> RubyTranscription {
-        RubyTranscription(script: script.resolved(system), keepsKatakana: keepsKatakana)
+    private init(form: Form, keepsKatakana: Bool) {
+        self.form = form
+        self.keepsKatakana = keepsKatakana
     }
 }
 
 extension RubyContent {
-    /// This content written out as `transcription` says: kanji become
+    /// This content written out in `script`: kanji become
     /// their readings and kana the script's kana, or everything becomes
     /// romaji, with spaces between words and Japanese punctuation made
     /// Latin. Words keep their grammar and move with their text.
@@ -106,8 +76,8 @@ extension RubyContent {
     ///   puts an ideographic space, such as between phrases, as text
     ///   written without kanji often does (分かち書き). Their offsets in
     ///   the transcribed text are its `spaces`.
-    package func transcribed(to transcription: RubyTranscription, spacedAt spaces: [Int] = []) -> RubyContent {
-        rewritten(.transcribed(transcription, spaces: transcription.script.isRomaji ? [] : spaces))
+    package func transcribed(to script: RubyScript, spacedAt spaces: [Int] = []) -> RubyContent {
+        rewritten(.transcribed(script, spaces: script.isRomaji ? [] : spaces))
     }
 
     /// This content with each kanji's reading in parentheses after it, in
@@ -118,10 +88,10 @@ extension RubyContent {
     }
 
     /// The reading `reading` shows in `script`, as furigana or inline:
-    /// readings in markup keep their kana in hiragana ({本気|マジ}).
+    /// readings in markup keep their katakana in `.hiragana` ({本気|マジ}).
     package static func text(of reading: RubyReading, in script: RubyScript) -> String {
         switch script.form {
-        case .hiragana: reading.text
+        case .hiragana: script.keepsKatakana ? reading.text : RubyKana.hiragana(reading.text)
         case .katakana: RubyKana.katakana(reading.text)
         case .romaji: script.romanization.transliterate(reading.text)
         }
@@ -130,7 +100,7 @@ extension RubyContent {
     // MARK: Rewriting
 
     private enum Rewrite: Hashable {
-        case transcribed(RubyTranscription, spaces: [Int])
+        case transcribed(RubyScript, spaces: [Int])
         case inlineReadings(RubyScript, open: String, close: String)
     }
 
@@ -149,12 +119,12 @@ extension RubyContent {
         let form: RubyRewriteForm
         let pieces: [RubyRewritePiece]
         switch rewrite {
-        case .transcribed(let transcription, _) where transcription.script.isRomaji:
+        case .transcribed(let script, _) where script.isRomaji:
             form = .romaji
-            pieces = romajiPieces(transcription.script.romanization)
-        case .transcribed(let transcription, let spaces):
+            pieces = romajiPieces(script.romanization)
+        case .transcribed(let script, let spaces):
             form = .kana
-            pieces = kanaPieces(transcription, spacedAt: Set(spaces))
+            pieces = kanaPieces(script, spacedAt: Set(spaces))
         case .inlineReadings(let script, let open, let close):
             form = .inline
             pieces = inlinePieces(script, open: open, close: close)
@@ -175,11 +145,11 @@ extension RubyContent {
     /// Each reading in the transcription's kana in place of its kanji, and
     /// every other character converted on its own, with a space before
     /// each of `spaces`.
-    private func kanaPieces(_ transcription: RubyTranscription, spacedAt spaces: Set<Int>) -> [RubyRewritePiece] {
+    private func kanaPieces(_ script: RubyScript, spacedAt spaces: Set<Int>) -> [RubyRewritePiece] {
         func convert(_ text: String) -> String {
-            if transcription.script == .katakana { return RubyKana.katakana(text) }
+            if script.form == .katakana { return RubyKana.katakana(text) }
             // Readings and kana as written, katakana included.
-            return transcription.keepsKatakana ? text : RubyKana.hiragana(text)
+            return script.keepsKatakana ? text : RubyKana.hiragana(text)
         }
         var readings = words.flatMap(\.furigana)[...]
         var pieces: [RubyRewritePiece] = []

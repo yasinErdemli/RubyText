@@ -24,22 +24,25 @@ The first release.
   the questions the model is asked, asks them one at a time to time them,
   and prewarms the model.
 - `{base|reading}` markup and `RubyText(segments:)` for readings you supply.
-  Each reading records where it came from, as `ReadingSource`.
+  Markup is read the way `Text` reads Markdown: in literals and with
+  `RubyText(markup:)`, while a `String` is shown as written. Each reading
+  records where it came from, as `ReadingSource`.
 - Readings in code with string interpolation, as `RubyString`:
-  `\(base, reading:)`, `\(verbatim:)` for text that's never annotated, and
-  `RubyStringConvertible` for your own types, with `PersonNameComponents`
-  read with their phonetic names. The pieces are analyzed as one text, and
-  markup in interpolated strings shows as written. `RubyText` literals
-  aren't localized; pass a `LocalizedStringResource` or
-  `String(localized:)` for localized text.
+  `\(base, reading:)`, `\(unannotated:)` for text that's never annotated,
+  and `RubyStringConvertible` for your own types, with
+  `PersonNameComponents` read with their phonetic names. The pieces are
+  analyzed as one text, and markup in interpolated strings shows as
+  written. `RubyText` literals aren't localized; pass a
+  `LocalizedStringResource` for localized text.
 - A benchmark of 255 words in context: 241 read correctly, 254 with the
   model.
 
 ### Display
 
-- `RubyText`: furigana above, romaji above or below, or both, inherited
-  through the environment like other text styles, with animated changes that
-  respect Reduce Motion.
+- `RubyText`: furigana above by default, romaji above or below, or both,
+  inherited through the environment like other text styles, with animated
+  changes that respect Reduce Motion. `import RubyUI` imports everything it
+  uses.
 - Furigana in hiragana, katakana or romaji, or inline in parentheses.
   Readings keep their natural spacing, centered over their kanji; long ones
   flow over neighboring kana and get space around their word, never inside
@@ -48,7 +51,8 @@ The first release.
   which still keeps each paragraph's last word together so no line holds a
   single kana (す。).
 - Whole text written in hiragana, katakana or romaji with
-  `rubyTranscription(_:)`, rolling glyph by glyph into the new text.
+  `rubyTranscription(_:)`, rolling glyph by glyph into the new text. One
+  `RubyScript` type names the script for furigana and for the whole text.
 - Romaji in Hepburn, Kunrei-shiki, Nihon-shiki, passport style, wāpuro (as
   typed) or Hepburn for Turkish readers, and readings in Cyrillic
   (Polivanov) or Hangul, set with `rubyRomanization(_:)`. Names of people
@@ -61,7 +65,8 @@ The first release.
 - Word details with the reading, dictionary form, part of speech, JLPT
   levels and JMdict definitions.
 - Read aloud with `RubyReader`, synthesized or from a recording, with the
-  phrase being spoken emphasized.
+  phrase being spoken emphasized. It reads with the analyzer and spoken
+  readings of the views it's attached to.
 
 ### Accessibility
 

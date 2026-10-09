@@ -16,7 +16,7 @@ import Testing
     }
 
     @Test func piecesMakeOneText() {
-        let string: RubyString = "\("今日", reading: "きょう")は{明日|あした}も\(verbatim: "iPhone")で\(3)回"
+        let string: RubyString = "\("今日", reading: "きょう")は{明日|あした}も\(unannotated: "iPhone")で\(3)回"
         #expect(string.plainText == "今日は明日もiPhoneで3回")
         #expect(content(string).string == "今日は明日もiPhoneで3回")
     }
@@ -46,16 +46,16 @@ import Testing
         #expect(!content.words.contains { $0.source == .manual })
     }
 
-    @Test func verbatimTextIsNotAnnotated() {
-        let content = content("\(verbatim: "東京")へ行く")
+    @Test func unannotatedTextIsNotAnnotated() {
+        let content = content("\(unannotated: "東京")へ行く")
         #expect(furigana(content) == ["行く:い"])
         #expect(!content.words.contains { $0.range.overlaps(0..<2) })
         #expect(content.romajiWords.map(\.text) == ["e", "iku"])
     }
 
-    @Test func verbatimTextIsNotAskedAbout() {
+    @Test func unannotatedTextIsNotAskedAbout() {
         #expect(RubyModelReadings.questions(in: "夜の公園は人気がない。" as RubyString, analyzer: RubyMeCabAnalyzer.ipadic).count == 1)
-        #expect(RubyModelReadings.questions(in: "夜の公園は\(verbatim: "人気")がない。", analyzer: RubyMeCabAnalyzer.ipadic).isEmpty)
+        #expect(RubyModelReadings.questions(in: "夜の公園は\(unannotated: "人気")がない。", analyzer: RubyMeCabAnalyzer.ipadic).isEmpty)
     }
 
     @Test func namesReadWithTheirPhoneticNames() throws {
@@ -93,7 +93,7 @@ import Testing
 
     @Test func converting() {
         let converter = RubyConverter(analyzer: RubyMeCabAnalyzer.ipadic)
-        #expect(converter.convert("\("本気", reading: "マジ")で\(verbatim: "AI")を使う" as RubyString, to: .hiragana) == "マジでAIをつかう")
+        #expect(converter.convert("\("本気", reading: "マジ")で\(unannotated: "AI")を使う" as RubyString, to: .hiragana) == "マジでAIをつかう")
         #expect(converter.annotate("\("宇宙", reading: "そら")を見る" as RubyString, with: .hiragana) == "宇宙（そら）を見（み）る")
     }
 

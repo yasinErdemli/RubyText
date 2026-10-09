@@ -39,7 +39,8 @@ extension View {
     }
 
     /// Emphasizes the words `reader` speaks in `RubyText` views showing the
-    /// same text.
+    /// same text. The reader reads with those views' analyzer and spoken
+    /// readings.
     public func rubyReader(_ reader: RubyReader?) -> some View {
         environment(\.rubyReader, reader)
     }

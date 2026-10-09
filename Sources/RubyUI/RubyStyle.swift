@@ -2,7 +2,8 @@ import RubyCore
 import RubyTransliteration
 import SwiftUI
 
-/// Which annotations `RubyText` draws around Japanese text.
+/// Which annotations `RubyText` draws around Japanese text. Furigana by
+/// default.
 ///
 /// Combine options as a set; the empty set shows plain text:
 ///
@@ -47,12 +48,12 @@ struct RubyPlacement: Equatable {
 }
 
 extension RubyPlacement {
-    init(style: RubyStyle, furiganaPosition: RubyFuriganaPosition = .above, transcription: RubyTranscription? = nil) {
+    init(style: RubyStyle, furiganaPosition: RubyFuriganaPosition = .above, transcription: RubyScript? = nil) {
         // Text written in kana or romaji has no kanji to read, and inline
         // furigana are part of the text.
         let furigana = style.contains(.furigana) && furiganaPosition == .above && transcription == nil
         // Romaji text needs no romaji.
-        let romaji = style.contains(.romaji) && transcription?.script.isRomaji != true
+        let romaji = style.contains(.romaji) && transcription?.isRomaji != true
         self.init(furigana: furigana, romajiAbove: romaji && !furigana, romajiBelow: romaji && furigana)
     }
 }
@@ -60,8 +61,7 @@ extension RubyPlacement {
 /// Which kanji get furigana, so learners only see readings they need.
 ///
 ///     RubyText("今日、政府は新しい経済政策を発表した。")
-///         .rubyStyle()
-///         .rubyFurigana(.above(.n4))   // readings for 政府, 経済, 政策, 発表
+/// ///         .rubyFurigana(.above(.n4))   // readings for 政府, 経済, 政策, 発表
 ///
 /// A reading spanning several kanji, like せいさく over 政策, shows if any
 /// of them is unknown. Changing the filter fades readings in and out.
@@ -254,8 +254,8 @@ public enum RubyLineBreaking: Hashable, Sendable {
 }
 
 extension EnvironmentValues {
-    /// The annotations `RubyText` views draw. Plain text by default.
-    @Entry var rubyStyle: RubyStyle = []
+    /// The annotations `RubyText` views draw. Furigana by default.
+    @Entry var rubyStyle: RubyStyle = .furigana
     /// Which kanji `RubyText` views show furigana for. All by default.
     @Entry var rubyFuriganaFilter = RubyFuriganaFilter.all
     /// The script `RubyText` views write furigana in. Hiragana by default.
@@ -263,7 +263,7 @@ extension EnvironmentValues {
     /// Where `RubyText` views put furigana. Above the text by default.
     @Entry var rubyFuriganaPosition = RubyFuriganaPosition.above
     /// How `RubyText` views write their text out, if not as it's written.
-    @Entry var rubyTranscription: RubyTranscription? = nil
+    @Entry var rubyTranscription: RubyScript? = nil
     /// The system `RubyText` views write romaji in. Hepburn by default.
     @Entry var rubyRomanization = RubyRomanization.hepburn
     /// Space `RubyText` views draw between words. None by default.
@@ -277,9 +277,9 @@ extension EnvironmentValues {
 }
 
 extension View {
-    /// Sets which annotations `RubyText` views in this hierarchy draw.
-    ///
-    /// Calling it without arguments enables furigana; pass `[]` for plain text.
+    /// Sets which annotations `RubyText` views in this hierarchy draw:
+    /// furigana by default, `[.furigana, .romaji]` for both, or `[]` for
+    /// plain text.
     public func rubyStyle(_ style: RubyStyle = .furigana) -> some View {
         environment(\.rubyStyle, style)
     }
@@ -310,11 +310,8 @@ extension View {
     ///
     /// Besides romaji systems, `.polivanov` writes readings in Cyrillic and
     /// `.hangul` in Hangul; `RubyRomanization(_:)` takes a style of your
-    /// own.
-    ///
-    /// A transcription or furigana script naming its own system, such as
-    /// `.romaji(system: .passport)`, uses that one instead, as a font
-    /// naming its design ignores `fontDesign(_:)`.
+    /// own. It's the only place the system is set: `.romaji` furigana and
+    /// `.romaji` transcriptions follow it.
     public func rubyRomanization(_ system: RubyRomanization) -> some View {
         environment(\.rubyRomanization, system)
     }
@@ -323,8 +320,7 @@ extension View {
     /// the text, or in parentheses after each kanji.
     ///
     ///     RubyText("東京へ行きたい。")
-    ///         .rubyStyle()
-    ///         .rubyFuriganaPosition(.inline)   // 東京（とうきょう）へ行（い）きたい。
+    ///     ///         .rubyFuriganaPosition(.inline)   // 東京（とうきょう）へ行（い）きたい。
     ///
     /// Inline readings are part of the text, so selecting and copying
     /// includes them. Romaji, if shown, move above the text.
@@ -355,7 +351,7 @@ extension View {
     ///     RubyText("今日はコーヒーを飲んだ。")
     ///         .rubyTranscription(.hiragana)
     ///         .rubySpacing(.phrases)          // きょうは　コーヒーを　のんだ。
-    public func rubyTranscription(_ transcription: RubyTranscription?) -> some View {
+    public func rubyTranscription(_ transcription: RubyScript?) -> some View {
         environment(\.rubyTranscription, transcription)
     }
 
@@ -393,8 +389,9 @@ extension View {
     ///     RubyText("{宇宙|そら}を見上げた")   // VoiceOver: そらをみあげた
     ///
     /// Braille displays still show the text as written. Text in romaji is
-    /// always spoken in Japanese, and text in kana as it's written. Set the
-    /// same readings on a `RubyReader` to read aloud alike.
+    /// always spoken in Japanese, and text in kana as it's written. A
+    /// `RubyReader` attached to the views reads aloud with the same
+    /// readings.
     public func rubySpokenReadings(_ readings: RubySpokenReadings) -> some View {
         environment(\.rubySpokenReadings, readings)
     }

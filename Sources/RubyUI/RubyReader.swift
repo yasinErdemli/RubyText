@@ -6,10 +6,14 @@ import Synchronization
 /// Reads Japanese text aloud and tracks the phrase being spoken, so
 /// `RubyText` views attached with `rubyReader(_:)` can emphasize it.
 ///
-///     @State private var reader = RubyReader(analyzer: analyzer)
+///     @State private var reader = RubyReader()
 ///
 ///     RubyText(text).rubyReader(reader)
 ///     Button("Read Aloud") { reader.speak(text) }
+///
+/// Attached to `RubyText` views, it reads with their analyzer and spoken
+/// readings, so it finds the words they show and says the readings
+/// VoiceOver says.
 ///
 /// It emphasizes reading phrases (文節) such as 吾輩は rather than single
 /// words, because voices pronounce particles together with the word before
@@ -24,9 +28,10 @@ import Synchronization
 ///   spoken with on-device speech recognition.
 @Observable
 public final class RubyReader {
-    /// Finds the words and phrases to emphasize, if anything does. Use the
-    /// same analyzer as the `RubyText` views showing the text.
-    public let analyzer: (any RubyAnalyzer)?
+    /// Finds the words and phrases to emphasize, if anything does: the
+    /// analyzer of the `RubyText` views the reader is attached to, or the
+    /// one it was created with.
+    public internal(set) var analyzer: (any RubyAnalyzer)?
     /// Speech rate relative to the system default, from 0.5 (slow) to 2.
     /// Applies to synthesized speech.
     public var rate: Float = 1
@@ -34,9 +39,9 @@ public final class RubyReader {
     /// Japanese voice installed. See `japaneseVoices`.
     public var voiceIdentifier: String?
     /// Which readings synthesized speech says in place of the text as
-    /// written, as `rubySpokenReadings(_:)` sets for VoiceOver: by
-    /// default, the ones a voice is most likely to get wrong, so
-    /// {宇宙|そら} is read そら.
+    /// written: by default, the ones a voice is most likely to get wrong,
+    /// so {宇宙|そら} is read そら. Attached to `RubyText` views, the reader
+    /// takes the readings `rubySpokenReadings(_:)` sets for them.
     public var spokenReadings = RubySpokenReadings.corrections
 
     /// Installed Japanese voices, best quality first. People can download
@@ -85,16 +90,16 @@ public final class RubyReader {
     @ObservationIgnored private var interruptionObservers: [NotificationCenter.ObservationToken] = []
     @ObservationIgnored private var routeChangeObserver: Task<Void, Never>?
 
-    /// Creates a reader that finds the phrases to emphasize with
-    /// `analyzer`, the one your `RubyText` views use.
-    public convenience init(analyzer: some RubyAnalyzer) {
-        self.init(analyzer as any RubyAnalyzer)
-    }
-
-    /// Creates a reader with no analyzer, which reads text aloud but
-    /// can't find phrases in it to emphasize.
+    /// Creates a reader that takes its analyzer from the `RubyText` views
+    /// it's attached to with `rubyReader(_:)`.
     public convenience init() {
         self.init(nil)
+    }
+
+    /// Creates a reader that finds phrases with `analyzer`, for reading
+    /// text that no `RubyText` view shows.
+    public convenience init(analyzer: some RubyAnalyzer) {
+        self.init(analyzer as any RubyAnalyzer)
     }
 
     private init(_ analyzer: (any RubyAnalyzer)?) {
@@ -122,15 +127,24 @@ public final class RubyReader {
         routeChangeObserver?.cancel()
     }
 
+    /// Takes the settings of a `RubyText` view the reader is attached to.
+    func adopt(analyzer: (any RubyAnalyzer)?, spokenReadings: RubySpokenReadings) {
+        if let analyzer { self.analyzer = analyzer }
+        if self.spokenReadings != spokenReadings { self.spokenReadings = spokenReadings }
+    }
+
     // MARK: Synthesized speech
 
-    /// Starts reading `markup` aloud, replacing anything being read.
-    public func speak(_ markup: String) {
-        speak(RubyString(markup: markup))
+    /// Starts reading `text` aloud as it's written, replacing anything
+    /// being read: markup in it isn't read.
+    @_disfavoredOverload
+    public func speak(_ text: some StringProtocol) {
+        speak(RubyString(text: String(text)))
     }
 
     /// Starts reading `string` aloud, with the readings it gives,
-    /// replacing anything being read.
+    /// replacing anything being read. Pass `RubyString(markup:)` for
+    /// markup you load at run time.
     public func speak(_ string: RubyString) {
         stop()
         let content = RubyContent.content(for: string, analyzer: analyzer)
@@ -167,13 +181,20 @@ public final class RubyReader {
 
     // MARK: Recorded narration
 
-    /// Plays a recording of `markup` read aloud, emphasizing along with it.
+    /// Plays a recording of `text` read aloud, emphasizing along with it.
+    /// Markup in `text` isn't read.
+    @_disfavoredOverload
+    public func play(narration url: URL, for text: some StringProtocol) async throws {
+        try await play(narration: url, for: RubyString(text: String(text)))
+    }
+
+    /// Plays a recording of `string` read aloud, emphasizing along with it.
     ///
     /// The first time, the recording is aligned to the text with on-device
     /// speech recognition, which can take a moment; results are cached.
-    public func play(narration url: URL, for markup: String) async throws {
+    public func play(narration url: URL, for string: RubyString) async throws {
         stop()
-        let content = RubyContent.content(for: markup, analyzer: analyzer)
+        let content = RubyContent.content(for: string, analyzer: analyzer)
         let units = RubyReadingUnits.units(in: content.string, words: content.words)
         let key = url.absoluteString + "\n" + content.string
         let token = session
