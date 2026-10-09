@@ -5,9 +5,9 @@ import Synchronization
 
 /// English definitions of Japanese words, from a JMdict database.
 ///
-/// The database isn't part of RubyCore. Add the RubyJMdict product and use
-/// `.jmdict`, or open a copy your app downloads with `init(url:)`.
-/// Tools/build-dictionary.py builds one.
+/// The database isn't part of RubyCore: bundle the one
+/// Tools/build-dictionary.py builds in your app, or download it, and open
+/// it with `init(url:)`.
 ///
 /// JMdict is the work of the Electronic Dictionary Research and
 /// Development Group (https://www.edrdg.org/jmdict/j_jmdict.html), used

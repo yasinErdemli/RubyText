@@ -1,6 +1,5 @@
 import Foundation
 @testable import RubyCore
-import RubyIPADic
 import Testing
 
 /// Picks the choice whose meaning mentions `keyword`, standing in for the

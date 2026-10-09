@@ -38,12 +38,15 @@ extension View {
     }
 
     /// Sets the dictionary that word details in this hierarchy show
-    /// definitions from. Set it once, near the root of your app:
+    /// definitions from. Set it once, near the root of your app, with a
+    /// database your app bundles:
     ///
-    ///     import RubyJMdict
+    ///     let dictionary = RubyDictionary(
+    ///         url: Bundle.main.url(forResource: "jmdict", withExtension: "sqlite")!
+    ///     )
     ///
     ///     ContentView()
-    ///         .rubyDictionary(.jmdict)
+    ///         .rubyDictionary(dictionary)
     ///
     /// Without one, word details show the reading, part of speech and JLPT
     /// level, but no definitions.

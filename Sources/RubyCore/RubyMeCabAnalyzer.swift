@@ -8,8 +8,8 @@ import Synchronization
 /// IPAdic dictionary. Its part-of-speech information also drives how words
 /// group into reading phrases and how they're colored for learners.
 ///
-/// The dictionary isn't part of RubyCore. Add the RubyIPADic product and
-/// use `.ipadic`, or load a copy your app downloads with
+/// The dictionary isn't part of RubyCore: bundle a compiled IPAdic folder
+/// in your app, or download one, and pass its location to
 /// `init(dictionary:)`.
 public nonisolated final class RubyMeCabAnalyzer: RubyAnalyzer, @unchecked Sendable {
     private struct State {

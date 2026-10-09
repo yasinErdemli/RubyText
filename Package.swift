@@ -25,12 +25,6 @@ let package = Package(
         .library(name: "RubyCore", targets: ["RubyCore"]),
         /// SwiftUI views that draw furigana and romaji.
         .library(name: "RubyUI", targets: ["RubyUI"]),
-        /// The IPAdic dictionary MeCab finds words and readings with,
-        /// about 50 MB.
-        .library(name: "RubyIPADic", targets: ["RubyIPADic"]),
-        /// JMdict's English definitions for Word Details, about 35 MB,
-        /// under CC BY-SA 4.0.
-        .library(name: "RubyJMdict", targets: ["RubyJMdict"]),
     ],
     dependencies: [
         .package(url: "https://github.com/shinjukunian/Mecab-Swift", from: "0.8.0"),
@@ -49,33 +43,28 @@ let package = Package(
             swiftSettings: swiftSettings
         ),
         .target(
-            name: "RubyIPADic",
-            dependencies: [
-                "RubyCore",
-                .product(name: "IPADic", package: "Mecab-Swift"),
-            ],
-            swiftSettings: swiftSettings
-        ),
-        .target(
-            name: "RubyJMdict",
-            dependencies: ["RubyCore"],
-            exclude: ["LICENSE.md"],
-            resources: [.copy("jmdict.sqlite")],
-            swiftSettings: swiftSettings
-        ),
-        .target(
             name: "RubyUI",
             dependencies: ["RubyCore"],
             swiftSettings: swiftSettings + [.defaultIsolation(MainActor.self)]
         ),
         .testTarget(
             name: "RubyUITests",
-            dependencies: ["RubyCore", "RubyUI", "RubyIPADic"],
+            dependencies: [
+                "RubyCore",
+                "RubyUI",
+                // Apps bundle their own dictionary; tests read with this one.
+                .product(name: "IPADic", package: "Mecab-Swift"),
+            ],
             swiftSettings: swiftSettings + [.defaultIsolation(MainActor.self)]
         ),
         .testTarget(
             name: "RubyCoreTests",
-            dependencies: ["RubyCore", "RubyTransliteration", "RubyIPADic", "RubyJMdict"],
+            dependencies: [
+                "RubyCore",
+                "RubyTransliteration",
+                // Apps bundle their own dictionary; tests read with this one.
+                .product(name: "IPADic", package: "Mecab-Swift"),
+            ],
             swiftSettings: swiftSettings
         ),
         .testTarget(

@@ -34,9 +34,10 @@ import SwiftUI
 /// read aloud, styled with `rubyEmphasis(_:)`.
 ///
 /// Readings come from the analyzer you set with `rubyAnalyzer(_:)`, such as
-/// `.ipadic` from the RubyIPADic product; without one, only readings in
-/// `{base|reading}` markup show. Add `rubyModelReadings()` to have Apple's
-/// on-device model read words whose reading depends on their meaning.
+/// a `RubyMeCabAnalyzer` with the IPAdic dictionary your app bundles;
+/// without one, only readings in `{base|reading}` markup show. Add
+/// `rubyModelReadings()` to have Apple's on-device model read words whose
+/// reading depends on their meaning.
 ///
 /// Annotations are drawn by `RubyRenderer` and aren't part of the text
 /// content, so selection, copy, and VoiceOver only see the base text.
@@ -203,12 +204,15 @@ extension EnvironmentValues {
 
 extension View {
     /// Sets the analyzer `RubyText` views in this hierarchy use to find
-    /// words and readings. Set it once, near the root of your app:
+    /// words and readings. Set it once, near the root of your app, with a
+    /// dictionary your app bundles:
     ///
-    ///     import RubyIPADic
+    ///     let analyzer = RubyMeCabAnalyzer(
+    ///         dictionary: Bundle.main.url(forResource: "ipadic", withExtension: "bundle")!
+    ///     )
     ///
     ///     ContentView()
-    ///         .rubyAnalyzer(.ipadic)
+    ///         .rubyAnalyzer(analyzer)
     ///
     /// Without an analyzer, only readings in `{base|reading}` markup show.
     /// Give a `RubyReader` reading the same text the same analyzer, so the

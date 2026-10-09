@@ -6,7 +6,7 @@ import Synchronization
 /// Reads Japanese text aloud and tracks the phrase being spoken, so
 /// `RubyText` views attached with `rubyReader(_:)` can emphasize it.
 ///
-///     @State private var reader = RubyReader(analyzer: .ipadic)
+///     @State private var reader = RubyReader(analyzer: analyzer)
 ///
 ///     RubyText(text).rubyReader(reader)
 ///     Button("Read Aloud") { reader.speak(text) }
@@ -78,7 +78,7 @@ public final class RubyReader {
     @ObservationIgnored private var routeChangeObserver: Task<Void, Never>?
 
     /// Creates a reader that finds the phrases to emphasize with
-    /// `analyzer`, such as `.ipadic` from the RubyIPADic product.
+    /// `analyzer`, the one your `RubyText` views use.
     public convenience init(analyzer: some RubyAnalyzer) {
         self.init(analyzer as any RubyAnalyzer)
     }
