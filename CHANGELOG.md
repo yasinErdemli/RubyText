@@ -49,7 +49,11 @@ The first release.
   single kana (す。).
 - Whole text written in hiragana, katakana or romaji with
   `rubyTranscription(_:)`, rolling glyph by glyph into the new text.
-- Romaji in Hepburn, Nihon-shiki or passport style.
+- Romaji in Hepburn, Kunrei-shiki, Nihon-shiki, passport style, wāpuro (as
+  typed) or Hepburn for Turkish readers, and readings in Cyrillic
+  (Polivanov) or Hangul, set with `rubyRomanization(_:)`. Names of people
+  and places start with a capital, as the dictionary marks them: Tōkyō,
+  İbaraki in Turkish.
 - Learner tools: furigana only above a JLPT level, word colors by part of
   speech, JLPT level or vocabulary, and space between words or phrases.
 - Word colors by where each reading came from, `.readingSources`, to check
@@ -70,5 +74,9 @@ The first release.
 
 - `RubyConverter` writes text in kana or romaji, or with inline readings,
   as plain strings.
-- `RubyTransliteration`: kana to romaji, hiragana and katakana, with only the
-  standard library.
+- `RubyTransliteration`: kana to romaji, Cyrillic or Hangul, hiragana and
+  katakana, with only the standard library. Kana are read once into a
+  `RubyPhrase` of `RubyMora`s, settling long vowels, particles, っ and ん, and
+  a `RubyTransliterationStyle` writes them: `RubyTableStyle` as data you can
+  change, or your own type. `RubyTransliterationValidator` checks a style
+  against every mora.

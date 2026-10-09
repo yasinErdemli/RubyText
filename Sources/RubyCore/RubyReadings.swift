@@ -41,21 +41,25 @@ extension RubyWord {
 /// A reading and what romaji need to know about it, so they can be
 /// written in any system.
 package struct RubyRomajiSource: Hashable, Sendable {
-    let reading: String
-    let pronunciation: String?
+    /// The word as transliteration styles receive it.
+    package var word: RubyPhrase.Word
     /// The next word's reading, for a final っ.
     let next: String?
-    let breaks: [Int]
 
-    package init(reading: String, pronunciation: String? = nil, next: String? = nil, breaks: [Int] = []) {
-        self.reading = reading
-        self.pronunciation = pronunciation
+    package init(
+        surface: String,
+        reading: String,
+        pronunciation: String? = nil,
+        role: RubyPhrase.Word.Role = .other,
+        next: String? = nil,
+        breaks: [Int] = []
+    ) {
+        word = RubyPhrase.Word(surface, reading: reading, pronunciation: pronunciation, role: role, breaks: breaks)
         self.next = next
-        self.breaks = breaks
     }
 
     func romaji(in system: RubyRomanization) -> String {
-        RubyRomaji.romanize(reading, system: system, pronunciation: pronunciation, next: next, breaks: breaks)
+        system.transliterate(RubyPhrase([word], following: next))
     }
 }
 
@@ -83,7 +87,7 @@ public enum RubyPartOfSpeech: String, CaseIterable, Hashable, Sendable {
 package nonisolated enum RubyReadings {
     /// A word whose reading was supplied with `{base|reading}` markup.
     package static func word(manualBase base: String, reading: String, offset: Int) -> RubyWord {
-        let source = RubyRomajiSource(reading: reading)
+        let source = RubyRomajiSource(surface: base, reading: reading)
         return RubyWord(
             range: offset..<(offset + base.utf16.count),
             furigana: furigana(base: base, reading: reading, offset: offset, force: true),

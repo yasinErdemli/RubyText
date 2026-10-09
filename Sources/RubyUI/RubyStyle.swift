@@ -306,7 +306,11 @@ extension View {
     ///
     ///     RubyText("東京へ行こう。")
     ///         .rubyStyle(.romaji)
-    ///         .rubyRomanization(.nippon)   // tôkyô e ikô
+    ///         .rubyRomanization(.nippon)   // Tôkyô e ikô
+    ///
+    /// Besides romaji systems, `.polivanov` writes readings in Cyrillic and
+    /// `.hangul` in Hangul; `RubyRomanization(_:)` takes a style of your
+    /// own.
     ///
     /// A transcription or furigana script naming its own system, such as
     /// `.romaji(system: .passport)`, uses that one instead, as a font

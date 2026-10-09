@@ -123,7 +123,7 @@ extension RubyContent {
         switch script.form {
         case .hiragana: reading.text
         case .katakana: RubyKana.katakana(reading.text)
-        case .romaji: RubyRomaji.romanize(reading.text, system: script.romanization)
+        case .romaji: script.romanization.transliterate(reading.text)
         }
     }
 
@@ -213,7 +213,7 @@ extension RubyContent {
         func addText(upTo end: Int) {
             guard offset < end else { return }
             let text = RubyReadingUnits.substring(of: string, utf16Range: offset..<end)
-            pieces.append(RubyRewritePiece(range: offset..<end, text: RubyRomaji.romanize(text, system: system)))
+            pieces.append(RubyRewritePiece(range: offset..<end, text: system.transliterate(text)))
         }
         for group in romajiWords(in: system) {
             addText(upTo: group.range.lowerBound)

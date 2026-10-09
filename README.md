@@ -19,8 +19,9 @@ RubyText("{今日|きょう}は日本語を勉強しています。")
   any of them.
 - **Every way to write a reading:** furigana in hiragana, katakana or romaji;
   romaji above or below; inline readings, 東京（とうきょう）; or the whole text
-  in hiragana, katakana or romaji. Romaji in Hepburn, Nihon-shiki or passport
-  style.
+  in hiragana, katakana or romaji. Romaji in Hepburn, Kunrei-shiki,
+  Nihon-shiki, passport style, as typed, or for Turkish readers; readings in
+  Cyrillic or Hangul; or in a style of your own.
 - **For learners:** furigana only above a JLPT level, word colors by part of
   speech, JLPT level or your own vocabulary, space between words or phrases,
   and word details with definitions from JMdict.
@@ -95,7 +96,7 @@ any view above it. Changes animate.
 RubyText("東京へ行きたい。")
     .rubyStyle([.furigana, .romaji])        // furigana above, romaji below
     .rubyFuriganaScript(.katakana)          // トウキョウ over 東京
-    .rubyRomanization(.nippon)              // tôkyô
+    .rubyRomanization(.nippon)              // Tôkyô
     .rubyFurigana(.above(.n4))              // none over N5 and N4 kanji
     .foregroundStyle(.primary, .red, .blue) // red furigana, blue romaji
 ```
@@ -114,6 +115,23 @@ RubyText("今日はコーヒーを飲んだ。")
 `.hiragana(loanwords: .hiragana)` writes loanwords in hiragana too,
 `.katakana` everything in katakana, and `.romaji(system: .passport)` gives
 kyo wa kohi o nonda.
+
+`rubyRomanization(_:)` chooses how romaji are written: `.hepburn` by
+default, `.kunrei`, `.nippon`, `.passport`, `.wapuro` (as typed: toukyou),
+`.turkish` (Şinbun), `.polivanov` (Cyrillic: симбун) or `.hangul` (신분).
+Names of people and places start with a capital: Tōkyō. For your own style,
+change a built-in table, or conform to `RubyTransliterationStyle` for a
+system a table can't express:
+
+```swift
+var style = RubyTableStyle.hepburn
+style.words["東京"] = "Tokyo"
+style.longVowels = .marked(RubyTableStyle.circumflexes)
+
+RubyText(text)
+    .rubyStyle(.romaji)
+    .rubyRomanization(RubyRomanization(style))
+```
 
 For plain strings, such as for search or sharing, use `RubyConverter`:
 

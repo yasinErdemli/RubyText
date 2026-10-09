@@ -26,11 +26,23 @@ import Testing
 
     @Test func romanizationSystems() {
         let sentence = "東京へ行こう。お茶を飲む。"
-        #expect(converter.convert(sentence, to: .romaji) == "tōkyō e ikō. ocha o nomu.")
-        #expect(converter.convert(sentence, to: .romaji(system: .hepburn)) == "tōkyō e ikō. ocha o nomu.")
-        #expect(converter.convert(sentence, to: .romaji(system: .nippon)) == "tôkyô e ikô. otya wo nomu.")
-        #expect(converter.convert(sentence, to: .romaji(system: .passport)) == "tokyo e iko. ocha o nomu.")
+        #expect(converter.convert(sentence, to: .romaji) == "Tōkyō e ikō. ocha o nomu.")
+        #expect(converter.convert(sentence, to: .romaji(system: .hepburn)) == "Tōkyō e ikō. ocha o nomu.")
+        #expect(converter.convert(sentence, to: .romaji(system: .nippon)) == "Tôkyô e ikô. otya wo nomu.")
+        #expect(converter.convert(sentence, to: .romaji(system: .passport)) == "Tokyo e iko. ocha o nomu.")
         #expect(converter.annotate("東京へ行きたい。", with: .romaji(system: .nippon)) == "東京（tôkyô）へ行（i）きたい。")
+        #expect(converter.convert(sentence, to: .romaji(system: .kunrei)) == "Tôkyô e ikô. otya o nomu.")
+        // Typed romaji spell long vowels and particles as written.
+        #expect(converter.convert(sentence, to: .romaji(system: .wapuro)) == "toukyou he ikou. ocha wo nomu.")
+        #expect(converter.convert(sentence, to: .romaji(system: .turkish)) == "Tôkyô e ikô. oça o nomu.")
+        #expect(converter.convert(sentence, to: .romaji(system: .polivanov)) == "Токё э ико. отя о ному.")
+        #expect(converter.convert(sentence, to: .romaji(system: .hangul)) == "도쿄 에 이코. 오차 오 노무.")
+    }
+
+    /// Names the dictionary knows start with a capital.
+    @Test func namesAreCapitalized() {
+        #expect(converter.convert("田中さんは東京に住んでいる。", to: .romaji) == "Tanaka san wa Tōkyō ni sunde iru.")
+        #expect(converter.convert("茨城に住んでいる。", to: .romaji(system: .turkish)) == "İbaraki ni sunde iru.")
     }
 
     @Test func romajiPunctuation() {

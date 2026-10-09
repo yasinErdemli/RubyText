@@ -73,29 +73,34 @@ package final class RubyContent {
         return romajiWords
     }
 
+    /// Words joined into phrases, each written by `system` as one romaji
+    /// word.
     private func groupingRomaji(in system: RubyRomanization) -> [RubyRomajiWord] {
-        var groups: [(range: Range<Int>, text: String, isVerbal: Bool, lastWord: RubyWord)] = []
+        var groups: [(range: Range<Int>, words: [RubyPhrase.Word], isVerbal: Bool, lastWord: RubyWord)] = []
         for word in words {
-            guard let romaji = word.romaji(in: system), !romaji.isEmpty else { continue }
+            guard word.romaji?.isEmpty == false, !word.romajiSources.isEmpty else { continue }
             let base = RubyReadingUnits.substring(of: string, utf16Range: word.range)
+            var phraseWords = word.romajiSources.map(\.word)
             if let last = groups.last, last.range.upperBound == word.range.lowerBound,
                Self.joinsRomaji(word, base: base, after: last.lastWord, in: last.range, isVerbal: last.isVerbal, string: string) {
-                groups[groups.count - 1].range = last.range.lowerBound..<word.range.upperBound
                 // The volitional う lengthens the o before it: でしょ|う is
                 // deshō, 行こ|う ikō.
-                if word.partOfSpeech == .auxiliary, romaji == "u", last.text.hasSuffix("o") {
-                    groups[groups.count - 1].text.removeLast()
-                    groups[groups.count - 1].text += RubyRomaji.long("o", in: system)
-                } else {
-                    groups[groups.count - 1].text += romaji
+                if word.partOfSpeech == .auxiliary, phraseWords.count == 1, phraseWords[0].reading == "う",
+                   RubyPhrase(last.words).morae.last?.vowel == "o" {
+                    phraseWords[0].pronunciation = "ー"
                 }
+                groups[groups.count - 1].range = last.range.lowerBound..<word.range.upperBound
+                groups[groups.count - 1].words += phraseWords
                 groups[groups.count - 1].lastWord = word
                 continue
             }
             let isVerbal = [.verb, .adjective, .auxiliary].contains(word.partOfSpeech)
-            groups.append((word.range, romaji, isVerbal, word))
+            groups.append((word.range, phraseWords, isVerbal, word))
         }
-        return groups.map { RubyRomajiWord(range: $0.range, text: $0.text) }
+        return groups.map { group in
+            let phrase = RubyPhrase(group.words, following: group.lastWord.romajiSources.last?.next)
+            return RubyRomajiWord(range: group.range, text: system.transliterate(phrase))
+        }
     }
 
     /// Whether `word` continues the romaji word before it.
@@ -454,10 +459,19 @@ package final class RubyContent {
             } ?? []
             // The next word's reading resolves a final っ (入っ|た → itta).
             let next = index + 1 < segments.count ? segments[index + 1].reading : nil
+            let role: RubyPhrase.Word.Role = if segment.word?.isProperNoun == true {
+                .properNoun
+            } else if segment.word?.partOfSpeech == .particle {
+                .particle
+            } else {
+                .other
+            }
             let source = segment.reading.map {
                 RubyRomajiSource(
+                    surface: segment.base,
                     reading: $0,
                     pronunciation: segment.pronunciation ?? particlePronunciation[segment.base],
+                    role: role,
                     next: next,
                     breaks: segment.romajiBreaks
                 )
@@ -490,16 +504,16 @@ private let particlePronunciation: [String: String] = ["は": "わ", "へ": "え
 
 /// Wraps a value as a key for `RubyContent`'s caches. `NSCache` keys must be
 /// objects, and value types aren't.
-final class RubyCacheKey<Value: Hashable>: NSObject {
+package final class RubyCacheKey<Value: Hashable>: NSObject {
     let value: Value
 
-    init(_ value: Value) {
+    package init(_ value: Value) {
         self.value = value
     }
 
-    override var hash: Int { value.hashValue }
+    override package var hash: Int { value.hashValue }
 
-    override func isEqual(_ object: Any?) -> Bool {
+    override package func isEqual(_ object: Any?) -> Bool {
         (object as? RubyCacheKey<Value>)?.value == value
     }
 }

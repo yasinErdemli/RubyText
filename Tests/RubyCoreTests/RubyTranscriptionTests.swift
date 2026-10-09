@@ -18,7 +18,7 @@ import Testing
         #expect(words(of: content) == ["きょう", "は", "とうきょう", "へ", "いき", "たい"])
         #expect(content.words.allSatisfy { $0.furigana.isEmpty })
         // Romaji stay, to show over the kana.
-        #expect(content.romajiWords.map(\.text) == ["kyō", "wa", "tōkyō", "e", "ikitai"])
+        #expect(content.romajiWords.map(\.text) == ["kyō", "wa", "Tōkyō", "e", "ikitai"])
     }
 
     @Test func katakana() {
@@ -29,9 +29,9 @@ import Testing
 
     @Test func romajiWordsMove() {
         let content = RubyContent.content(for: Self.sentence).transcribed(to: .romaji)
-        #expect(content.string == "kyō wa tōkyō e ikitai.")
+        #expect(content.string == "kyō wa Tōkyō e ikitai.")
         // 行き and たい share the romaji word ikitai, divided between them.
-        #expect(words(of: content) == ["kyō", "wa", "tōkyō", "e", "iki", "tai"])
+        #expect(words(of: content) == ["kyō", "wa", "Tōkyō", "e", "iki", "tai"])
         // Romaji text needs no romaji over it.
         #expect(content.romajiWords.isEmpty)
     }
@@ -46,9 +46,9 @@ import Testing
         let original = RubyContent.content(for: Self.sentence)
         let content = original.transcribed(to: .romaji)
         // 東京 is offsets 3..<5 of the original.
-        #expect(RubyReadingUnits.substring(of: content.string, utf16Range: content.range(fromOriginal: 3..<5)) == "tōkyō")
+        #expect(RubyReadingUnits.substring(of: content.string, utf16Range: content.range(fromOriginal: 3..<5)) == "Tōkyō")
         // A phrase, 東京へ, takes in the space between its words.
-        #expect(RubyReadingUnits.substring(of: content.string, utf16Range: content.range(fromOriginal: 3..<6)) == "tōkyō e")
+        #expect(RubyReadingUnits.substring(of: content.string, utf16Range: content.range(fromOriginal: 3..<6)) == "Tōkyō e")
         // Content that wasn't rewritten keeps its ranges.
         #expect(original.range(fromOriginal: 3..<5) == 3..<5)
         #expect(content.sourceString == Self.sentence)

@@ -1,4 +1,4 @@
-@testable import RubyTransliteration
+import RubyTransliteration
 import Testing
 
 @Suite struct RubyRomajiTests {
@@ -38,7 +38,8 @@ import Testing
         ("こんにちは", "こんにちわ", nil, "konnichiwa"),
     ] as [(String, String?, String?, String)])
     func hepburn(_ reading: String, _ pronunciation: String?, _ next: String?, _ expected: String) {
-        #expect(RubyRomaji.romanize(reading, system: .hepburn, pronunciation: pronunciation, next: next) == expected)
+        let phrase = RubyPhrase([.init(reading, pronunciation: pronunciation)], following: next)
+        #expect(RubyRomanization.hepburn.transliterate(phrase) == expected)
     }
 
     /// Text written in kana, with no dictionary to say what's a word.

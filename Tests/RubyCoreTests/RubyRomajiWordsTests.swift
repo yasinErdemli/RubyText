@@ -6,11 +6,11 @@ import Testing
 @Suite struct RubyRomajiWordsTests {
     /// Romaji words for whole sentences, as shown below the text.
     @Test(arguments: [
-        ("今日は東京へ行きたい。", "kyō wa tōkyō e ikitai"),
+        ("今日は東京へ行きたい。", "kyō wa Tōkyō e ikitai"),
         ("コーヒーを飲みながら日本語を勉強しています。", "kōhī o nominagara nihongo o benkyō shite imasu"),
         ("漫画を読んだ。", "manga o yonda"),
         ("気に入った店", "kiniitta mise"),
-        ("東京で会おう。", "tōkyō de aō"),
+        ("東京で会おう。", "Tōkyō de aō"),
         ("学校では静かだ。", "gakkō dewa shizuka da"),
         ("映画でも見ましょう。", "eiga demo mimashō"),
         ("食べてしまった。", "tabete shimatta"),

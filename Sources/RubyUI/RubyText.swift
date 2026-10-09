@@ -843,7 +843,17 @@ final class RubyMeasurements {
     /// anywhere; see `RubyLineBreaking.endings(in:)`.
     let endings: [Range<Int>]
 
-    private static let cache = NSCache<NSString, RubyMeasurements>()
+    /// What measurements depend on. Content objects are cached too, so the
+    /// same text read by another analyzer is a different object.
+    private struct Key: Hashable {
+        let metrics: String
+        let furiganaScript: RubyScript
+        let romanization: RubyRomanization
+        let content: ObjectIdentifier
+        let string: String
+    }
+
+    private static let cache = NSCache<RubyCacheKey<Key>, RubyMeasurements>()
 
     static func measurements(
         for content: RubyContent,
@@ -851,9 +861,13 @@ final class RubyMeasurements {
         furiganaScript: RubyScript,
         romanization: RubyRomanization
     ) -> RubyMeasurements {
-        // Content objects are cached too, so the same text read by another
-        // analyzer is a different object.
-        let key = "\(metrics.cacheKey) \(furiganaScript) \(romanization) \(ObjectIdentifier(content).hashValue)\n\(content.string)" as NSString
+        let key = RubyCacheKey(Key(
+            metrics: metrics.cacheKey,
+            furiganaScript: furiganaScript,
+            romanization: romanization,
+            content: ObjectIdentifier(content),
+            string: content.string
+        ))
         if let cached = cache.object(forKey: key) { return cached }
         let measurements = RubyMeasurements(
             content: content,

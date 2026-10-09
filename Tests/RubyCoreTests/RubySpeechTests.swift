@@ -33,7 +33,7 @@ import Testing
     @Test func romajiTextIsSpokenInKana() {
         let content = RubyContent.content(for: "今日は東京へ行きたい。").transcribed(to: .romaji)
         // Every word, whatever the readings, as kana text would say it.
-        let expected = ["kyō": "きょう", "wa": "は", "tōkyō": "とうきょう", "e": "へ", "iki": "いき", "tai": "たい"]
+        let expected = ["kyō": "きょう", "wa": "は", "Tōkyō": "とうきょう", "e": "へ", "iki": "いき", "tai": "たい"]
         #expect(speech(content, []) == expected)
         #expect(speech(content) == expected)
     }

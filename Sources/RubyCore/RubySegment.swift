@@ -35,11 +35,20 @@ public struct RubySegment: Hashable, Sendable {
         /// Whether this segment grammatically attaches to the one before
         /// it, like a particle or verb ending.
         public var attachesToPrevious: Bool?
+        /// Whether this is the name of a person or place, which romaji
+        /// capitalize: Tōkyō, Tanaka.
+        public var isProperNoun: Bool
 
-        public init(partOfSpeech: RubyPartOfSpeech? = nil, dictionaryForm: String? = nil, attachesToPrevious: Bool? = nil) {
+        public init(
+            partOfSpeech: RubyPartOfSpeech? = nil,
+            dictionaryForm: String? = nil,
+            attachesToPrevious: Bool? = nil,
+            isProperNoun: Bool = false
+        ) {
             self.partOfSpeech = partOfSpeech
             self.dictionaryForm = dictionaryForm
             self.attachesToPrevious = attachesToPrevious
+            self.isProperNoun = isProperNoun
         }
     }
 

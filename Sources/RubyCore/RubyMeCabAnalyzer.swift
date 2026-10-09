@@ -104,7 +104,8 @@ public nonisolated final class RubyMeCabAnalyzer: RubyAnalyzer, @unchecked Senda
                 word: RubySegment.Word(
                     partOfSpeech: id.map(Self.partOfSpeech),
                     dictionaryForm: dictionaryForm,
-                    attachesToPrevious: id.map(Self.attaches) ?? (annotation.partOfSpeech == .particle)
+                    attachesToPrevious: id.map(Self.attaches) ?? (annotation.partOfSpeech == .particle),
+                    isProperNoun: id.map(Self.properNounIDs.contains) ?? false
                 ),
                 source: .dictionary
             ))
@@ -127,6 +128,10 @@ public nonisolated final class RubyMeCabAnalyzer: RubyAnalyzer, @unchecked Senda
         32, 33,             // 動詞, 接尾 / 非自立 (〜れる, いる in している)
         50, 51, 52, 53, 54, 55, 56, 57, 58, // 名詞, 接尾, noun suffixes (さん, 円, 年)
     ]
+
+    /// IDs of names: 名詞, 固有名詞 (general, people, organizations,
+    /// places, countries).
+    private static let properNounIDs: ClosedRange<UInt16> = 41...47
 
     private static func attaches(_ id: UInt16) -> Bool {
         attachingIDs.contains(id)
