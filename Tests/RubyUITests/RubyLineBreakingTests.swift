@@ -155,7 +155,7 @@ import Testing
         Self.recordedEllipsis = nil
         let view = Text(layout.text).font(metrics.textFont).lineLimit(2).truncationMode(mode)
             .textRenderer(Recorder(mode: mode)).frame(width: 300)
-        _ = ImageRenderer(content: view).uiImage
+        _ = ImageRenderer(content: view).cgImage
         let (ellipsis, shown) = try #require(Self.recordedEllipsis)
         // The ellipsis stands in for the first character hidden: after the
         // text shown, before it, or after its first part.
@@ -221,19 +221,19 @@ import Testing
     private static func paragraphLines(of text: Text, width: CGFloat, string: String) -> [[String]] {
         recordedParagraphs = []
         let view = text.textRenderer(ParagraphRecorder(string: string)).frame(width: width, alignment: .leading)
-        _ = ImageRenderer(content: view).uiImage
+        _ = ImageRenderer(content: view).cgImage
         return recordedParagraphs
     }
 
     private static func fontContext() throws -> Font.Context {
-        _ = ImageRenderer(content: ContextCapture()).uiImage
+        _ = ImageRenderer(content: ContextCapture()).cgImage
         return try #require(capturedContext)
     }
 
     private static func lines(of text: Text, width: CGFloat, string: String = sentence) -> [String] {
         recordedLines = []
         let view = text.textRenderer(LineRecorder(string: string)).frame(width: width, alignment: .leading)
-        _ = ImageRenderer(content: view).uiImage
+        _ = ImageRenderer(content: view).cgImage
         return recordedLines
     }
 

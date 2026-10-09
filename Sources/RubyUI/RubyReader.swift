@@ -104,7 +104,8 @@ public final class RubyReader {
 
     private init(_ analyzer: (any RubyAnalyzer)?) {
         self.analyzer = analyzer
-        #if os(iOS)
+        // macOS has no audio session, so nothing interrupts reading there.
+        #if os(iOS) || os(visionOS)
         interruptionObservers = [
             NotificationCenter.default.addObserver(for: AVAudioSession.DidBecomeInactiveMessage.self) { [weak self] message in
                 guard case .systemInterruption = message.deactivationResult else { return }
@@ -268,6 +269,7 @@ public final class RubyReader {
         if shouldResume { resume() }
     }
 
+    #if os(iOS) || os(visionOS)
     /// Pauses when headphones or another output disconnects, rather than
     /// continuing out loud on the speaker.
     private func handleRouteChange(_ notification: Notification) {
@@ -276,6 +278,7 @@ public final class RubyReader {
         else { return }
         pause()
     }
+    #endif
 
     public func stop() {
         session += 1

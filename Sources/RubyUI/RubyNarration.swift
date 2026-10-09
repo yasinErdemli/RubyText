@@ -4,10 +4,10 @@ import Speech
 
 /// Prepares the shared audio session for reading aloud without blocking the
 /// main thread: the category is set on a background task, and activation
-/// uses the asynchronous API.
+/// uses the asynchronous API. macOS has no audio session to prepare.
 nonisolated enum RubyAudioSession {
     static func activateForSpeech() async {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         await Task.detached(priority: .userInitiated) {
             let session = AVAudioSession.sharedInstance()
             if session.category != .playback || session.mode != .spokenAudio {
