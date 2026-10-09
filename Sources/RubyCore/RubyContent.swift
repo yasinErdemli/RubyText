@@ -20,9 +20,8 @@ package final class RubyContent {
     /// UTF-16 offsets of the spaces kana text was given between phrases
     /// or words, which aren't in the original.
     package private(set) var spaces: [Int] = []
-    /// Whether rewritten text keeps the original's romaji, which romaji
-    /// text doesn't need.
-    private var keepsRomaji = true
+    /// How rewritten text writes its words, if it was rewritten.
+    private(set) var rewriteForm: RubyRewriteForm?
 
     /// Words as a dictionary lists them, for word details: a verb or
     /// adjective with its conjugated endings (生まれ|た), a noun with its
@@ -66,7 +65,7 @@ package final class RubyContent {
         if let cached = romajiWordsBySystem[system] { return cached }
         let romajiWords: [RubyRomajiWord] = if let original, let offsetMap {
             // Rewritten text keeps the original's romaji, moved with it.
-            keepsRomaji ? original.romajiWords(in: system).map { RubyRomajiWord(range: offsetMap.range($0.range), text: $0.text) } : []
+            rewriteForm != .romaji ? original.romajiWords(in: system).map { RubyRomajiWord(range: offsetMap.range($0.range), text: $0.text) } : []
         } else {
             groupingRomaji(in: system)
         }
@@ -311,13 +310,13 @@ package final class RubyContent {
         self.words = Self.words(from: segments)
     }
 
-    /// `original` rewritten as `string`, its words moved through
-    /// `offsets`, with `spaces` put between phrases or words. Readings are
-    /// part of the rewritten text, so the words have no furigana; they
-    /// keep their romaji unless `keepsRomaji` is false, for text that's
-    /// romaji already.
-    init(rewriting original: RubyContent, as string: String, offsets: RubyOffsetMap, spaces: [Int], keepsRomaji: Bool) {
+    /// `original` rewritten as `string` in `form`, its words moved
+    /// through `offsets`, with `spaces` put between phrases or words.
+    /// Readings are part of the rewritten text, so the words have no
+    /// furigana; they keep their romaji unless the text is romaji already.
+    init(rewriting original: RubyContent, as string: String, form: RubyRewriteForm, offsets: RubyOffsetMap, spaces: [Int]) {
         self.string = string
+        let keepsRomaji = form != .romaji
         words = original.words.map { word in
             RubyWord(
                 range: offsets.range(word.range),
@@ -333,7 +332,7 @@ package final class RubyContent {
         self.original = original
         offsetMap = offsets
         self.spaces = spaces
-        self.keepsRomaji = keepsRomaji
+        rewriteForm = form
         dictionaryWords = original.dictionaryWords.map(offsets.range)
     }
 

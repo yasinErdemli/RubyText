@@ -33,6 +33,11 @@ public final class RubyReader {
     /// Identifier of the voice to read with, or `nil` for the best-quality
     /// Japanese voice installed. See `japaneseVoices`.
     public var voiceIdentifier: String?
+    /// Which readings synthesized speech says in place of the text as
+    /// written, as `rubySpokenReadings(_:)` sets for VoiceOver: by
+    /// default, the ones a voice is most likely to get wrong, so
+    /// {宇宙|そら} is read そら.
+    public var spokenReadings = RubySpokenReadings.corrections
 
     /// Installed Japanese voices, best quality first. People can download
     /// Enhanced and Premium voices in Settings › Accessibility.
@@ -66,6 +71,9 @@ public final class RubyReader {
     @ObservationIgnored private var narration: RubyNarrationPlayback?
     @ObservationIgnored private var narrationAnchors: [RubyTimelineAnchor] = []
     @ObservationIgnored private var units: [RubyReadingUnit] = []
+    /// The text synthesized speech is reading, with readings in place of
+    /// their words, which its markers are offsets in.
+    @ObservationIgnored private var spokenString: RubySpokenString?
     /// Increments on every start or stop, so stale async work is ignored.
     @ObservationIgnored private var session = 0
     /// Alignments already computed, keyed by recording and text.
@@ -120,7 +128,10 @@ public final class RubyReader {
     public func speak(_ markup: String) {
         stop()
         let content = RubyContent.content(for: markup, analyzer: analyzer)
-        let utterance = AVSpeechUtterance(string: content.string)
+        // The readings themselves, rather than SSML, which voices may
+        // ignore and which turns off the rate.
+        let spoken = content.spokenString(spokenReadings)
+        let utterance = AVSpeechUtterance(string: spoken.string)
         utterance.voice = voiceIdentifier.flatMap(AVSpeechSynthesisVoice.init(identifier:))
             ?? Self.japaneseVoices.first
             ?? AVSpeechSynthesisVoice(language: "ja-JP")
@@ -133,6 +144,7 @@ public final class RubyReader {
         speech.onFinish = Self.finishHandler(for: self, session: session + 1)
         self.speech = speech
         begin(content)
+        spokenString = spoken
 
         let token = session
         Task {
@@ -248,6 +260,7 @@ public final class RubyReader {
         narration = nil
         narrationAnchors = []
         units = []
+        spokenString = nil
         isSpeaking = false
         isPaused = false
         text = nil
@@ -305,7 +318,9 @@ public final class RubyReader {
     private func speechAnchors(_ state: RubySpeechPlayback.State) -> [RubyTimelineAnchor] {
         var earliest: [Int: AVAudioFramePosition] = [:]
         for marker in state.markers {
-            guard let unit = RubyReadingUnits.unit(containing: marker.location, in: units) else { continue }
+            // Markers are offsets in what's spoken, which can differ from the text.
+            let location = spokenString?.sourceOffset(marker.location) ?? marker.location
+            guard let unit = RubyReadingUnits.unit(containing: location, in: units) else { continue }
             earliest[unit] = min(earliest[unit] ?? marker.frame, marker.frame)
         }
 

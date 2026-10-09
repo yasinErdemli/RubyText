@@ -63,6 +63,7 @@ public struct RubyWordDetailView: View {
     /// the card is created, which takes a millisecond or two, so the card
     /// has its final size when the popover opens.
     @State private var entries: [RubyDictionary.Entry]
+    @Environment(\.rubySpokenReadings) private var spokenReadings
 
     /// Creates a card for `word`, with definitions from `dictionary` if
     /// there is one.
@@ -71,13 +72,24 @@ public struct RubyWordDetailView: View {
         _entries = State(initialValue: dictionary?.entries(for: word) ?? [])
     }
 
+    /// The word with its reading from the text, which analyzing the word
+    /// on its own could read differently: {宇宙|そら} is not うちゅう.
+    private var segment: RubySegment {
+        RubySegment(
+            word.text,
+            reading: word.reading == word.text ? nil : word.reading,
+            word: RubySegment.Word(partOfSpeech: word.partOfSpeech, dictionaryForm: word.dictionaryForm),
+            source: word.source
+        )
+    }
+
     public var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
-                    // The word as written with its reading above, however
-                    // the text it was tapped in is written.
-                    RubyText(verbatim: word.text)
+                    // The word as written with the reading it has in the
+                    // text above, however the text is written.
+                    RubyText(segments: [segment])
                         .font(.largeTitle)
                         .rubyStyle()
                         .rubyFuriganaScript(.hiragana)
@@ -92,7 +104,8 @@ public struct RubyWordDetailView: View {
                 }
                 Spacer(minLength: 16)
                 Button("Listen", systemImage: "speaker.wave.2.fill") {
-                    RubyWordSpeaker.shared.speak(word.text)
+                    // Said as VoiceOver says it in the text.
+                    RubyWordSpeaker.shared.speak(spokenReadings.contains(word.source) ? word.reading : word.text)
                 }
                 .labelStyle(.iconOnly)
                 .buttonStyle(.bordered)

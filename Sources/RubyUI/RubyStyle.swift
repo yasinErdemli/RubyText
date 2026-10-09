@@ -212,6 +212,8 @@ extension EnvironmentValues {
     @Entry var rubyLineBreaking = RubyLineBreaking.words
     /// Whether `RubyText` hides readings over numbers written in digits.
     @Entry var rubyDigitReadingsHidden = false
+    /// Which readings VoiceOver says in place of the text as written.
+    @Entry var rubySpokenReadings = RubySpokenReadings.corrections
 }
 
 extension View {
@@ -314,5 +316,22 @@ extension View {
     ///         .rubyDigitReadingsHidden()
     public func rubyDigitReadingsHidden(_ hidden: Bool = true) -> some View {
         environment(\.rubyDigitReadingsHidden, hidden)
+    }
+
+    /// Sets which readings VoiceOver says in place of the text as written
+    /// in `RubyText` views in this hierarchy, and in word details.
+    ///
+    /// By default, VoiceOver says the readings a voice is most likely to
+    /// get wrong as the views show them: yours, such as {宇宙|そら}, and
+    /// ones rules or the model chose. Pass `.all` to have it say every
+    /// reading as furigana show it, or `[]` to leave reading to the voice.
+    ///
+    ///     RubyText("{宇宙|そら}を見上げた")   // VoiceOver: そらをみあげた
+    ///
+    /// Braille displays still show the text as written. Text in romaji is
+    /// always spoken in Japanese, and text in kana as it's written. Set the
+    /// same readings on a `RubyReader` to read aloud alike.
+    public func rubySpokenReadings(_ readings: RubySpokenReadings) -> some View {
+        environment(\.rubySpokenReadings, readings)
     }
 }

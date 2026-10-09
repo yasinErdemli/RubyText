@@ -146,21 +146,27 @@ extension RubyContent {
     private func rewritten(_ rewrite: Rewrite) -> RubyContent {
         let key = RubyCacheKey(RewriteKey(content: ObjectIdentifier(self), rewrite: rewrite))
         if let cached = Self.rewrites.object(forKey: key), cached.original === self { return cached }
-        let isRomaji = if case .transcribed(let transcription, _) = rewrite { transcription.script.isRomaji } else { false }
-        let pieces = switch rewrite {
+        let form: RubyRewriteForm
+        let pieces: [RubyRewritePiece]
+        switch rewrite {
+        case .transcribed(let transcription, _) where transcription.script.isRomaji:
+            form = .romaji
+            pieces = romajiPieces(transcription.script.romanization)
         case .transcribed(let transcription, let spaces):
-            isRomaji ? romajiPieces(transcription.script.romanization) : kanaPieces(transcription, spacedAt: Set(spaces))
+            form = .kana
+            pieces = kanaPieces(transcription, spacedAt: Set(spaces))
         case .inlineReadings(let script, let open, let close):
-            inlinePieces(script, open: open, close: close)
+            form = .inline
+            pieces = inlinePieces(script, open: open, close: close)
         }
         let (string, offsets, separators) = RubyOffsetMap.assemble(pieces, length: string.utf16.count)
         // Romaji are spaced as words; kana only where they were asked to be.
         let content = RubyContent(
             rewriting: self,
             as: string,
+            form: form,
             offsets: offsets,
-            spaces: isRomaji ? [] : separators,
-            keepsRomaji: !isRomaji
+            spaces: form == .romaji ? [] : separators
         )
         Self.rewrites.setObject(content, forKey: key)
         return content
@@ -269,6 +275,16 @@ extension RubyContent {
         }
         return pieces
     }
+}
+
+/// How rewritten text writes its words.
+enum RubyRewriteForm {
+    /// Each word in its reading, in kana.
+    case kana
+    /// Each word in romaji.
+    case romaji
+    /// Each word as written, with its readings in parentheses.
+    case inline
 }
 
 /// A stretch of text and what it's rewritten as.

@@ -1,3 +1,4 @@
+import Accessibility
 import RubyCore
 import RubyTransliteration
 import SwiftUI
@@ -49,8 +50,12 @@ import SwiftUI
 /// reading depends on their meaning.
 ///
 /// Annotations are drawn by `RubyRenderer` and aren't part of the text
-/// content, so selection, copy, and VoiceOver only see the text, as
-/// written or as rewritten.
+/// content, so selection and copy only see the text, as written or as
+/// rewritten. VoiceOver reads the text once, saying readings voices
+/// would likely get wrong as furigana show them; see
+/// `rubySpokenReadings(_:)`. With word details or a tap action, each word
+/// is also an accessibility action, so VoiceOver users swipe up or down
+/// to a word and double-tap for it.
 public struct RubyText: View {
     private enum Input {
         case markup(String)
@@ -70,6 +75,9 @@ public struct RubyText: View {
     @Environment(\.rubyWordColoring) private var wordColoring
     @Environment(\.rubyDictionary) private var dictionary
     @Environment(\.rubyModelReadings) private var usesModel
+    @Environment(\.rubySpokenReadings) private var spokenReadings
+    @Environment(\.rubyShowsWordDetails) private var showsWordDetails
+    @Environment(\.rubyWordTapAction) private var wordTapAction
     /// Content with the model's readings, once it has answered, and the
     /// input it's for.
     @State private var modelContent: (key: ModelKey, content: RubyContent)?
@@ -113,6 +121,7 @@ public struct RubyText: View {
             }
         }
         let content = rewritten(analyzed)
+        let speech = content.speech(spokenReadings)
         let placement = RubyPlacement(style: style, furiganaPosition: furiganaPosition, transcription: transcription)
         RubyTextContent(
             content: content,
@@ -127,6 +136,10 @@ public struct RubyText: View {
             // on every frame.
             textColors: RubyTextContent.coloredRanges(wordColoring.text, in: content),
             backgroundColors: RubyTextContent.coloredRanges(wordColoring.background, in: content),
+            speech: speech,
+            accessibilityWords: showsWordDetails || wordTapAction != nil
+                ? RubyTextContent.accessibilityWords(in: content, speech: speech)
+                : [],
             // Word details describe the word as written.
             selectedRange: selectedWord.map { content.range(fromOriginal: $0.range) },
             selectedWord: $selectedWord,
@@ -296,6 +309,10 @@ private struct RubyTextContent: View {
     /// lookups on every frame of a style animation.
     @AnimatableIgnored let textColors: [RubyColoredRange]
     @AnimatableIgnored let backgroundColors: [RubyColoredRange]
+    /// What VoiceOver says in place of parts of the text.
+    @AnimatableIgnored let speech: [RubySpokenText]
+    /// The words VoiceOver users can choose, if words can be tapped.
+    @AnimatableIgnored let accessibilityWords: [RubyAccessibilityWord]
 
     @AnimatableIgnored @Environment(\.rubyReader) private var reader
     @AnimatableIgnored @Environment(\.rubyEmphasis) private var emphasisOptions
@@ -330,7 +347,7 @@ private struct RubyTextContent: View {
     var body: some View {
         if above == 0 && below == 0 && reader == nil && textColors.isEmpty && backgroundColors.isEmpty
             && wordGaps.isZero && content.spaces.isEmpty && !isTappable {
-            Text(Self.plainText(content.string, language: lineBreaking.languageIdentifier))
+            Text(Self.plainText(content.string, language: lineBreaking.languageIdentifier).speaking(speech))
                 .font(RubyMetrics(font: font ?? .body, in: fontResolutionContext).textFont)
                 .contentTransition(.numericText())
         } else {
@@ -373,7 +390,7 @@ private struct RubyTextContent: View {
         let above = metrics.reservedHeight * above
         let below = metrics.reservedHeight * below
 
-        return Text(layout.text)
+        return Text(layout.text.speaking(speech))
             .font(metrics.textFont)
             // Text rewritten in another script rolls into the new one, glyph
             // by glyph, letters and kana as well as digits.
@@ -389,9 +406,16 @@ private struct RubyTextContent: View {
                 romajiBelow: romajiBelow,
                 emphasis: emphasis
             ))
-            .modifier(RubyWordTapping(isEnabled: isTappable) { point, geometry in
-                tapWord(at: point, in: geometry, layout: layout, metrics: metrics)
-            })
+            .modifier(RubyWordTapping(
+                isEnabled: isTappable,
+                words: accessibilityWords,
+                onTap: { point, geometry in
+                    tapWord(at: point, in: geometry, layout: layout, metrics: metrics)
+                },
+                onActivate: { index, geometry in
+                    selectWord(index, in: geometry, layout: layout, metrics: metrics)
+                }
+            ))
     }
 
     /// Word backgrounds, plus a highlight on the word whose details show.
@@ -414,6 +438,13 @@ private struct RubyTextContent: View {
             selectedWord.wrappedValue = nil
             return
         }
+        selectWord(index, in: geometry, layout: layout, metrics: metrics)
+    }
+
+    /// Reports the dictionary word at `index` to the tap action, and shows
+    /// its details.
+    private func selectWord(_ index: Int, in geometry: RubyTextGeometry, layout: RubyLayout, metrics: RubyMetrics) {
+        guard content.dictionaryWords.indices.contains(index) else { return }
         let range = content.dictionaryWords[index]
         // Details describe the word as written, even in rewritten text,
         // whose words match the original's one to one.
@@ -423,6 +454,20 @@ private struct RubyTextContent: View {
         if showsWordDetails {
             selectedRect.wrappedValue = wordRect(range, in: geometry, layout: layout, metrics: metrics) ?? .zero
             selectedWord.wrappedValue = word
+        }
+    }
+
+    /// Each dictionary word in `content` with letters in it, named as
+    /// VoiceOver says it in the text with `speech`, for word actions.
+    fileprivate static func accessibilityWords(in content: RubyContent, speech: [RubySpokenText]) -> [RubyAccessibilityWord] {
+        content.dictionaryWords.enumerated().compactMap { index, range in
+            let text = RubyReadingUnits.substring(of: content.string, utf16Range: range)
+            guard text.contains(where: \.isLetter) else { return nil }
+            // What VoiceOver says for the parts of the word it says differently.
+            let spoken = speech.filter { range.contains($0.range.lowerBound) }.map {
+                RubySpokenText(range: ($0.range.lowerBound - range.lowerBound)..<(min($0.range.upperBound, range.upperBound) - range.lowerBound), text: $0.text)
+            }
+            return RubyAccessibilityWord(id: index, name: Text(AttributedString(text).speaking(spoken)))
         }
     }
 
@@ -530,16 +575,27 @@ private struct RubyTextGeometry: Equatable {
     let layout: Text.Layout
 }
 
+/// A word VoiceOver users can choose as an action.
+private struct RubyAccessibilityWord: Identifiable {
+    /// Index of the word in the content's dictionary words.
+    let id: Int
+    let name: Text
+}
+
 /// Captures the layout SwiftUI made for the text, and reports taps with
-/// it so the tapped word can be found.
+/// it so the tapped word can be found. For VoiceOver, each of `words` is
+/// an action that selects it.
 private struct RubyWordTapping: ViewModifier {
     let isEnabled: Bool
+    let words: [RubyAccessibilityWord]
     let onTap: (CGPoint, RubyTextGeometry) -> Void
+    /// Selects the word with an ID of `words`, for VoiceOver.
+    let onActivate: (Int, RubyTextGeometry) -> Void
 
     @State private var geometry: RubyTextGeometry?
 
     func body(content: Content) -> some View {
-        content
+        let tappable = content
             .backgroundPreferenceValue(Text.LayoutKey.self) { layouts in
                 if isEnabled {
                     GeometryReader { proxy in
@@ -555,6 +611,53 @@ private struct RubyWordTapping: ViewModifier {
                 },
                 isEnabled: isEnabled
             )
+        if isEnabled {
+            tappable
+                .accessibilityActions {
+                    // SwiftUI lists actions last first, so the words are
+                    // declared from the end to be listed in text order.
+                    ForEach(words.reversed()) { word in
+                        Button {
+                            if let geometry { onActivate(word.id, geometry) }
+                        } label: {
+                            word.name
+                        }
+                    }
+                }
+                // Double-tapping would otherwise tap the middle of the
+                // text, whichever word is there; choose the first instead.
+                .accessibilityAction {
+                    if let geometry, let word = words.first { onActivate(word.id, geometry) }
+                }
+                .accessibilityHint("Swipe up or down to choose a word, then double-tap.")
+        } else {
+            tappable
+        }
+    }
+}
+
+extension AttributedString {
+    /// This text with what VoiceOver says for each of `speech`'s ranges,
+    /// as SSML that replaces the range's text in speech only.
+    func speaking(_ speech: [RubySpokenText]) -> AttributedString {
+        guard !speech.isEmpty else { return self }
+        // Built from pieces, since indices don't outlive a mutation. The
+        // ranges are in order, so each is found from the one before.
+        var text = AttributedString()
+        var index = utf16.startIndex
+        var offset = 0
+        for item in speech where item.range.lowerBound >= offset {
+            let lower = utf16.index(index, offsetBy: item.range.lowerBound - offset)
+            let upper = utf16.index(lower, offsetBy: item.range.count)
+            text.append(self[index..<lower])
+            var spoken = AttributedString(self[lower..<upper])
+            spoken.accessibilitySpeechSSML = item.ssml
+            text.append(spoken)
+            index = upper
+            offset = item.range.upperBound
+        }
+        text.append(self[index...])
+        return text
     }
 }
 

@@ -17,6 +17,10 @@ public struct RubyWordInfo: Identifiable, Hashable, Sendable {
     public let jlptLevel: RubyJLPTLevel?
     /// Each kanji in the word, with its JLPT level, or `nil` if beyond it.
     public let kanji: [Kanji]
+    /// Where the word's reading came from. For a word with readings from
+    /// several places, such as a number read by a rule with a counter from
+    /// the dictionary, the first of manual, rule, and model.
+    public let source: ReadingSource
 
     public struct Kanji: Hashable, Sendable {
         public let character: Character
@@ -32,16 +36,7 @@ public struct RubyWordInfo: Identifiable, Hashable, Sendable {
         let tokens = content.words.filter { range.contains($0.range.lowerBound) }
 
         // Spell the word in kana: readings replace the kanji they cover.
-        var reading = ""
-        for token in tokens {
-            var position = token.range.lowerBound
-            for furigana in token.furigana.sorted(by: { $0.range.lowerBound < $1.range.lowerBound }) {
-                reading += RubyReadingUnits.substring(of: content.string, utf16Range: position..<furigana.range.lowerBound)
-                reading += furigana.text
-                position = furigana.range.upperBound
-            }
-            reading += RubyReadingUnits.substring(of: content.string, utf16Range: position..<token.range.upperBound)
-        }
+        let reading = tokens.map(content.spelling(of:)).joined()
 
         let head = tokens.first
         // A noun with する (勉強した) is listed as 勉強する.
@@ -62,7 +57,8 @@ public struct RubyWordInfo: Identifiable, Hashable, Sendable {
             dictionaryForm: dictionaryForm == text ? nil : dictionaryForm,
             partOfSpeech: isSuruVerb ? .verb : head?.partOfSpeech,
             jlptLevel: RubyJLPTLevel.level(of: text, dictionaryForm: nil, vocabulary: [:]),
-            kanji: text.filter(RubyJLPTKanji.isGraded).map { Kanji(character: $0, level: RubyJLPTKanji.level(of: $0)) }
+            kanji: text.filter(RubyJLPTKanji.isGraded).map { Kanji(character: $0, level: RubyJLPTKanji.level(of: $0)) },
+            source: ReadingSource.allCases.first { source in tokens.contains { $0.source == source } } ?? .dictionary
         )
     }
 }
