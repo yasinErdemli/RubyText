@@ -46,12 +46,12 @@ struct RubyPlacement: Equatable {
 }
 
 extension RubyPlacement {
-    init(style: RubyStyle, furiganaPosition: RubyFuriganaPosition = .above, transcription: RubyScript? = nil) {
+    init(style: RubyStyle, furiganaPosition: RubyFuriganaPosition = .above, transcription: RubyTranscription? = nil) {
         // Text written in kana or romaji has no kanji to read, and inline
         // furigana are part of the text.
         let furigana = style.contains(.furigana) && furiganaPosition == .above && transcription == nil
         // Romaji text needs no romaji.
-        let romaji = style.contains(.romaji) && transcription != .romaji
+        let romaji = style.contains(.romaji) && transcription?.script != .romaji
         self.init(furigana: furigana, romajiAbove: romaji && !furigana, romajiBelow: romaji && furigana)
     }
 }
@@ -201,9 +201,8 @@ extension EnvironmentValues {
     @Entry var rubyFuriganaScript = RubyScript.hiragana
     /// Where `RubyText` views put furigana. Above the text by default.
     @Entry var rubyFuriganaPosition = RubyFuriganaPosition.above
-    /// The script `RubyText` views write their text in, if not as it's
-    /// written.
-    @Entry var rubyTranscription: RubyScript? = nil
+    /// How `RubyText` views write their text out, if not as it's written.
+    @Entry var rubyTranscription: RubyTranscription? = nil
     /// Space `RubyText` views draw between words. None by default.
     @Entry var rubySpacing = RubySpacing.none
     /// Where `RubyText` views may break lines. Between words by default.
@@ -249,12 +248,12 @@ extension View {
         environment(\.rubyFuriganaPosition, position)
     }
 
-    /// Writes the text of `RubyText` views in this hierarchy entirely in
-    /// `script`, or as it's written for `nil`, like `textCase(_:)` does
-    /// for case.
+    /// Writes the text of `RubyText` views in this hierarchy out in
+    /// hiragana, katakana, or romaji, or as it's written for `nil`, like
+    /// `textCase(_:)` does for case.
     ///
     ///     RubyText("今日はコーヒーを飲んだ。")
-    ///         .rubyTranscription(.hiragana)   // きょうはこーひーをのんだ。
+    ///         .rubyTranscription(.hiragana)   // きょうはコーヒーをのんだ。
     ///     RubyText("今日はコーヒーを飲んだ。")
     ///         .rubyTranscription(.romaji)     // kyō wa kōhī o nonda.
     ///
@@ -262,8 +261,18 @@ extension View {
     /// annotate; romaji still show over kana. Selecting and copying gives
     /// the transcribed text, and word details, word colors, and read-aloud
     /// emphasis follow each word to where it moved.
-    public func rubyTranscription(_ script: RubyScript?) -> some View {
-        environment(\.rubyTranscription, script)
+    ///
+    /// Kana text is easier to read with spaces between phrases, as
+    /// children's books write it (分かち書き): with `rubySpacing(_:)`, it
+    /// gets real ideographic spaces, as wide as the spacing asks, which
+    /// copy with the text. Lines then break mostly at the spaces, since
+    /// without kanji, the system finds phrases poorly.
+    ///
+    ///     RubyText("今日はコーヒーを飲んだ。")
+    ///         .rubyTranscription(.hiragana)
+    ///         .rubySpacing(.phrases)          // きょうは　コーヒーを　のんだ。
+    public func rubyTranscription(_ transcription: RubyTranscription?) -> some View {
+        environment(\.rubyTranscription, transcription)
     }
 
     /// Adds visual space between words or reading phrases in `RubyText`

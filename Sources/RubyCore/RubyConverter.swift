@@ -29,18 +29,18 @@ public struct RubyConverter: Sendable {
         analyzer = nil
     }
 
-    /// `markup` written entirely in `script`: kanji become their readings,
-    /// and kana the script's kana. Romaji put spaces between words and
-    /// turn Japanese punctuation into Latin.
+    /// `markup` written out as `transcription` says: kanji become their
+    /// readings, and kana the script's kana. Romaji put spaces between
+    /// words and turn Japanese punctuation into Latin.
     ///
-    ///     converter.convert("今日はコーヒーを飲んだ。", to: .hiragana)  // きょうはこーひーをのんだ。
+    ///     converter.convert("今日はコーヒーを飲んだ。", to: .hiragana)  // きょうはコーヒーをのんだ。
     ///     converter.convert("今日はコーヒーを飲んだ。", to: .katakana)  // キョウハコーヒーヲノンダ。
     ///     converter.convert("今日はコーヒーを飲んだ。", to: .romaji)    // kyō wa kōhī o nonda.
     ///
     /// Words without a known reading, such as kanji without an analyzer,
     /// stay as they're written.
-    public func convert(_ markup: String, to script: RubyScript) -> String {
-        content(for: markup).transcribed(to: script).string
+    public func convert(_ markup: String, to transcription: RubyTranscription) -> String {
+        content(for: markup).transcribed(to: transcription).string
     }
 
     /// `markup` with the reading of each kanji in parentheses after it,

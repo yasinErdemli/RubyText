@@ -17,6 +17,9 @@ package final class RubyContent {
     /// to, as the start of a range and as its end. The two differ where a
     /// space was put between romaji words.
     private var offsetMap: RubyOffsetMap?
+    /// UTF-16 offsets of the spaces kana text was given between phrases
+    /// or words, which aren't in the original.
+    package private(set) var spaces: [Int] = []
 
     /// Words as a dictionary lists them, for word details: a verb or
     /// adjective with its conjugated endings (生まれ|た), a noun with its
@@ -288,10 +291,11 @@ package final class RubyContent {
     }
 
     /// `original` rewritten as `string`, its words moved through
-    /// `offsets`. Readings are part of the rewritten text, so the words
-    /// have no furigana; they keep their romaji unless `keepsRomaji` is
-    /// false, for text that's romaji already.
-    init(rewriting original: RubyContent, as string: String, offsets: RubyOffsetMap, keepsRomaji: Bool) {
+    /// `offsets`, with `spaces` put between phrases or words. Readings are
+    /// part of the rewritten text, so the words have no furigana; they
+    /// keep their romaji unless `keepsRomaji` is false, for text that's
+    /// romaji already.
+    init(rewriting original: RubyContent, as string: String, offsets: RubyOffsetMap, spaces: [Int], keepsRomaji: Bool) {
         self.string = string
         words = original.words.map { word in
             RubyWord(
@@ -306,6 +310,7 @@ package final class RubyContent {
         }
         self.original = original
         offsetMap = offsets
+        self.spaces = spaces
         romajiWords = keepsRomaji ? original.romajiWords.map { RubyRomajiWord(range: offsets.range($0.range), text: $0.text) } : []
         dictionaryWords = original.dictionaryWords.map(offsets.range)
     }

@@ -9,13 +9,56 @@ public enum RubyScript: Hashable, Sendable, CaseIterable {
     case romaji
 }
 
+/// How Japanese text is written out without kanji: in hiragana, katakana,
+/// or romaji.
+///
+///     .hiragana                         // きょうはコーヒーをのんだ。
+///     .hiragana(loanwords: .hiragana)   // きょうはこーひーをのんだ。
+///     .katakana                         // キョウハコーヒーヲノンダ。
+///     .romaji                           // kyō wa kōhī o nonda.
+public struct RubyTranscription: Hashable, Sendable {
+    /// The script the text is written in.
+    public let script: RubyScript
+    /// Whether katakana stays katakana, in hiragana text.
+    let keepsKatakana: Bool
+
+    /// Kana loanwords can be written in.
+    public enum Kana: Hashable, Sendable {
+        case hiragana
+        case katakana
+    }
+
+    /// Hiragana, with loanwords left in katakana as children's books
+    /// write them: きょうはコーヒーをのんだ。
+    public static let hiragana = hiragana(loanwords: .katakana)
+
+    /// Hiragana, with loanwords and other words written in katakana, such
+    /// as コーヒー, in `loanwords`: `.hiragana` writes everything in
+    /// hiragana, こーひー.
+    public static func hiragana(loanwords: Kana) -> RubyTranscription {
+        RubyTranscription(script: .hiragana, keepsKatakana: loanwords == .katakana)
+    }
+
+    /// Katakana throughout: キョウハコーヒーヲノンダ。
+    public static let katakana = RubyTranscription(script: .katakana, keepsKatakana: false)
+
+    /// Hepburn romaji, with spaces between words and Japanese punctuation
+    /// made Latin: kyō wa kōhī o nonda.
+    public static let romaji = RubyTranscription(script: .romaji, keepsKatakana: false)
+}
+
 extension RubyContent {
-    /// This content written entirely in `script`: kanji become their
-    /// readings and kana the script's kana, or everything becomes romaji,
-    /// with spaces between words and Japanese punctuation made Latin.
-    /// Words keep their grammar and move with their text.
-    package func transcribed(to script: RubyScript) -> RubyContent {
-        rewritten(.transcribed(script))
+    /// This content written out as `transcription` says: kanji become
+    /// their readings and kana the script's kana, or everything becomes
+    /// romaji, with spaces between words and Japanese punctuation made
+    /// Latin. Words keep their grammar and move with their text.
+    ///
+    /// - Parameter spaces: UTF-16 offsets in this content where kana text
+    ///   puts an ideographic space, such as between phrases, as text
+    ///   written without kanji often does (分かち書き). Their offsets in
+    ///   the transcribed text are its `spaces`.
+    package func transcribed(to transcription: RubyTranscription, spacedAt spaces: [Int] = []) -> RubyContent {
+        rewritten(.transcribed(transcription, spaces: transcription.script == .romaji ? [] : spaces))
     }
 
     /// This content with each kanji's reading in parentheses after it, in
@@ -38,7 +81,7 @@ extension RubyContent {
     // MARK: Rewriting
 
     private enum Rewrite: Hashable {
-        case transcribed(RubyScript)
+        case transcribed(RubyTranscription, spaces: [Int])
         case inlineReadings(RubyScript, open: String, close: String)
     }
 
@@ -54,22 +97,34 @@ extension RubyContent {
     private func rewritten(_ rewrite: Rewrite) -> RubyContent {
         let key = RubyCacheKey(RewriteKey(content: ObjectIdentifier(self), rewrite: rewrite))
         if let cached = Self.rewrites.object(forKey: key), cached.original === self { return cached }
+        let isRomaji = if case .transcribed(let transcription, _) = rewrite { transcription.script == .romaji } else { false }
         let pieces = switch rewrite {
-        case .transcribed(.romaji): romajiPieces()
-        case .transcribed(let script): kanaPieces(script)
-        case .inlineReadings(let script, let open, let close): inlinePieces(script, open: open, close: close)
+        case .transcribed(let transcription, let spaces):
+            isRomaji ? romajiPieces() : kanaPieces(transcription, spacedAt: Set(spaces))
+        case .inlineReadings(let script, let open, let close):
+            inlinePieces(script, open: open, close: close)
         }
-        let (string, offsets) = RubyOffsetMap.assemble(pieces, length: string.utf16.count)
-        let content = RubyContent(rewriting: self, as: string, offsets: offsets, keepsRomaji: rewrite != .transcribed(.romaji))
+        let (string, offsets, separators) = RubyOffsetMap.assemble(pieces, length: string.utf16.count)
+        // Romaji are spaced as words; kana only where they were asked to be.
+        let content = RubyContent(
+            rewriting: self,
+            as: string,
+            offsets: offsets,
+            spaces: isRomaji ? [] : separators,
+            keepsRomaji: !isRomaji
+        )
         Self.rewrites.setObject(content, forKey: key)
         return content
     }
 
-    /// Each reading in `script`'s kana in place of its kanji, and every
-    /// other character converted on its own.
-    private func kanaPieces(_ script: RubyScript) -> [RubyRewritePiece] {
+    /// Each reading in the transcription's kana in place of its kanji, and
+    /// every other character converted on its own, with a space before
+    /// each of `spaces`.
+    private func kanaPieces(_ transcription: RubyTranscription, spacedAt spaces: Set<Int>) -> [RubyRewritePiece] {
         func convert(_ text: String) -> String {
-            script == .katakana ? RubyKana.katakana(text) : RubyKana.hiragana(text)
+            if transcription.script == .katakana { return RubyKana.katakana(text) }
+            // Readings and kana as written, katakana included.
+            return transcription.keepsKatakana ? text : RubyKana.hiragana(text)
         }
         var readings = words.flatMap(\.furigana)[...]
         var pieces: [RubyRewritePiece] = []
@@ -86,6 +141,11 @@ extension RubyContent {
                 continue
             }
             pieces.append(RubyRewritePiece(range: offset..<(offset + length), text: convert(String(character))))
+        }
+        // Ideographic spaces, as children's books put between phrases:
+        // lines break at them much more readily than at narrow ones.
+        for index in pieces.indices.dropFirst() where spaces.contains(pieces[index].range.lowerBound) {
+            pieces[index].separator = "\u{3000}"
         }
         return pieces
     }
@@ -201,14 +261,17 @@ struct RubyOffsetMap {
         min(max(offset, 0), starts.count - 1)
     }
 
-    /// The text `pieces` make, which cover the original text in order, and
-    /// where each of the original's `length` offsets moved to.
-    static func assemble(_ pieces: [RubyRewritePiece], length: Int) -> (String, RubyOffsetMap) {
+    /// The text `pieces` make, which cover the original text in order,
+    /// where each of the original's `length` offsets moved to, and where
+    /// each separator is in the text.
+    static func assemble(_ pieces: [RubyRewritePiece], length: Int) -> (String, RubyOffsetMap, [Int]) {
         var result = ""
         var count = 0
         var starts = [Int](repeating: 0, count: length + 1)
         var ends = starts
+        var separators: [Int] = []
         for piece in pieces {
+            if !piece.separator.isEmpty { separators.append(count) }
             result += piece.separator
             count += piece.separator.utf16.count
             let start = count
@@ -224,6 +287,6 @@ struct RubyOffsetMap {
             ends[piece.range.upperBound] = count
         }
         starts[length] = count
-        return (result, RubyOffsetMap(starts: starts, ends: ends))
+        return (result, RubyOffsetMap(starts: starts, ends: ends), separators)
     }
 }

@@ -149,7 +149,10 @@ public struct RubyText: View {
 
     /// `content` as the transcription or inline furigana write it.
     private func rewritten(_ content: RubyContent) -> RubyContent {
-        if let transcription { return content.transcribed(to: transcription) }
+        if let transcription {
+            // Spacing in kana text is real spaces, so lines break at them.
+            return content.transcribed(to: transcription, spacedAt: spacing.boundaries(in: content))
+        }
         if style.contains(.furigana), furiganaPosition == .inline { return content.withInlineReadings(in: furiganaScript) }
         return content
     }
@@ -211,8 +214,9 @@ public struct RubyText: View {
     /// font size. One value per offset, so switching between word and
     /// phrase spacing animates each space separately.
     private func wordGaps(in content: RubyContent) -> RubyAnimatableVector {
-        // Romaji are spaced already.
-        guard transcription != .romaji else { return .zero }
+        // Transcribed text has real spaces: romaji between words, and kana
+        // wherever the spacing puts them.
+        guard transcription == nil else { return .zero }
         // Words and phrases are found in the text as written.
         let boundaries = spacing.boundaries(in: content.original ?? content).map(content.offset(fromOriginal:))
         guard !boundaries.isEmpty else { return .zero }
@@ -290,6 +294,7 @@ private struct RubyTextContent: View {
     @AnimatableIgnored @Environment(\.rubyReader) private var reader
     @AnimatableIgnored @Environment(\.rubyEmphasis) private var emphasisOptions
     @AnimatableIgnored @Environment(\.rubyLineBreaking) private var lineBreaking
+    @AnimatableIgnored @Environment(\.rubySpacing) private var spacing
     @AnimatableIgnored @Environment(\.rubyShowsWordDetails) private var showsWordDetails
     @AnimatableIgnored @Environment(\.rubyWordTapAction) private var wordTapAction
     @AnimatableIgnored @Environment(\.rubyFuriganaScript) private var furiganaScript
@@ -317,8 +322,8 @@ private struct RubyTextContent: View {
 
     var body: some View {
         if above == 0 && below == 0 && reader == nil && textColors.isEmpty && backgroundColors.isEmpty
-            && wordGaps.isZero && !isTappable {
-            Text(Self.plainText(content.string, lineBreaking: lineBreaking))
+            && wordGaps.isZero && content.spaces.isEmpty && !isTappable {
+            Text(Self.plainText(content.string, language: lineBreaking.languageIdentifier))
                 .font(RubyMetrics(font: font ?? .body, in: fontResolutionContext).textFont)
         } else {
             let metrics = RubyMetrics(font: font ?? .body, in: fontResolutionContext)
@@ -331,7 +336,8 @@ private struct RubyTextContent: View {
                 wordGaps: wordGaps,
                 fontSize: metrics.fontSize,
                 romajiSpacing: metrics.romajiSpacing,
-                lineBreaking: lineBreaking,
+                language: lineBreaking.languageIdentifier,
+                insertedSpaceWidth: spacing.width,
                 textColors: textColors,
                 backgrounds: backgrounds()
             )
@@ -458,9 +464,9 @@ private struct RubyTextContent: View {
 
     /// Text without annotations, tagged as Japanese so lines break the
     /// same way as annotated text.
-    private static func plainText(_ string: String, lineBreaking: RubyLineBreaking) -> AttributedString {
+    private static func plainText(_ string: String, language: String) -> AttributedString {
         var text = AttributedString(string)
-        text.languageIdentifier = lineBreaking.languageIdentifier
+        text.languageIdentifier = language
         return text
     }
 
@@ -635,6 +641,9 @@ final class RubyMeasurements {
     let starts: [Int]
     let furigana: [Furigana]
     let romaji: [Romaji]
+    /// Indices of the characters that are spaces put between phrases of
+    /// kana text.
+    let insertedSpaces: [Int]
     /// UTF-16 offset where each paragraph starts.
     let paragraphStarts: [Int]
 
@@ -765,6 +774,7 @@ final class RubyMeasurements {
         self.starts = starts
         self.furigana = furigana
         self.romaji = romaji
+        insertedSpaces = content.spaces.map { Self.index(of: $0, in: starts) }
         self.paragraphStarts = paragraphStarts
     }
 
@@ -795,7 +805,8 @@ struct RubyLayout {
         wordGaps: RubyAnimatableVector,
         fontSize: CGFloat,
         romajiSpacing: CGFloat,
-        lineBreaking: RubyLineBreaking,
+        language: String,
+        insertedSpaceWidth: CGFloat,
         textColors: [RubyColoredRange],
         backgrounds: [RubyColoredRange]
     ) {
@@ -823,7 +834,8 @@ struct RubyLayout {
             romajiVisibility: romajiVisibility,
             wordGaps: wordGaps,
             fontSize: fontSize,
-            romajiSpacing: romajiSpacing
+            romajiSpacing: romajiSpacing,
+            insertedSpaceWidth: insertedSpaceWidth
         )
         let tracking = spacing.tracking
         let shifts = spacing.shifts
@@ -849,7 +861,7 @@ struct RubyLayout {
         }
         // The language decides where lines may break, such as only between
         // phrases. It's a standard attribute, so copying still works.
-        text.languageIdentifier = lineBreaking.languageIdentifier
+        text.languageIdentifier = language
         self.text = text
 
         // Layout character indices restart at each paragraph, so ranges are
@@ -904,7 +916,8 @@ struct RubyLayout {
         romajiVisibility: RubyAnimatableVector,
         wordGaps: RubyAnimatableVector,
         fontSize: CGFloat,
-        romajiSpacing: CGFloat
+        romajiSpacing: CGFloat,
+        insertedSpaceWidth: CGFloat = 0
     ) -> (tracking: [CGFloat], shifts: [CGFloat]) {
         let characters = measurements.characters
         let widths = measurements.widths
@@ -948,6 +961,10 @@ struct RubyLayout {
         // Word spacing pads after the last character of a word.
         for index in characters.indices {
             tracking[index] += wordGaps.value(at: measurements.starts[index + 1], default: 0) * fontSize
+        }
+        // Spaces put between phrases of kana text take the spacing's width.
+        for index in measurements.insertedSpaces {
+            tracking[index] += insertedSpaceWidth * fontSize - widths[index]
         }
 
         guard romaji > 0, !measurements.romaji.isEmpty else { return (tracking, shifts) }

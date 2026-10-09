@@ -65,6 +65,24 @@ import Testing
         #expect(words == ["にほんご", "を", "べんきょうした"])
     }
 
+    @Test func loanwordsStayInKatakana() {
+        let original = RubyContent.content(for: "コーヒーを飲んだ。")
+        #expect(original.transcribed(to: .hiragana).string == "コーヒーをのんだ。")
+        #expect(original.transcribed(to: .hiragana(loanwords: .hiragana)).string == "こーひーをのんだ。")
+    }
+
+    @Test func kanaSpacedBetweenPhrases() {
+        let original = RubyContent.content(for: Self.sentence)
+        // After 今日は (offset 3) and 東京へ (offset 6).
+        let content = original.transcribed(to: .hiragana, spacedAt: [3, 6])
+        #expect(content.string == "きょうは\u{3000}とうきょうへ\u{3000}いきたい。")
+        #expect(content.spaces == [4, 11])
+        // Words don't take in the spaces around them.
+        #expect(words(of: content) == ["きょう", "は", "とうきょう", "へ", "いき", "たい"])
+        // Romaji are spaced as words regardless.
+        #expect(original.transcribed(to: .romaji, spacedAt: [3, 6]).spaces.isEmpty)
+    }
+
     @Test func rewritingIsCached() {
         let original = RubyContent.content(for: Self.sentence)
         #expect(original.transcribed(to: .hiragana) === original.transcribed(to: .hiragana))

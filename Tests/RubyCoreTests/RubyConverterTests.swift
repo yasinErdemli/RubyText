@@ -7,8 +7,10 @@ import Testing
 
     @Test func hiragana() {
         #expect(converter.convert(Self.sentence, to: .hiragana) == "かんじとれたらてをつなごう")
-        // Katakana becomes hiragana too, keeping the long-vowel mark.
-        #expect(converter.convert("今日はコーヒーを飲んだ。", to: .hiragana) == "きょうはこーひーをのんだ。")
+        // Loanwords stay in katakana, unless they're asked for in hiragana,
+        // which keeps the long-vowel mark.
+        #expect(converter.convert("今日はコーヒーを飲んだ。", to: .hiragana) == "きょうはコーヒーをのんだ。")
+        #expect(converter.convert("今日はコーヒーを飲んだ。", to: .hiragana(loanwords: .hiragana)) == "きょうはこーひーをのんだ。")
     }
 
     @Test func katakana() {
@@ -52,7 +54,8 @@ import Testing
         // Readings you supply win, and keep their kana unless asked for another script.
         #expect(converter.annotate("{本気|マジ}で{今日|こんにち}", with: .hiragana) == "本気（マジ）で今日（こんにち）")
         #expect(converter.annotate("{本気|マジ}で", with: .katakana) == "本気（マジ）で")
-        #expect(converter.convert("{本気|マジ}で", to: .hiragana) == "まじで")
+        #expect(converter.convert("{本気|マジ}で", to: .hiragana) == "マジで")
+        #expect(converter.convert("{本気|マジ}で", to: .hiragana(loanwords: .hiragana)) == "まじで")
     }
 
     @Test func withoutAnalyzer() {
