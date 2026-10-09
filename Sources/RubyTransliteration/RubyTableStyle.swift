@@ -77,6 +77,7 @@ public struct RubyTableStyle: RubyTransliterationStyle, CustomStringConvertible 
     /// vowel.
     ///
     /// - Parameters:
+    ///   - name: The style's name, such as hepburn.
     ///   - onsets: Each consonant as Hepburn writes it (k, sh, ch, ts, f,
     ///     j, and ky, gy for those before a small や, ゆ or よ), and how this
     ///     style writes it. The empty string is a syllable with no
@@ -86,6 +87,7 @@ public struct RubyTableStyle: RubyTransliterationStyle, CustomStringConvertible 
     ///     consonant (`RubyMora.isPalatalized(_:)`), if differently, as
     ///     Cyrillic writes кя and ся.
     ///   - exceptions: Syllables written otherwise, by hiragana.
+    ///   - longVowels: How long vowels are written.
     public init(
         name: String,
         onsets: [String: String],
