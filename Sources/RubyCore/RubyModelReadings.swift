@@ -120,13 +120,25 @@ public nonisolated enum RubyModelReadings {
         return result
     }
 
+    /// Forgets every reading the model has chosen, so `RubyText` views ask
+    /// again the next time they load: to watch or measure the model, or
+    /// after a system update changes it.
+    public static func forgetAnswers() {
+        answers.withLock { $0.removeAll() }
+        RubyContent.forgetModelReadings()
+    }
+
     /// `segments` with the readings `chooser` picks for words on the
     /// homograph list, each marked as from the model. Words it can't answer
     /// about keep the dictionary's reading.
+    ///
+    /// - Parameter onChange: Called with the segments so far each time an
+    ///   answer changes a reading.
     package static func apply(
         to segments: [RubySegment],
         excluding excluded: [Range<Int>] = [],
-        chooser: some RubyReadingChooser
+        chooser: some RubyReadingChooser,
+        onChange: (([RubySegment]) async -> Void)? = nil
     ) async -> [RubySegment] {
         var result = segments
         for (index, question) in questions(in: segments, excluding: excluded) {
@@ -138,6 +150,7 @@ public nonisolated enum RubyModelReadings {
             // The pronunciation was for the dictionary's reading.
             result[index].pronunciation = nil
             result[index].source = .model
+            await onChange?(result)
         }
         return result
     }

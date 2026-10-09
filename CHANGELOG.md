@@ -14,7 +14,9 @@ The first release.
   2026年 → にせんにじゅうろくねん) and for set phrases (一日中, 大家さん).
 - Readings that depend on meaning chosen by Apple's on-device model with
   `rubyModelReadings()`, where Apple Intelligence is available: 辛い as からい
-  for spicy food, 人気 as ひとけ for people around. `RubyModelReadings` lists
+  for spicy food, 人気 as ひとけ for people around. With `updates: .asAnswered`,
+  each reading changes as soon as the model answers, so long texts correct
+  themselves as it works. `RubyModelReadings` lists
   the questions the model is asked, asks them one at a time to time them,
   and prewarms the model.
 - `{base|reading}` markup and `RubyText(segments:)` for readings you supply.

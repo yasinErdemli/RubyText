@@ -179,6 +179,11 @@ package final class RubyContent {
 
     private static let modelCache = NSCache<RubyCacheKey<ModelKey>, RubyContent>()
 
+    /// Forgets content with the model's readings, so it's asked again.
+    package static func forgetModelReadings() {
+        modelCache.removeAllObjects()
+    }
+
     /// Markup analyzed by a particular analyzer, with a chooser's readings.
     private struct ModelKey: Hashable {
         let markup: MarkupKey
@@ -192,10 +197,14 @@ package final class RubyContent {
     /// The same as `content(for:analyzer:)` where the text has no such
     /// words or the chooser can't answer. Only readings change, so words
     /// cover the same ranges in both.
+    ///
+    /// - Parameter onEachReading: Called with the content so far each time
+    ///   an answer changes a reading, to show readings as they come.
     package static func content(
         for markup: String,
         analyzer: (any RubyAnalyzer)?,
-        chooser: some RubyReadingChooser
+        chooser: some RubyReadingChooser,
+        onEachReading: ((RubyContent) async -> Void)? = nil
     ) async -> RubyContent {
         let key = RubyCacheKey(ModelKey(
             markup: MarkupKey(markup: markup, analyzer: analyzer),
@@ -204,7 +213,15 @@ package final class RubyContent {
         if let cached = modelCache.object(forKey: key) { return cached }
         let (string, manual) = parse(markup)
         let segments = Self.segments(in: string, analyzer: analyzer)
-        let chosen = await RubyModelReadings.apply(to: segments, excluding: manual.map(\.range), chooser: chooser)
+        let onChange: (([RubySegment]) async -> Void)? = onEachReading.map { update in
+            { segments in await update(RubyContent(string: string, manual: manual, segments: segments)) }
+        }
+        let chosen = await RubyModelReadings.apply(
+            to: segments,
+            excluding: manual.map(\.range),
+            chooser: chooser,
+            onChange: onChange
+        )
         // Unchanged, possibly because the chooser couldn't answer yet, so
         // only changed content is cached.
         guard chosen != segments else { return Self.content(for: markup, analyzer: analyzer) }

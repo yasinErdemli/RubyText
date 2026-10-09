@@ -29,7 +29,8 @@ ContentView()
 
 - ``RubyText``
 - ``SwiftUICore/View/rubyAnalyzer(_:)``
-- ``SwiftUICore/View/rubyModelReadings(_:)``
+- ``SwiftUICore/View/rubyModelReadings(_:updates:)``
+- ``RubyModelReadingUpdates``
 
 ### Choosing annotations
 

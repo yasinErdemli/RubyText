@@ -12,6 +12,15 @@ private struct KeywordChooser: RubyReadingChooser {
     }
 }
 
+/// Picks the first choice whose meaning mentions one of `keywords`.
+private struct KeywordsChooser: RubyReadingChooser {
+    let keywords: [String]
+
+    func choose(_ question: RubyReadingQuestion) async throws -> Int? {
+        question.choices.firstIndex { choice in keywords.contains { choice.meaning.contains($0) } }
+    }
+}
+
 @Suite struct RubyModelReadingsTests {
     private func questions(_ text: String) -> [RubyReadingQuestion] {
         let segments = RubyContent.segments(in: text, analyzer: RubyMeCabAnalyzer.ipadic)
@@ -52,6 +61,37 @@ private struct KeywordChooser: RubyReadingChooser {
         let word = content.words.first { $0.furigana.first?.text == "ひとけ" }
         #expect(word?.source == .model)
         #expect(word?.romaji == "hitoke")
+    }
+
+    @Test func readingsComeAsAnswered() async {
+        var updates: [[String]] = []
+        let content = await RubyContent.content(
+            for: "夜の公園は人気がない。このカレーは辛い！",
+            analyzer: RubyMeCabAnalyzer.ipadic,
+            chooser: KeywordsChooser(keywords: ["deserted", "spicy"])
+        ) { content in
+            updates.append(content.words.filter { $0.source == .model }.flatMap(\.furigana).map(\.text))
+        }
+        // One update for each reading changed, each with the ones before.
+        #expect(updates == [["ひとけ"], ["ひとけ", "から"]])
+        #expect(content.words.filter { $0.source == .model }.flatMap(\.furigana).map(\.text) == ["ひとけ", "から"])
+    }
+
+    @Test func forgottenReadingsAreChosenAgain() async {
+        func updates() async -> Int {
+            var count = 0
+            _ = await RubyContent.content(
+                for: "受付の方に聞いてください。",
+                analyzer: RubyMeCabAnalyzer.ipadic,
+                chooser: KeywordsChooser(keywords: ["polite"])
+            ) { _ in count += 1 }
+            return count
+        }
+        #expect(await updates() == 1)
+        // Kept, so nothing changes as it's shown again.
+        #expect(await updates() == 0)
+        RubyModelReadings.forgetAnswers()
+        #expect(await updates() == 1)
     }
 
     @Test func agreeingWithTheDictionaryChangesNothing() async {
