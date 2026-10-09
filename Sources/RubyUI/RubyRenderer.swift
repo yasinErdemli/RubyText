@@ -454,22 +454,56 @@ struct RubyRenderer: TextRenderer {
 
     private static let romajiVowels = Set("aeiouāīūēōâîûêô")
 
-    /// Whether romaji may be split before `index`: after a vowel, after a
-    /// syllabic n (ben|kyou), or between doubled consonants (chot|to).
-    /// Always true for non-Latin text, which the kana rule handles.
-    private static func isRomajiBreak(in text: [Character], at index: Int) -> Bool {
+    /// Whether romaji may be split before `index`: after a vowel, unless a
+    /// syllabic n or doubled consonant follows (ben|kyō, not be|nkyō;
+    /// chot|to, not cho|tto), after a syllabic n or m (shim|bun), or
+    /// between doubled consonants. Always true for non-Latin text, which
+    /// the kana rule handles.
+    static func isRomajiBreak(in text: [Character], at index: Int) -> Bool {
         guard index > 0, index < text.count else { return true }
         let previous = Character(text[index - 1].lowercased())
         let next = Character(text[index].lowercased())
+        // The apostrophe after a syllabic n (kin'en) stays with it.
+        if next == "'" || next == "’" { return false }
         guard previous.isASCII || romajiVowels.contains(previous),
               next.isASCII || romajiVowels.contains(next),
               previous.isLetter, next.isLetter
         else { return true }
 
+        if isSyllabicNasal(in: text, at: index) || isDoubling(in: text, at: index) { return false }
         let nextIsVowel = romajiVowels.contains(next)
         if romajiVowels.contains(previous) { return true }
         if previous == "n" { return !nextIsVowel && next != "y" }
-        return previous == next
+        if previous == "m", next == "b" || next == "p" { return true }
+        return previous == next || (previous == "t" && next == "c")
+    }
+
+    /// Whether the consonant at `index` doubles the next, as っ is written
+    /// (chotto, matcha), so it ends the syllable before it.
+    private static func isDoubling(in text: [Character], at index: Int) -> Bool {
+        guard index + 1 < text.count else { return false }
+        let letter = Character(text[index].lowercased())
+        let following = Character(text[index + 1].lowercased())
+        // Two n are ん and a syllable starting with n (onna).
+        guard letter.isLetter, letter != "n", !romajiVowels.contains(letter) else { return false }
+        return letter == following || (letter == "t" && following == "c")
+    }
+
+    /// Whether the letter at `index` is ん on its own: n not starting a
+    /// syllable with a vowel or y after it, or m before b, m, or p, as
+    /// passport romaji write ん (shimbun).
+    private static func isSyllabicNasal(in text: [Character], at index: Int) -> Bool {
+        let letter = Character(text[index].lowercased())
+        let following = index + 1 < text.count ? Character(text[index + 1].lowercased()) : nil
+        switch letter {
+        case "n":
+            guard let following, following.isLetter else { return true }
+            return !romajiVowels.contains(following) && following != "y"
+        case "m":
+            return following.map { "bmp".contains($0) } ?? false
+        default:
+            return false
+        }
     }
 
     /// Binary search for the item whose range covers a UTF-16 offset.
