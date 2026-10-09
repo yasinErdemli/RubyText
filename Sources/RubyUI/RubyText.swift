@@ -1,7 +1,9 @@
 import RubyCore
+import RubyTransliteration
 import SwiftUI
 
-/// Japanese text that can show furigana above and romaji below its words.
+/// Japanese text that can show furigana or romaji above its words, or
+/// furigana above and romaji below.
 ///
 /// Use it like `Text`, and choose annotations with `rubyStyle(_:)` on it or
 /// any parent view. Readings are generated on device; supply your own with
@@ -11,6 +13,8 @@ import SwiftUI
 ///         .font(.title)
 ///         .textSelection(.enabled)
 ///         .rubyStyle([.furigana, .romaji])
+///
+/// `rubyFuriganaScript(.katakana)` writes furigana in katakana.
 ///
 /// Pass `RubySegment`s directly to show readings from your own data, with
 /// no on-device analysis:
@@ -101,7 +105,8 @@ public struct RubyText: View {
         RubyTextContent(
             content: content,
             furigana: style.contains(.furigana) ? 1 : 0,
-            romaji: style.contains(.romaji) ? 1 : 0,
+            romajiAbove: style.romajiAbove ? 1 : 0,
+            romajiBelow: style.contains(.romaji) && !style.romajiAbove ? 1 : 0,
             readingVisibility: readingVisibility(in: content),
             romajiVisibility: romajiVisibility(in: content),
             wordGaps: wordGaps(in: content),
@@ -247,7 +252,10 @@ extension View {
 private struct RubyTextContent: View {
     @AnimatableIgnored let content: RubyContent
     var furigana: CGFloat
-    var romaji: CGFloat
+    /// Romaji above the text, where furigana would be, and below it.
+    /// Switching between furigana and romaji alone crossfades them above.
+    var romajiAbove: CGFloat
+    var romajiBelow: CGFloat
     var readingVisibility: RubyAnimatableVector
     var romajiVisibility: RubyAnimatableVector
     var wordGaps: RubyAnimatableVector
@@ -261,6 +269,7 @@ private struct RubyTextContent: View {
     @AnimatableIgnored @Environment(\.rubyLineBreaking) private var lineBreaking
     @AnimatableIgnored @Environment(\.rubyShowsWordDetails) private var showsWordDetails
     @AnimatableIgnored @Environment(\.rubyWordTapAction) private var wordTapAction
+    @AnimatableIgnored @Environment(\.rubyFuriganaScript) private var furiganaScript
     @AnimatableIgnored @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AnimatableIgnored @Environment(\.font) private var font
     // Carries Dynamic Type and other traits needed to resolve `font`.
@@ -275,15 +284,23 @@ private struct RubyTextContent: View {
 
     private var isTappable: Bool { showsWordDetails || wordTapAction != nil }
 
+    /// How strongly romaji show, wherever they are.
+    private var romaji: CGFloat { min(1, romajiAbove + romajiBelow) }
+
+    /// How much of the reserved height annotations take above and below
+    /// each line.
+    private var above: CGFloat { min(1, furigana + romajiAbove) }
+    private var below: CGFloat { romajiBelow }
+
     var body: some View {
-        if furigana == 0 && romaji == 0 && reader == nil && textColors.isEmpty && backgroundColors.isEmpty
+        if above == 0 && below == 0 && reader == nil && textColors.isEmpty && backgroundColors.isEmpty
             && wordGaps.isZero && !isTappable {
             Text(Self.plainText(content.string, lineBreaking: lineBreaking))
                 .font(RubyMetrics(font: font ?? .body, in: fontResolutionContext).textFont)
         } else {
             let metrics = RubyMetrics(font: font ?? .body, in: fontResolutionContext)
             let layout = RubyLayout(
-                measurements: .measurements(for: content, metrics: metrics),
+                measurements: .measurements(for: content, metrics: metrics, furiganaScript: furiganaScript),
                 furigana: furigana,
                 romaji: romaji,
                 readingVisibility: readingVisibility,
@@ -311,8 +328,8 @@ private struct RubyTextContent: View {
     }
 
     private func annotatedText(_ layout: RubyLayout, metrics: RubyMetrics, emphasis: RubyEmphasisState?) -> some View {
-        let above = metrics.reservedHeight * furigana
-        let below = metrics.reservedHeight * romaji
+        let above = metrics.reservedHeight * above
+        let below = metrics.reservedHeight * below
 
         return Text(layout.text)
             .font(metrics.textFont)
@@ -323,7 +340,8 @@ private struct RubyTextContent: View {
                 metrics: metrics,
                 paragraphs: layout.paragraphs,
                 furigana: furigana,
-                romaji: romaji,
+                romajiAbove: romajiAbove,
+                romajiBelow: romajiBelow,
                 emphasis: emphasis
             ))
             .modifier(RubyWordTapping(isEnabled: isTappable) { point, geometry in
@@ -363,8 +381,8 @@ private struct RubyTextContent: View {
     /// a word's furigana or romaji counts as a tap on the word.
     private func characterOffset(at point: CGPoint, in geometry: RubyTextGeometry, layout: RubyLayout, metrics: RubyMetrics) -> Int? {
         let point = CGPoint(x: point.x - geometry.origin.x, y: point.y - geometry.origin.y)
-        let above = metrics.reservedHeight * furigana
-        let below = metrics.reservedHeight * romaji
+        let above = metrics.reservedHeight * above
+        let below = metrics.reservedHeight * below
         for (_, line, paragraph, start) in geometry.layout.rubyParagraphLines {
             let bounds = line.typographicBounds.rect
             guard point.y >= bounds.minY - above, point.y < bounds.maxY + below else { continue }
@@ -397,8 +415,8 @@ private struct RubyTextContent: View {
             }
             guard !rect.isNull else { continue }
             let bounds = line.typographicBounds.rect
-            let above = metrics.reservedHeight * furigana
-            let below = metrics.reservedHeight * romaji
+            let above = metrics.reservedHeight * above
+            let below = metrics.reservedHeight * below
             return CGRect(
                 x: rect.minX + geometry.origin.x,
                 y: bounds.minY - above + geometry.origin.y,
@@ -590,23 +608,29 @@ final class RubyMeasurements {
 
     private static let cache = NSCache<NSString, RubyMeasurements>()
 
-    static func measurements(for content: RubyContent, metrics: RubyMetrics) -> RubyMeasurements {
+    static func measurements(for content: RubyContent, metrics: RubyMetrics, furiganaScript: RubyFuriganaScript) -> RubyMeasurements {
         // Content objects are cached too, so the same text read by another
         // analyzer is a different object.
-        let key = "\(metrics.cacheKey) \(ObjectIdentifier(content).hashValue)\n\(content.string)" as NSString
+        let key = "\(metrics.cacheKey) \(furiganaScript) \(ObjectIdentifier(content).hashValue)\n\(content.string)" as NSString
         if let cached = cache.object(forKey: key) { return cached }
-        let measurements = RubyMeasurements(content: content, metrics: metrics)
+        let measurements = RubyMeasurements(
+            content: content,
+            furiganaScript: furiganaScript,
+            baseWidth: metrics.baseWidth(of:),
+            annotationWidth: metrics.annotationWidth(of:)
+        )
         cache.setObject(measurements, forKey: key)
         return measurements
     }
 
-    private convenience init(content: RubyContent, metrics: RubyMetrics) {
-        self.init(content: content, baseWidth: metrics.baseWidth(of:), annotationWidth: metrics.annotationWidth(of:))
-    }
-
     /// Measures `content` with the given text widths, which tests can
     /// supply without fonts.
-    init(content: RubyContent, baseWidth: (String) -> CGFloat, annotationWidth: (String) -> CGFloat) {
+    init(
+        content: RubyContent,
+        furiganaScript: RubyFuriganaScript = .hiragana,
+        baseWidth: (String) -> CGFloat,
+        annotationWidth: (String) -> CGFloat
+    ) {
         let characters = Array(content.string)
         var starts: [Int] = []
         var offset = 0
@@ -621,7 +645,12 @@ final class RubyMeasurements {
         }
 
         let widths = characters.map { baseWidth(String($0)) }
-        let readings = content.words.flatMap { word in word.furigana.map { (reading: $0, word: word.range) } }
+        let readings = content.words.flatMap { word in
+            word.furigana.map { reading in
+                let text = furiganaScript == .katakana ? RubyKana.katakana(reading.text) : reading.text
+                return (reading: (range: reading.range, text: text), word: word.range)
+            }
+        }
         var hasReading = [Bool](repeating: false, count: characters.count)
         for (reading, _) in readings {
             for index in characterRange(reading.range) { hasReading[index] = true }
@@ -720,7 +749,7 @@ final class RubyMeasurements {
     }
 }
 
-/// The attributed text and renderer data for one pair of annotation strengths.
+/// The attributed text and renderer data for one set of annotation strengths.
 struct RubyLayout {
     let text: AttributedString
     let paragraphs: [RubyParagraph]
@@ -806,7 +835,7 @@ struct RubyLayout {
                 let visibility = readingVisibility.value(at: reading.source, default: 1)
                 guard visibility > 0 else { continue }
                 let placed = Self.place(reading.range, paragraphStarts: paragraphStarts)
-                paragraphs[placed.paragraph].above.append(RubyAnnotation(
+                paragraphs[placed.paragraph].furigana.append(RubyAnnotation(
                     id: id, text: reading.text, range: placed.range, baseCount: reading.characters.count,
                     color: colors[reading.characters.lowerBound],
                     opacity: visibility,
@@ -819,7 +848,7 @@ struct RubyLayout {
                 let visibility = romajiVisibility.value(at: word.source, default: 1)
                 guard visibility > 0 else { continue }
                 let placed = Self.place(word.range, paragraphStarts: paragraphStarts)
-                paragraphs[placed.paragraph].below.append(RubyAnnotation(
+                paragraphs[placed.paragraph].romaji.append(RubyAnnotation(
                     id: id, text: word.text, range: placed.range, baseCount: word.characters.count,
                     color: colors[word.characters.lowerBound],
                     opacity: visibility,

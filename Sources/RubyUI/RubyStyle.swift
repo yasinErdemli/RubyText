@@ -7,6 +7,9 @@ import SwiftUI
 ///
 ///     RubyText("日本語を勉強しています。")
 ///         .rubyStyle([.furigana, .romaji])
+///
+/// Either one alone sits above the text. Together, furigana are above
+/// and romaji below.
 public struct RubyStyle: OptionSet, Hashable, Sendable {
     public let rawValue: Int
 
@@ -14,10 +17,29 @@ public struct RubyStyle: OptionSet, Hashable, Sendable {
         self.rawValue = rawValue
     }
 
-    /// Hiragana readings above words that contain kanji.
+    /// Readings above words that contain kanji, in hiragana unless
+    /// `rubyFuriganaScript(_:)` sets katakana.
     public static let furigana = RubyStyle(rawValue: 1 << 0)
-    /// Romaji below every Japanese word.
+    /// Romaji for every Japanese word: above the text on their own, and
+    /// below it with furigana.
     public static let romaji = RubyStyle(rawValue: 1 << 1)
+
+    /// Whether romaji are drawn above the text, where furigana would be.
+    var romajiAbove: Bool { contains(.romaji) && !contains(.furigana) }
+}
+
+/// The kana `RubyText` writes furigana in.
+///
+///     RubyText("東京タワーに登った。")
+///         .rubyStyle()
+///         .rubyFuriganaScript(.katakana)   // トウキョウ over 東京
+public enum RubyFuriganaScript: Hashable, Sendable {
+    /// Hiragana, as Japanese text usually writes readings. Readings you
+    /// supply in markup keep the kana you wrote them in: {本気|マジ}.
+    case hiragana
+    /// Katakana, as dictionaries write on'yomi, and some texts every
+    /// reading.
+    case katakana
 }
 
 /// Which kanji get furigana, so learners only see readings they need.
@@ -161,6 +183,8 @@ extension EnvironmentValues {
     @Entry var rubyStyle: RubyStyle = []
     /// Which kanji `RubyText` views show furigana for. All by default.
     @Entry var rubyFuriganaFilter = RubyFuriganaFilter.all
+    /// The kana `RubyText` views write furigana in. Hiragana by default.
+    @Entry var rubyFuriganaScript = RubyFuriganaScript.hiragana
     /// Space `RubyText` views draw between words. None by default.
     @Entry var rubySpacing = RubySpacing.none
     /// Where `RubyText` views may break lines. Between words by default.
@@ -181,6 +205,12 @@ extension View {
     /// for, such as `.above(.n4)` to hide readings of N5 and N4 kanji.
     public func rubyFurigana(_ filter: RubyFuriganaFilter) -> some View {
         environment(\.rubyFuriganaFilter, filter)
+    }
+
+    /// Sets the kana `RubyText` views in this hierarchy write furigana in,
+    /// such as `.katakana` for トウキョウ over 東京.
+    public func rubyFuriganaScript(_ script: RubyFuriganaScript) -> some View {
+        environment(\.rubyFuriganaScript, script)
     }
 
     /// Adds visual space between words or reading phrases in `RubyText`

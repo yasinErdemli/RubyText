@@ -44,7 +44,7 @@ let package = Package(
         ),
         .target(
             name: "RubyUI",
-            dependencies: ["RubyCore"],
+            dependencies: ["RubyCore", "RubyTransliteration"],
             swiftSettings: swiftSettings + [.defaultIsolation(MainActor.self)]
         ),
         .testTarget(

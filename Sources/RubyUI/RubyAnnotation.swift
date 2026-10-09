@@ -52,8 +52,9 @@ struct RubyTrackedRange {
 /// Everything the renderer needs for one paragraph, sorted by range.
 struct RubyParagraph {
     var tracked: [RubyTrackedRange] = []
-    var above: [RubyAnnotation] = []
-    var below: [RubyAnnotation] = []
+    var furigana: [RubyAnnotation] = []
+    /// Drawn above the text or below it, depending on the style.
+    var romaji: [RubyAnnotation] = []
     var backgrounds: [RubyColoredRange] = []
 }
 

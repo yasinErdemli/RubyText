@@ -1,17 +1,25 @@
 import RubyCore
 import SwiftUI
 
-/// Draws text normally, then draws furigana above and romaji below the
-/// annotated ranges, and emphasizes the word a `RubyReader` is speaking.
+/// Draws text normally, then draws furigana above and romaji above or
+/// below the annotated ranges, and emphasizes the word a `RubyReader` is
+/// speaking.
 struct RubyRenderer: TextRenderer {
     let metrics: RubyMetrics
     /// Annotation data for each paragraph of the text.
     let paragraphs: [RubyParagraph]
-    /// How strongly furigana and romaji are shown, from 0 to 1. Values in
-    /// between occur while a style change animates.
+    /// How strongly furigana, romaji above the text, and romaji below it
+    /// are shown, from 0 to 1. Values in between occur while a style
+    /// change animates.
     let furigana: CGFloat
-    let romaji: CGFloat
+    let romajiAbove: CGFloat
+    let romajiBelow: CGFloat
     var emphasis: RubyEmphasisState?
+
+    /// How much of the reserved height annotations take above and below
+    /// each line.
+    private var above: CGFloat { min(1, furigana + romajiAbove) }
+    private var below: CGFloat { romajiBelow }
 
     /// How much the spoken word scales up with `.grow`.
     private static let growScale: CGFloat = 0.12
@@ -37,8 +45,8 @@ struct RubyRenderer: TextRenderer {
     func draw(layout: Text.Layout, in context: inout GraphicsContext) {
         // Fragments in layout order. An annotation normally yields one
         // fragment, but gets one per line if its base text wraps.
-        var above: [Fragment] = []
-        var below: [Fragment] = []
+        var furiganaFragments: [Fragment] = []
+        var romajiFragments: [Fragment] = []
         // Bounds of the spoken word on each line it appears on.
         var emphasizedLines: [Int: CGRect] = [:]
         // Annotations may extend past their words, but not past the text.
@@ -103,19 +111,19 @@ struct RubyRenderer: TextRenderer {
 
                 // Collect the boxes that annotations and emphasis sit around.
                 for index in 0..<run.count {
-                    let aboveAnnotation = Self.item(at: offsets[index], in: data.above, range: \.range)
-                    let belowAnnotation = Self.item(at: offsets[index], in: data.below, range: \.range)
+                    let reading = Self.item(at: offsets[index], in: data.furigana, range: \.range)
+                    let romaji = Self.item(at: offsets[index], in: data.romaji, range: \.range)
                     let spoken = isSpoken(index)
-                    guard aboveAnnotation != nil || belowAnnotation != nil || spoken else { continue }
+                    guard reading != nil || romaji != nil || spoken else { continue }
 
                     let glyph = Self.glyphBox(in: run, at: index, offset: offsets[index], tracked: data.tracked)
                     let rect = CGRect(x: glyph.minX, y: lineBounds.minY, width: glyph.width, height: lineBounds.height)
                     if spoken { wordRect = wordRect.union(rect) }
-                    if let aboveAnnotation {
-                        Self.add(aboveAnnotation, rect: rect, paragraph: paragraph, line: lineNumber, to: &above)
+                    if let reading {
+                        Self.add(reading, rect: rect, paragraph: paragraph, line: lineNumber, to: &furiganaFragments)
                     }
-                    if let belowAnnotation {
-                        Self.add(belowAnnotation, rect: rect, paragraph: paragraph, line: lineNumber, to: &below)
+                    if let romaji {
+                        Self.add(romaji, rect: rect, paragraph: paragraph, line: lineNumber, to: &romajiFragments)
                     }
                 }
             }
@@ -137,7 +145,7 @@ struct RubyRenderer: TextRenderer {
             var layer = context
             layer.opacity = furigana
             layer.translateBy(x: 0, y: (1 - furigana) * slide)
-            let pieces = Self.pieces(of: above)
+            let pieces = Self.pieces(of: furiganaFragments)
             // Readings of neighboring kanji (経済|政策) may touch; others
             // keep a little space.
             let centers = placeAnnotations(pieces, spreads: true, spacing: metrics.romajiSpacing / 2, within: edges, in: context)
@@ -148,12 +156,14 @@ struct RubyRenderer: TextRenderer {
                 drawFurigana(text, over: fragment.rect, at: center, scale: fragment.annotation.scale, spread: !isSplit, tinted: tinted, color: fragment.annotation.color, in: &annotationContext)
             }
         }
-        if romaji > 0 {
+        guard romajiAbove > 0 || romajiBelow > 0 else { return }
+        let pieces = Self.pieces(of: romajiFragments)
+        let centers = placeAnnotations(pieces, spreads: false, spacing: metrics.romajiSpacing, within: edges, in: context)
+        // Romaji switching sides fade out on one and in on the other.
+        for (strength, isAbove) in [(romajiAbove, true), (romajiBelow, false)] where strength > 0 {
             var layer = context
-            layer.opacity = romaji
-            layer.translateBy(x: 0, y: -(1 - romaji) * slide)
-            let pieces = Self.pieces(of: below)
-            let centers = placeAnnotations(pieces, spreads: false, spacing: metrics.romajiSpacing, within: edges, in: context)
+            layer.opacity = strength
+            layer.translateBy(x: 0, y: (isAbove ? 1 : -1) * (1 - strength) * slide)
             for ((text, fragment, _), center) in zip(pieces, centers) {
                 var annotationContext = layer
                 annotationContext.opacity *= fragment.annotation.opacity
@@ -169,9 +179,12 @@ struct RubyRenderer: TextRenderer {
                 } else {
                     .style(.tertiary)
                 }
-                annotationContext.translateBy(x: center, y: fragment.rect.maxY + metrics.gap)
+                annotationContext.translateBy(
+                    x: center,
+                    y: isAbove ? fragment.rect.minY - metrics.gap : fragment.rect.maxY + metrics.gap
+                )
                 annotationContext.scaleBy(x: fragment.annotation.scale, y: 1)
-                annotationContext.draw(resolved, at: .zero, anchor: .top)
+                annotationContext.draw(resolved, at: .zero, anchor: isAbove ? .bottom : .top)
             }
         }
     }
@@ -207,8 +220,8 @@ struct RubyRenderer: TextRenderer {
             // Inset slightly so neighboring words read as separate boxes.
             var rect = CGRect(x: box.rect.minX, y: lineBounds.minY, width: box.rect.width, height: lineBounds.height)
                 .insetBy(dx: metrics.gap * 0.5, dy: -metrics.gap * 0.5)
-            rect.origin.y -= metrics.reservedHeight * furigana
-            rect.size.height += metrics.reservedHeight * (furigana + romaji)
+            rect.origin.y -= metrics.reservedHeight * above
+            rect.size.height += metrics.reservedHeight * (above + below)
             // Lightened so text in the primary color stays readable.
             context.fill(
                 RoundedRectangle(cornerRadius: metrics.reservedHeight * 0.3).path(in: rect),
@@ -233,8 +246,8 @@ struct RubyRenderer: TextRenderer {
         if emphasis.options.contains(.highlight) {
             // Cover the word's annotations too.
             var box = rect.insetBy(dx: -metrics.gap * 2, dy: -metrics.gap)
-            box.origin.y -= metrics.reservedHeight * furigana
-            box.size.height += metrics.reservedHeight * (furigana + romaji)
+            box.origin.y -= metrics.reservedHeight * above
+            box.size.height += metrics.reservedHeight * (above + below)
             // Use the background style if one is set, such as with
             // `.backgroundStyle(.yellow)`; otherwise a soft tint. The default
             // background (`nil`) is the system background, which would be
