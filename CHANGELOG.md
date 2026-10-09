@@ -41,6 +41,12 @@ The first release.
   through the environment like other text styles, with animated changes that
   respect Reduce Motion.
 - Furigana in hiragana, katakana or romaji, or inline in parentheses.
+  Readings keep their natural spacing, centered over their kanji; long ones
+  flow over neighboring kana and get space around their word, never inside
+  it.
+- Lines break between phrases, or anywhere with `.rubyLineBreaking(.anywhere)`,
+  which still keeps each paragraph's last word together so no line holds a
+  single kana (す。).
 - Whole text written in hiragana, katakana or romaji with
   `rubyTranscription(_:)`, rolling glyph by glyph into the new text.
 - Romaji in Hepburn, Nihon-shiki or passport style.

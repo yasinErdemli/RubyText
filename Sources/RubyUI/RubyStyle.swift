@@ -178,7 +178,8 @@ public enum RubyLineBreaking: Hashable, Sendable {
     /// still breaks within it.
     case words
     /// Between almost any two characters, following the rules against
-    /// starting a line with 。 or ゃ.
+    /// starting a line with 。 or ゃ. Each paragraph's last word stays
+    /// together, so its last line never holds a single kana (す。).
     case anywhere
 
     /// The language the text is set in, which also selects its line
@@ -189,6 +190,65 @@ public enum RubyLineBreaking: Hashable, Sendable {
         switch self {
         case .words: "ja-u-lw-phrase"
         case .anywhere: "ja"
+        }
+    }
+
+    /// Sets the language of `text`, which selects how its lines break.
+    /// Breaking anywhere, `endings` break only between phrases, so they
+    /// stay together on a line.
+    ///
+    /// - Parameter endings: UTF-16 ranges from `endings(in:)`, found only
+    ///   when breaking anywhere.
+    func setLanguage(of text: inout AttributedString, endings: @autoclosure () -> [Range<Int>]) {
+        text.languageIdentifier = languageIdentifier
+        guard self == .anywhere else { return }
+        for ending in endings() {
+            let lower = text.utf16.index(text.startIndex, offsetBy: ending.lowerBound)
+            let upper = text.utf16.index(lower, offsetBy: ending.count)
+            text[lower..<upper].languageIdentifier = Self.words.languageIdentifier
+        }
+    }
+
+    /// The end of each paragraph to keep on one line: its last word, with
+    /// the words before it until they hold two letters, and the punctuation
+    /// after them. Kept together, a paragraph's last line never holds a
+    /// single kana: ます。, not す。, and 好きだ。, not だ。.
+    ///
+    /// Each ending includes the line break after it, if there is one: the
+    /// language only changes where lines break if it reaches the end of the
+    /// paragraph.
+    static func endings(in content: RubyContent) -> [Range<Int>] {
+        let characters = Array(content.string)
+        var starts = [0]
+        for character in characters { starts.append(starts[starts.count - 1] + character.utf16.count) }
+        // Where the word each character belongs to starts.
+        var wordStarts = Array(characters.indices)
+        for word in content.words {
+            let lower = RubyMeasurements.index(of: word.range.lowerBound, in: starts)
+            let upper = RubyMeasurements.index(of: word.range.upperBound, in: starts)
+            for index in lower..<upper { wordStarts[index] = lower }
+        }
+        func isLetter(_ character: Character) -> Bool {
+            !(character.isPunctuation || character.isSymbol || character.isWhitespace)
+        }
+
+        var paragraphs: [Range<Int>] = []
+        var lower = 0
+        for (index, character) in characters.enumerated() where character.isNewline {
+            paragraphs.append(lower..<index)
+            lower = index + 1
+        }
+        paragraphs.append(lower..<characters.count)
+
+        return paragraphs.compactMap { paragraph in
+            var start = paragraph.upperBound
+            var letters = 0
+            while letters < 2, let last = characters[paragraph.lowerBound..<start].lastIndex(where: isLetter) {
+                start = max(wordStarts[last], paragraph.lowerBound)
+                letters += characters[start...last].count(where: isLetter)
+            }
+            guard start < paragraph.upperBound else { return nil }
+            return starts[start]..<starts[min(paragraph.upperBound + 1, characters.count)]
         }
     }
 }

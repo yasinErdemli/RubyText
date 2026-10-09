@@ -1,5 +1,6 @@
 import CoreText
 import RubyCore
+import RubyTransliteration
 @testable import RubyUI
 import SwiftUI
 import Testing
@@ -77,10 +78,63 @@ import Testing
         #expect(withSpaces > withoutSpaces * 1.5, "\(withSpaces) with spaces, \(withoutSpaces) without")
     }
 
+    @Test func endingsHoldTheLastWords() {
+        func endings(_ string: String) -> [String] {
+            let content = RubyContent.content(for: string)
+            let utf16 = Array(content.string.utf16)
+            return RubyLineBreaking.endings(in: content).map {
+                String(utf16CodeUnits: Array(utf16[$0]), count: $0.count)
+            }
+        }
+        #expect(endings("日本語を勉強しています。") == ["ます。"])
+        // だ alone has one letter, so the word before it joins.
+        #expect(endings("夏は夜が好きだ。") == ["好きだ。"])
+        // Each takes its paragraph's line break.
+        #expect(endings("春は桜がきれいだ。\n公園で花見をする人が多い。") == ["きれいだ。\n", "多い。"])
+        #expect(endings("「はい」") == ["はい」"])
+        // Paragraphs without letters have none.
+        #expect(endings("。\n\n猫が好き") == ["好き"])
+    }
+
+    /// Breaking anywhere, the last line of a paragraph never holds a single
+    /// kana (す。), with or without annotations.
+    @Test(arguments: [RubyLineBreaking.words, .anywhere])
+    func paragraphsNeverEndWithOneKana(_ lineBreaking: RubyLineBreaking) throws {
+        let metrics = RubyMetrics(font: .title3, in: try Self.fontContext())
+        let texts = [
+            Self.sentence,
+            "春は桜がきれいだ。公園で花見をする人が多い。\n夏は夜が好きだ。窓を開けると、涼しい風が入ってくる。",
+            "侍の魂と志を胸に、暁の湖で雷を待つ。",
+        ]
+        for string in texts {
+            let content = RubyContent.content(for: string)
+            let measurements = RubyMeasurements.measurements(for: content, metrics: metrics, furiganaScript: .hiragana, romanization: .hepburn)
+            for annotations in [CGFloat(0), 1] {
+                let layout = RubyLayout(
+                    measurements: measurements, furigana: annotations, romaji: annotations,
+                    readingVisibility: .zero, romajiVisibility: .zero, wordGaps: .zero,
+                    fontSize: metrics.fontSize, romajiSpacing: metrics.romajiSpacing,
+                    lineBreaking: lineBreaking, insertedSpaceWidth: 0,
+                    textColors: [], backgrounds: []
+                )
+                // From six characters a line, so the last words fit on one.
+                for width in stride(from: metrics.fontSize * 6, through: metrics.fontSize * 20, by: metrics.fontSize / 4) {
+                    let paragraphs = Self.paragraphLines(of: Text(layout.text).font(metrics.textFont), width: width, string: content.string)
+                    #expect(paragraphs.count == string.count { $0 == "\n" } + 1)
+                    for lines in paragraphs where lines.count > 1 {
+                        let letters = lines[lines.count - 1].filter { !($0.isPunctuation || $0.isWhitespace) }
+                        #expect(letters.count > 1, "\(lineBreaking) \(width): \(lines)")
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: Helpers
 
     nonisolated(unsafe) private static var capturedContext: Font.Context?
     nonisolated(unsafe) private static var recordedLines: [String] = []
+    nonisolated(unsafe) private static var recordedParagraphs: [[String]] = []
 
     private struct ContextCapture: View {
         @Environment(\.fontResolutionContext) private var context
@@ -104,6 +158,31 @@ import Testing
                 return String(utf16CodeUnits: Array(utf16[range]), count: range.count)
             }
         }
+    }
+
+    /// Records the text of each line SwiftUI lays out, by paragraph.
+    private struct ParagraphRecorder: TextRenderer {
+        let string: String
+        func draw(layout: Text.Layout, in context: inout GraphicsContext) {
+            let utf16 = Array(string.utf16)
+            var paragraphStarts = [0]
+            for (offset, unit) in utf16.enumerated() where unit == 0x0A { paragraphStarts.append(offset + 1) }
+            var paragraphs = [[String]](repeating: [], count: paragraphStarts.count)
+            for (_, line, paragraph, start) in layout.rubyParagraphLines {
+                let indices = line.flatMap(\.characterIndices)
+                guard let lower = indices.min(), let upper = indices.max() else { continue }
+                let range = (paragraphStarts[paragraph] + start.distance(to: lower))...(paragraphStarts[paragraph] + start.distance(to: upper))
+                paragraphs[paragraph].append(String(utf16CodeUnits: Array(utf16[range]), count: range.count))
+            }
+            RubyLineBreakingTests.recordedParagraphs = paragraphs
+        }
+    }
+
+    private static func paragraphLines(of text: Text, width: CGFloat, string: String) -> [[String]] {
+        recordedParagraphs = []
+        let view = text.textRenderer(ParagraphRecorder(string: string)).frame(width: width, alignment: .leading)
+        _ = ImageRenderer(content: view).uiImage
+        return recordedParagraphs
     }
 
     private static func fontContext() throws -> Font.Context {

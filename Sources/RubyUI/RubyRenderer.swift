@@ -148,23 +148,23 @@ struct RubyRenderer: TextRenderer {
             let pieces = Self.pieces(of: furiganaFragments)
             // Readings of neighboring kanji (経済|政策) may touch; others
             // keep a little space.
-            let centers = placeAnnotations(pieces, spreads: true, spacing: metrics.romajiSpacing / 2, within: edges, in: context)
-            for ((text, fragment, isSplit), center) in zip(pieces, centers) {
+            let centers = placeAnnotations(pieces, adjoining: true, spacing: metrics.romajiSpacing / 2, within: edges, in: context)
+            for ((text, fragment), center) in zip(pieces, centers) {
                 var annotationContext = layer
                 annotationContext.opacity *= fragment.annotation.opacity
                 let tinted = emphasize(fragment, in: &annotationContext, lines: emphasizedLines)
-                drawFurigana(text, over: fragment.rect, at: center, scale: fragment.annotation.scale, spread: !isSplit && Self.spreads(text), tinted: tinted, color: fragment.annotation.color, in: &annotationContext)
+                drawFurigana(text, over: fragment.rect, at: center, scale: fragment.annotation.scale, tinted: tinted, color: fragment.annotation.color, in: &annotationContext)
             }
         }
         guard romajiAbove > 0 || romajiBelow > 0 else { return }
         let pieces = Self.pieces(of: romajiFragments)
-        let centers = placeAnnotations(pieces, spreads: false, spacing: metrics.romajiSpacing, within: edges, in: context)
+        let centers = placeAnnotations(pieces, adjoining: false, spacing: metrics.romajiSpacing, within: edges, in: context)
         // Romaji switching sides fade out on one and in on the other.
         for (strength, isAbove) in [(romajiAbove, true), (romajiBelow, false)] where strength > 0 {
             var layer = context
             layer.opacity = strength
             layer.translateBy(x: 0, y: (isAbove ? 1 : -1) * (1 - strength) * slide)
-            for ((text, fragment, _), center) in zip(pieces, centers) {
+            for ((text, fragment), center) in zip(pieces, centers) {
                 var annotationContext = layer
                 annotationContext.opacity *= fragment.annotation.opacity
                 let tinted = emphasize(fragment, in: &annotationContext, lines: emphasizedLines)
@@ -338,26 +338,25 @@ struct RubyRenderer: TextRenderer {
     /// line; then it moves inside, and neighbors on its line move along so
     /// none overlap.
     ///
-    /// - Parameter spreads: Whether readings narrower than their base are
-    ///   spread across it, taking its full width.
+    /// - Parameter adjoining: Whether annotations over bases that touch
+    ///   may touch too, as readings of neighboring kanji do.
     private func placeAnnotations(
-        _ pieces: [(String, Fragment, Bool)],
-        spreads: Bool,
+        _ pieces: [(text: String, fragment: Fragment)],
+        adjoining: Bool,
         spacing: CGFloat,
         within edges: ClosedRange<CGFloat>,
         in context: GraphicsContext
     ) -> [CGFloat] {
-        let widths = pieces.map { text, fragment, isSplit in
-            let natural = context.resolve(metrics.annotationText(text))
+        let widths = pieces.map { text, fragment in
+            context.resolve(metrics.annotationText(text))
                 .measure(in: CGSize(width: CGFloat.infinity, height: .infinity)).width * fragment.annotation.scale
-            return spreads && !isSplit && text.count > 1 && Self.spreads(text) ? max(natural, fragment.rect.width) : natural
         }
-        var centers = pieces.map { $0.1.rect.midX }
-        for indices in Dictionary(grouping: pieces.indices, by: { pieces[$0].1.line }).values {
+        var centers = pieces.map(\.fragment.rect.midX)
+        for indices in Dictionary(grouping: pieces.indices, by: { pieces[$0].fragment.line }).values {
             let order = indices.sorted { centers[$0] < centers[$1] }
             // Space between two annotations, unless their bases touch.
             func space(_ first: Int, _ second: Int) -> CGFloat {
-                pieces[second].1.rect.minX - pieces[first].1.rect.maxX > 0.5 || !spreads ? spacing : 0
+                !adjoining || pieces[second].fragment.rect.minX - pieces[first].fragment.rect.maxX > 0.5 ? spacing : 0
             }
             // Left to right, keep each clear of the edge and the one before.
             func clearLeadingEdge() {
@@ -387,24 +386,19 @@ struct RubyRenderer: TextRenderer {
 
     // MARK: Annotations
 
-    /// Draws a reading above `rect`. Like HTML `<ruby>`, a reading narrower
-    /// than its base is spread across it.
+    /// Draws a reading above `rect`, centered at `center`. Readings keep
+    /// their natural spacing: one narrower than its base is centered over
+    /// it rather than spread across it (き ょ う), and one wider gets space
+    /// around its word, never between its kana.
     private func drawFurigana(
         _ text: String,
         over rect: CGRect,
         at center: CGFloat,
         scale: CGFloat,
-        spread: Bool,
         tinted: Bool,
         color: Color?,
         in context: inout GraphicsContext
     ) {
-        let natural = context.resolve(metrics.annotationText(text))
-        let width = natural.measure(in: CGSize(width: CGFloat.infinity, height: .infinity)).width
-        var tracking: CGFloat = 0
-        if spread, scale == 1, text.count > 1 {
-            tracking = max(0, rect.width - width) / CGFloat(text.count)
-        }
         // Furigana use the secondary foreground style, so
         // `.foregroundStyle(_:_:)` can color them separately from the text,
         // unless the word they belong to is colored. The style is part of
@@ -416,20 +410,11 @@ struct RubyRenderer: TextRenderer {
         } else {
             AnyShapeStyle(.secondary)
         }
-        let resolved = context.resolve(
-            metrics.annotationText(text).tracking(tracking).foregroundStyle(style)
-        )
-        // Offset by half the trailing tracking so the visible glyphs are centered.
+        let resolved = context.resolve(metrics.annotationText(text).foregroundStyle(style))
         var drawing = context
-        drawing.translateBy(x: center + tracking / 2, y: rect.minY - metrics.gap)
+        drawing.translateBy(x: center, y: rect.minY - metrics.gap)
         drawing.scaleBy(x: scale, y: 1)
         drawing.draw(resolved, at: .zero, anchor: .bottom)
-    }
-
-    /// Whether a reading narrower than its base may be spread across it,
-    /// as kana are in `<ruby>`. Romaji furigana keep their letter spacing.
-    private static func spreads(_ text: String) -> Bool {
-        !text.contains(where: \.isASCII)
     }
 
     private static func add(
@@ -527,8 +512,8 @@ struct RubyRenderer: TextRenderer {
     /// Pairs each fragment with the annotation text to draw for it. When the
     /// base wraps, the text is divided in proportion to how many base
     /// characters each line holds, so it isn't duplicated.
-    private static func pieces(of fragments: [Fragment]) -> [(String, Fragment, Bool)] {
-        var result: [(String, Fragment, Bool)] = []
+    private static func pieces(of fragments: [Fragment]) -> [(text: String, fragment: Fragment)] {
+        var result: [(text: String, fragment: Fragment)] = []
         var index = 0
         while index < fragments.count {
             let id = fragments[index].annotation.id
@@ -536,7 +521,7 @@ struct RubyRenderer: TextRenderer {
             while end + 1 < fragments.count, fragments[end + 1].annotation.id == id { end += 1 }
 
             if index == end {
-                result.append((fragments[index].annotation.text, fragments[index], false))
+                result.append((fragments[index].annotation.text, fragments[index]))
             } else {
                 let text = Array(fragments[index].annotation.text)
                 let baseCount = max(fragments[index].annotation.baseCount, 1)
@@ -557,7 +542,7 @@ struct RubyRenderer: TextRenderer {
                           Self.attachesToPrevious.contains(text[stop]) || !Self.isRomajiBreak(in: text, at: stop) {
                         stop += 1
                     }
-                    result.append((String(text[start..<stop]), fragment, true))
+                    result.append((String(text[start..<stop]), fragment))
                     start = stop
                 }
             }

@@ -419,7 +419,7 @@ private struct RubyTextContent: View {
     var body: some View {
         if above == 0 && below == 0 && reader == nil && textColors.isEmpty && backgroundColors.isEmpty
             && wordGaps.isZero && content.spaces.isEmpty && !isTappable {
-            Text(Self.plainText(content.string, language: lineBreaking.languageIdentifier).speaking(speech))
+            Text(Self.plainText(content, lineBreaking: lineBreaking).speaking(speech))
                 .font(RubyMetrics(font: font ?? .body, in: fontResolutionContext).textFont)
                 .contentTransition(.numericText())
         } else {
@@ -438,7 +438,7 @@ private struct RubyTextContent: View {
                 wordGaps: wordGaps,
                 fontSize: metrics.fontSize,
                 romajiSpacing: metrics.romajiSpacing,
-                language: lineBreaking.languageIdentifier,
+                lineBreaking: lineBreaking,
                 insertedSpaceWidth: spacing.width,
                 textColors: textColors,
                 backgrounds: backgrounds()
@@ -599,9 +599,9 @@ private struct RubyTextContent: View {
 
     /// Text without annotations, tagged as Japanese so lines break the
     /// same way as annotated text.
-    private static func plainText(_ string: String, language: String) -> AttributedString {
-        var text = AttributedString(string)
-        text.languageIdentifier = language
+    private static func plainText(_ content: RubyContent, lineBreaking: RubyLineBreaking) -> AttributedString {
+        var text = AttributedString(content.string)
+        lineBreaking.setLanguage(of: &text, endings: RubyLineBreaking.endings(in: content))
         return text
     }
 
@@ -839,6 +839,9 @@ final class RubyMeasurements {
     let insertedSpaces: [Int]
     /// UTF-16 offset where each paragraph starts.
     let paragraphStarts: [Int]
+    /// The end of each paragraph, kept on one line when lines may break
+    /// anywhere; see `RubyLineBreaking.endings(in:)`.
+    let endings: [Range<Int>]
 
     private static let cache = NSCache<NSString, RubyMeasurements>()
 
@@ -976,6 +979,7 @@ final class RubyMeasurements {
         self.romaji = romaji
         insertedSpaces = content.spaces.map { Self.index(of: $0, in: starts) }
         self.paragraphStarts = paragraphStarts
+        endings = RubyLineBreaking.endings(in: content)
     }
 
     /// Index of the character starting at a UTF-16 offset (binary search).
@@ -1005,7 +1009,7 @@ struct RubyLayout {
         wordGaps: RubyAnimatableVector,
         fontSize: CGFloat,
         romajiSpacing: CGFloat,
-        language: String,
+        lineBreaking: RubyLineBreaking,
         insertedSpaceWidth: CGFloat,
         textColors: [RubyColoredRange],
         backgrounds: [RubyColoredRange]
@@ -1061,7 +1065,7 @@ struct RubyLayout {
         }
         // The language decides where lines may break, such as only between
         // phrases. It's a standard attribute, so copying still works.
-        text.languageIdentifier = language
+        lineBreaking.setLanguage(of: &text, endings: measurements.endings)
         self.text = text
 
         // Layout character indices restart at each paragraph, so ranges are
