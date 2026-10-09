@@ -1,5 +1,4 @@
 import RubyCore
-import RubyTransliteration
 import SwiftUI
 
 /// Japanese text that can show furigana or romaji above its words, or
@@ -14,7 +13,10 @@ import SwiftUI
 ///         .textSelection(.enabled)
 ///         .rubyStyle([.furigana, .romaji])
 ///
-/// `rubyFuriganaScript(.katakana)` writes furigana in katakana.
+/// Readings can also be written into the text itself: in parentheses
+/// after each kanji with `rubyFuriganaPosition(.inline)`, or as the whole
+/// text in hiragana, katakana, or romaji with `rubyTranscription(_:)`.
+/// `rubyFuriganaScript(_:)` writes furigana in katakana or romaji.
 ///
 /// Pass `RubySegment`s directly to show readings from your own data, with
 /// no on-device analysis:
@@ -22,7 +24,8 @@ import SwiftUI
 ///     RubyText(segments: mySegments)
 ///
 /// Changing the style animates: annotations fade in or out, and the line
-/// spacing and letter spacing they need ease to their new values.
+/// spacing and letter spacing they need ease to their new values. Text
+/// rewritten in another script crossfades.
 ///
 /// Furigana use the secondary foreground style and romaji the tertiary one,
 /// so they're quieter than the text by default and can be colored with the
@@ -44,7 +47,8 @@ import SwiftUI
 /// reading depends on their meaning.
 ///
 /// Annotations are drawn by `RubyRenderer` and aren't part of the text
-/// content, so selection, copy, and VoiceOver only see the base text.
+/// content, so selection, copy, and VoiceOver only see the text, as
+/// written or as rewritten.
 public struct RubyText: View {
     private enum Input {
         case markup(String)
@@ -54,6 +58,9 @@ public struct RubyText: View {
 
     @Environment(\.rubyAnalyzer) private var analyzer
     @Environment(\.rubyStyle) private var style
+    @Environment(\.rubyFuriganaScript) private var furiganaScript
+    @Environment(\.rubyFuriganaPosition) private var furiganaPosition
+    @Environment(\.rubyTranscription) private var transcription
     @Environment(\.rubyFuriganaFilter) private var furiganaFilter
     @Environment(\.rubyDigitReadingsHidden) private var digitReadingsHidden
     @Environment(\.rubySpacing) private var spacing
@@ -94,7 +101,7 @@ public struct RubyText: View {
         // Cached per markup or segment array, so this is cheap after the
         // first time. The dictionary's readings show until the model's
         // arrive.
-        let content: RubyContent = if let modelContent, modelContent.key == modelKey {
+        let analyzed: RubyContent = if let modelContent, modelContent.key == modelKey {
             modelContent.content
         } else {
             switch input {
@@ -102,11 +109,13 @@ public struct RubyText: View {
             case .segments(let segments): .content(for: segments)
             }
         }
+        let content = rewritten(analyzed)
+        let placement = RubyPlacement(style: style, furiganaPosition: furiganaPosition, transcription: transcription)
         RubyTextContent(
             content: content,
-            furigana: style.contains(.furigana) ? 1 : 0,
-            romajiAbove: style.romajiAbove ? 1 : 0,
-            romajiBelow: style.contains(.romaji) && !style.romajiAbove ? 1 : 0,
+            furigana: placement.furigana ? 1 : 0,
+            romajiAbove: placement.romajiAbove ? 1 : 0,
+            romajiBelow: placement.romajiBelow ? 1 : 0,
             readingVisibility: readingVisibility(in: content),
             romajiVisibility: romajiVisibility(in: content),
             wordGaps: wordGaps(in: content),
@@ -115,7 +124,8 @@ public struct RubyText: View {
             // on every frame.
             textColors: RubyTextContent.coloredRanges(wordColoring.text, in: content),
             backgroundColors: RubyTextContent.coloredRanges(wordColoring.background, in: content),
-            selectedRange: selectedWord?.range,
+            // Word details describe the word as written.
+            selectedRange: selectedWord.map { content.range(fromOriginal: $0.range) },
             selectedWord: $selectedWord,
             selectedRect: $selectedRect
         )
@@ -126,12 +136,22 @@ public struct RubyText: View {
         // Annotations slide and lines move apart, so with Reduce Motion the
         // style switches without animating.
         .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: style)
+        .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: furiganaScript)
+        .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: furiganaPosition)
+        .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: transcription)
         .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: furiganaFilter)
         .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: digitReadingsHidden)
         .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: spacing)
         .task(id: modelKey) {
             await loadModelReadings()
         }
+    }
+
+    /// `content` as the transcription or inline furigana write it.
+    private func rewritten(_ content: RubyContent) -> RubyContent {
+        if let transcription { return content.transcribed(to: transcription) }
+        if style.contains(.furigana), furiganaPosition == .inline { return content.withInlineReadings(in: furiganaScript) }
+        return content
     }
 
     /// What the model's readings depend on: the markup, the analyzer, and
@@ -191,7 +211,10 @@ public struct RubyText: View {
     /// font size. One value per offset, so switching between word and
     /// phrase spacing animates each space separately.
     private func wordGaps(in content: RubyContent) -> RubyAnimatableVector {
-        let boundaries = spacing.boundaries(in: content)
+        // Romaji are spaced already.
+        guard transcription != .romaji else { return .zero }
+        // Words and phrases are found in the text as written.
+        let boundaries = spacing.boundaries(in: content.original ?? content).map(content.offset(fromOriginal:))
         guard !boundaries.isEmpty else { return .zero }
         var values = [Double](repeating: 0, count: content.string.utf16.count + 1)
         for offset in boundaries { values[offset] = spacing.width }
@@ -315,7 +338,7 @@ private struct RubyTextContent: View {
 
             if let reader {
                 // Only tick while this text is the one being read.
-                let isReadingThis = reader.text == content.string && reader.isSpeaking
+                let isReadingThis = reader.text == content.sourceString && reader.isSpeaking
                 TimelineView(.animation(paused: !isReadingThis || reader.isPaused)) { _ in
                     annotatedText(layout, metrics: metrics, emphasis: isReadingThis
                         ? emphasisState(reader: reader, layout: layout)
@@ -333,6 +356,8 @@ private struct RubyTextContent: View {
 
         return Text(layout.text)
             .font(metrics.textFont)
+            // Text rewritten in another script fades into the new one.
+            .contentTransition(.opacity)
             .lineSpacing(above + below)
             .padding(.top, above)
             .padding(.bottom, below)
@@ -364,12 +389,16 @@ private struct RubyTextContent: View {
 
     private func tapWord(at point: CGPoint, in geometry: RubyTextGeometry, layout: RubyLayout, metrics: RubyMetrics) {
         guard let offset = characterOffset(at: point, in: geometry, layout: layout, metrics: metrics),
-              let range = content.dictionaryWords.first(where: { $0.contains(offset) })
+              let index = content.dictionaryWords.firstIndex(where: { $0.contains(offset) })
         else {
             selectedWord.wrappedValue = nil
             return
         }
-        let word = RubyWordInfo.info(for: range, in: content)
+        let range = content.dictionaryWords[index]
+        // Details describe the word as written, even in rewritten text,
+        // whose words match the original's one to one.
+        let source = content.original ?? content
+        let word = RubyWordInfo.info(for: source.dictionaryWords[index], in: source)
         wordTapAction?(word)
         if showsWordDetails {
             selectedRect.wrappedValue = wordRect(range, in: geometry, layout: layout, metrics: metrics) ?? .zero
@@ -440,7 +469,9 @@ private struct RubyTextContent: View {
     fileprivate static func coloredRanges(_ colors: RubyWordColors?, in content: RubyContent) -> [RubyColoredRange] {
         guard let colors else { return [] }
         var ranges: [RubyColoredRange] = []
-        for (word, color) in zip(content.words, colors.colors(for: content.words, in: content.string)) {
+        // Words are colored as written, then wherever rewriting moved them.
+        let source = content.original ?? content
+        for (word, color) in zip(content.words, colors.colors(for: source.words, in: source.string)) {
             guard let color else { continue }
             if let last = ranges.last, last.color == color, last.range.upperBound == word.range.lowerBound {
                 ranges[ranges.count - 1] = RubyColoredRange(range: last.range.lowerBound..<word.range.upperBound, color: color)
@@ -459,7 +490,8 @@ private struct RubyTextContent: View {
         var options = emphasisOptions
         if reduceMotion { options.remove(.grow) }
         guard !options.isEmpty, let word = reader.spokenWord() else { return nil }
-        let placed = layout.place(word.range)
+        // The reader reads the text as written.
+        let placed = layout.place(content.range(fromOriginal: word.range))
         // Ease out over the first moment of the word for grow and highlight.
         let appear = 1 - pow(1 - min(word.elapsed / 0.15, 1), 3)
         return RubyEmphasisState(
@@ -608,7 +640,7 @@ final class RubyMeasurements {
 
     private static let cache = NSCache<NSString, RubyMeasurements>()
 
-    static func measurements(for content: RubyContent, metrics: RubyMetrics, furiganaScript: RubyFuriganaScript) -> RubyMeasurements {
+    static func measurements(for content: RubyContent, metrics: RubyMetrics, furiganaScript: RubyScript) -> RubyMeasurements {
         // Content objects are cached too, so the same text read by another
         // analyzer is a different object.
         let key = "\(metrics.cacheKey) \(furiganaScript) \(ObjectIdentifier(content).hashValue)\n\(content.string)" as NSString
@@ -627,7 +659,7 @@ final class RubyMeasurements {
     /// supply without fonts.
     init(
         content: RubyContent,
-        furiganaScript: RubyFuriganaScript = .hiragana,
+        furiganaScript: RubyScript = .hiragana,
         baseWidth: (String) -> CGFloat,
         annotationWidth: (String) -> CGFloat
     ) {
@@ -647,8 +679,7 @@ final class RubyMeasurements {
         let widths = characters.map { baseWidth(String($0)) }
         let readings = content.words.flatMap { word in
             word.furigana.map { reading in
-                let text = furiganaScript == .katakana ? RubyKana.katakana(reading.text) : reading.text
-                return (reading: (range: reading.range, text: text), word: word.range)
+                (reading: (range: reading.range, text: RubyContent.text(of: reading, in: furiganaScript)), word: word.range)
             }
         }
         var hasReading = [Bool](repeating: false, count: characters.count)

@@ -17,29 +17,43 @@ public struct RubyStyle: OptionSet, Hashable, Sendable {
         self.rawValue = rawValue
     }
 
-    /// Readings above words that contain kanji, in hiragana unless
-    /// `rubyFuriganaScript(_:)` sets katakana.
+    /// Readings of words that contain kanji: above the text, or in
+    /// parentheses after the kanji with `rubyFuriganaPosition(.inline)`.
+    /// In hiragana unless `rubyFuriganaScript(_:)` sets another script.
     public static let furigana = RubyStyle(rawValue: 1 << 0)
-    /// Romaji for every Japanese word: above the text on their own, and
-    /// below it with furigana.
+    /// Romaji for every Japanese word: below the text when furigana are
+    /// above it, otherwise above it.
     public static let romaji = RubyStyle(rawValue: 1 << 1)
-
-    /// Whether romaji are drawn above the text, where furigana would be.
-    var romajiAbove: Bool { contains(.romaji) && !contains(.furigana) }
 }
 
-/// The kana `RubyText` writes furigana in.
-///
-///     RubyText("東京タワーに登った。")
-///         .rubyStyle()
-///         .rubyFuriganaScript(.katakana)   // トウキョウ over 東京
-public enum RubyFuriganaScript: Hashable, Sendable {
-    /// Hiragana, as Japanese text usually writes readings. Readings you
-    /// supply in markup keep the kana you wrote them in: {本気|マジ}.
-    case hiragana
-    /// Katakana, as dictionaries write on'yomi, and some texts every
-    /// reading.
-    case katakana
+/// Where `RubyText` puts furigana.
+public enum RubyFuriganaPosition: Hashable, Sendable {
+    /// Above the kanji, as ruby.
+    case above
+    /// In parentheses after the kanji, as part of the text, the way text
+    /// without ruby gives readings: 東京（とうきょう）へ行（い）く.
+    case inline
+}
+
+/// Where `RubyText` draws each kind of annotation, for a style.
+struct RubyPlacement: Equatable {
+    /// Whether furigana are drawn above the text.
+    let furigana: Bool
+    /// Whether romaji are drawn above the text, where furigana would be,
+    /// or below it.
+    let romajiAbove: Bool
+    let romajiBelow: Bool
+}
+
+extension RubyPlacement {
+    init(style: RubyStyle, furiganaPosition: RubyFuriganaPosition = .above, transcription: RubyScript? = nil) {
+        // Text written in kana or romaji has no kanji to read, and inline
+        // furigana are part of the text.
+        let furigana = style.contains(.furigana) && furiganaPosition == .above && transcription == nil
+        // Romaji text needs no romaji.
+        let romaji = style.contains(.romaji) && transcription != .romaji
+        self.init(furigana: furigana, romajiAbove: romaji && !furigana, romajiBelow: romaji && furigana)
+    }
 }
 
 /// Which kanji get furigana, so learners only see readings they need.
@@ -183,8 +197,13 @@ extension EnvironmentValues {
     @Entry var rubyStyle: RubyStyle = []
     /// Which kanji `RubyText` views show furigana for. All by default.
     @Entry var rubyFuriganaFilter = RubyFuriganaFilter.all
-    /// The kana `RubyText` views write furigana in. Hiragana by default.
-    @Entry var rubyFuriganaScript = RubyFuriganaScript.hiragana
+    /// The script `RubyText` views write furigana in. Hiragana by default.
+    @Entry var rubyFuriganaScript = RubyScript.hiragana
+    /// Where `RubyText` views put furigana. Above the text by default.
+    @Entry var rubyFuriganaPosition = RubyFuriganaPosition.above
+    /// The script `RubyText` views write their text in, if not as it's
+    /// written.
+    @Entry var rubyTranscription: RubyScript? = nil
     /// Space `RubyText` views draw between words. None by default.
     @Entry var rubySpacing = RubySpacing.none
     /// Where `RubyText` views may break lines. Between words by default.
@@ -207,10 +226,44 @@ extension View {
         environment(\.rubyFuriganaFilter, filter)
     }
 
-    /// Sets the kana `RubyText` views in this hierarchy write furigana in,
-    /// such as `.katakana` for トウキョウ over 東京.
-    public func rubyFuriganaScript(_ script: RubyFuriganaScript) -> some View {
+    /// Sets the script `RubyText` views in this hierarchy write furigana
+    /// in: トウキョウ over 東京 for `.katakana`, and kan over 感 for
+    /// `.romaji`.
+    ///
+    /// In hiragana, the default, readings you supply in markup keep the
+    /// kana you wrote them in: {本気|マジ}.
+    public func rubyFuriganaScript(_ script: RubyScript) -> some View {
         environment(\.rubyFuriganaScript, script)
+    }
+
+    /// Sets where `RubyText` views in this hierarchy put furigana: above
+    /// the text, or in parentheses after each kanji.
+    ///
+    ///     RubyText("東京へ行きたい。")
+    ///         .rubyStyle()
+    ///         .rubyFuriganaPosition(.inline)   // 東京（とうきょう）へ行（い）きたい。
+    ///
+    /// Inline readings are part of the text, so selecting and copying
+    /// includes them. Romaji, if shown, move above the text.
+    public func rubyFuriganaPosition(_ position: RubyFuriganaPosition) -> some View {
+        environment(\.rubyFuriganaPosition, position)
+    }
+
+    /// Writes the text of `RubyText` views in this hierarchy entirely in
+    /// `script`, or as it's written for `nil`, like `textCase(_:)` does
+    /// for case.
+    ///
+    ///     RubyText("今日はコーヒーを飲んだ。")
+    ///         .rubyTranscription(.hiragana)   // きょうはこーひーをのんだ。
+    ///     RubyText("今日はコーヒーを飲んだ。")
+    ///         .rubyTranscription(.romaji)     // kyō wa kōhī o nonda.
+    ///
+    /// Kanji become their readings, so furigana have nothing left to
+    /// annotate; romaji still show over kana. Selecting and copying gives
+    /// the transcribed text, and word details, word colors, and read-aloud
+    /// emphasis follow each word to where it moved.
+    public func rubyTranscription(_ script: RubyScript?) -> some View {
+        environment(\.rubyTranscription, script)
     }
 
     /// Adds visual space between words or reading phrases in `RubyText`

@@ -9,6 +9,15 @@ package final class RubyContent {
     package let string: String
     package let words: [RubyWord]
 
+    /// For text rewritten from other content, such as in hiragana or with
+    /// readings in parentheses, the content it was rewritten from. Its
+    /// words correspond one to one with this content's.
+    package private(set) var original: RubyContent?
+    /// For rewritten text, where each UTF-16 offset of the original moved
+    /// to, as the start of a range and as its end. The two differ where a
+    /// space was put between romaji words.
+    private var offsetMap: RubyOffsetMap?
+
     /// Words as a dictionary lists them, for word details: a verb or
     /// adjective with its conjugated endings (生まれ|た), a noun with its
     /// suffixes (田中|さん), or a noun with する as one verb (勉強|し|た).
@@ -278,6 +287,44 @@ package final class RubyContent {
         self.words = Self.words(from: segments)
     }
 
+    /// `original` rewritten as `string`, its words moved through
+    /// `offsets`. Readings are part of the rewritten text, so the words
+    /// have no furigana; they keep their romaji unless `keepsRomaji` is
+    /// false, for text that's romaji already.
+    init(rewriting original: RubyContent, as string: String, offsets: RubyOffsetMap, keepsRomaji: Bool) {
+        self.string = string
+        words = original.words.map { word in
+            RubyWord(
+                range: offsets.range(word.range),
+                furigana: [],
+                romaji: keepsRomaji ? word.romaji : nil,
+                attachesToPrevious: word.attachesToPrevious,
+                partOfSpeech: word.partOfSpeech,
+                dictionaryForm: word.dictionaryForm,
+                source: word.source
+            )
+        }
+        self.original = original
+        offsetMap = offsets
+        romajiWords = keepsRomaji ? original.romajiWords.map { RubyRomajiWord(range: offsets.range($0.range), text: $0.text) } : []
+        dictionaryWords = original.dictionaryWords.map(offsets.range)
+    }
+
+    /// The text this content was rewritten from, or its own.
+    package var sourceString: String { original?.string ?? string }
+
+    /// Where `range` of the original text is in this text; the same range
+    /// for content that wasn't rewritten.
+    package func range(fromOriginal range: Range<Int>) -> Range<Int> {
+        offsetMap?.range(range) ?? range
+    }
+
+    /// Where the original text's UTF-16 `offset` is in this text, as the
+    /// end of what comes before it.
+    package func offset(fromOriginal offset: Int) -> Int {
+        offsetMap?.end(offset) ?? offset
+    }
+
     /// Segments for `text` from the automatic layers, in priority order:
     /// rules, then the analyzer's dictionary readings. Each rule only
     /// replaces segments still read by the analyzer. Without an analyzer,
@@ -345,7 +392,7 @@ private let particlePronunciation: [String: String] = ["は": "わ", "へ": "え
 
 /// Wraps a value as a key for `RubyContent`'s caches. `NSCache` keys must be
 /// objects, and value types aren't.
-private final class RubyCacheKey<Value: Hashable>: NSObject {
+final class RubyCacheKey<Value: Hashable>: NSObject {
     let value: Value
 
     init(_ value: Value) {

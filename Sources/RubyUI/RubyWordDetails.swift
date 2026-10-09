@@ -75,9 +75,14 @@ public struct RubyWordDetailView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
+                    // The word as written with its reading above, however
+                    // the text it was tapped in is written.
                     RubyText(verbatim: word.text)
                         .font(.largeTitle)
                         .rubyStyle()
+                        .rubyFuriganaScript(.hiragana)
+                        .rubyFuriganaPosition(.above)
+                        .rubyTranscription(nil)
                         .textSelection(.enabled)
                     if !word.romaji.isEmpty {
                         Text(verbatim: word.romaji)

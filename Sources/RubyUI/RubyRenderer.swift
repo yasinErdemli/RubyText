@@ -153,7 +153,7 @@ struct RubyRenderer: TextRenderer {
                 var annotationContext = layer
                 annotationContext.opacity *= fragment.annotation.opacity
                 let tinted = emphasize(fragment, in: &annotationContext, lines: emphasizedLines)
-                drawFurigana(text, over: fragment.rect, at: center, scale: fragment.annotation.scale, spread: !isSplit, tinted: tinted, color: fragment.annotation.color, in: &annotationContext)
+                drawFurigana(text, over: fragment.rect, at: center, scale: fragment.annotation.scale, spread: !isSplit && Self.spreads(text), tinted: tinted, color: fragment.annotation.color, in: &annotationContext)
             }
         }
         guard romajiAbove > 0 || romajiBelow > 0 else { return }
@@ -350,7 +350,7 @@ struct RubyRenderer: TextRenderer {
         let widths = pieces.map { text, fragment, isSplit in
             let natural = context.resolve(metrics.annotationText(text))
                 .measure(in: CGSize(width: CGFloat.infinity, height: .infinity)).width * fragment.annotation.scale
-            return spreads && !isSplit && text.count > 1 ? max(natural, fragment.rect.width) : natural
+            return spreads && !isSplit && text.count > 1 && Self.spreads(text) ? max(natural, fragment.rect.width) : natural
         }
         var centers = pieces.map { $0.1.rect.midX }
         for indices in Dictionary(grouping: pieces.indices, by: { pieces[$0].1.line }).values {
@@ -423,6 +423,12 @@ struct RubyRenderer: TextRenderer {
         drawing.translateBy(x: center + tracking / 2, y: rect.minY - metrics.gap)
         drawing.scaleBy(x: scale, y: 1)
         drawing.draw(resolved, at: .zero, anchor: .bottom)
+    }
+
+    /// Whether a reading narrower than its base may be spread across it,
+    /// as kana are in `<ruby>`. Romaji furigana keep their letter spacing.
+    private static func spreads(_ text: String) -> Bool {
+        !text.contains(where: \.isASCII)
     }
 
     private static func add(
