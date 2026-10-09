@@ -48,4 +48,4 @@ The first release.
 - `RubyConverter` writes text in kana or romaji, or with inline readings,
   as plain strings.
 - `RubyTransliteration`: kana to romaji, hiragana and katakana, with only the
-  standard library, on Apple platforms and Linux.
+  standard library.

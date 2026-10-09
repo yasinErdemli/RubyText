@@ -32,9 +32,7 @@ RubyText("{今日|きょう}は日本語を勉強しています。")
 
 ## Requirements
 
-iOS 27, macOS 27 or visionOS 27, and Swift 6.2. `RubyTransliteration` also
-builds on Linux; `RubyCore` and `RubyUI` are on Apple platforms only, since
-Mecab-Swift's tokenizer uses CoreFoundation's.
+iOS 27, macOS 27 or visionOS 27, and Swift 6.2.
 
 ## Installation
 
