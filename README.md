@@ -131,6 +131,35 @@ Markup sets a reading where the automatic one is wrong, or for names:
 RubyText("{宇宙|そら}を見上げた。")
 ```
 
+In code, give readings with string interpolation:
+
+```swift
+RubyText("\("今日", reading: "きょう")は\(user.name)さんと話した。")
+RubyText("\(verbatim: "無印良品")で本を\(count)冊買った。") // 無印良品 is never annotated
+```
+
+`\(base, reading:)` takes an optional reading, so a missing one falls back to
+analysis. Strings and numbers you interpolate are read with the words around
+them, so `\(3)冊` reads さんさつ, and markup in them shows as written, so text
+people type can't add readings. `PersonNameComponents` read with their
+phonetic names, and your own types can too by conforming to
+`RubyStringConvertible`:
+
+```swift
+struct User: RubyStringConvertible {
+    var familyName = "田中", givenName = "花子"
+    var familyKana: String? = "たなか", givenKana: String? = "はなこ"
+
+    var rubyString: RubyString {
+        "\(familyName, reading: familyKana)\(givenName, reading: givenKana)"
+    }
+}
+```
+
+Unlike `Text`, a literal isn't localized. For localized text, pass a
+`LocalizedStringResource`, such as `RubyText(.welcome)` with the symbols your
+String Catalog generates, or `String(localized:)`. Both can use markup.
+
 To show readings from your own data with no analysis, pass segments:
 
 ```swift

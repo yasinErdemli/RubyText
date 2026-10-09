@@ -126,8 +126,14 @@ public final class RubyReader {
 
     /// Starts reading `markup` aloud, replacing anything being read.
     public func speak(_ markup: String) {
+        speak(RubyString(markup: markup))
+    }
+
+    /// Starts reading `string` aloud, with the readings it gives,
+    /// replacing anything being read.
+    public func speak(_ string: RubyString) {
         stop()
-        let content = RubyContent.content(for: markup, analyzer: analyzer)
+        let content = RubyContent.content(for: string, analyzer: analyzer)
         // The readings themselves, rather than SSML, which voices may
         // ignore and which turns off the rate.
         let spoken = content.spokenString(spokenReadings)

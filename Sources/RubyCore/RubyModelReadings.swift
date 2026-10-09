@@ -76,9 +76,15 @@ public nonisolated enum RubyModelReadings {
     /// word on the list whose reading the dictionary chose, outside
     /// readings you supply in `{base|reading}` markup, in text order.
     public static func questions(in markup: String, analyzer: some RubyAnalyzer) -> [RubyReadingQuestion] {
-        let (string, manual) = RubyContent.parse(markup)
-        let segments = RubyContent.segments(in: string, analyzer: analyzer)
-        return questions(in: segments, excluding: manual.map(\.range)).map(\.question)
+        questions(in: RubyString(markup: markup), analyzer: analyzer)
+    }
+
+    /// The questions `rubyModelReadings()` asks about `string`, outside the
+    /// readings it gives and its verbatim text, in text order.
+    public static func questions(in string: RubyString, analyzer: some RubyAnalyzer) -> [RubyReadingQuestion] {
+        let (text, manual, verbatim) = RubyContent.parse(string)
+        let segments = RubyContent.segments(in: text, analyzer: analyzer)
+        return questions(in: segments, excluding: manual.map(\.range) + verbatim).map(\.question)
     }
 
     /// Asks the model about `question` now, and returns the reading it

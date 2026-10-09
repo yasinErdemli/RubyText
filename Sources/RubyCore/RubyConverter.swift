@@ -42,7 +42,13 @@ public struct RubyConverter: Sendable {
     /// Words without a known reading, such as kanji without an analyzer,
     /// stay as they're written.
     public func convert(_ markup: String, to transcription: RubyTranscription) -> String {
-        content(for: markup).transcribed(to: transcription).string
+        convert(RubyString(markup: markup), to: transcription)
+    }
+
+    /// `string` written out as `transcription` says, with the readings it
+    /// gives; its verbatim text stays as it is.
+    public func convert(_ string: RubyString, to transcription: RubyTranscription) -> String {
+        content(for: string).transcribed(to: transcription).string
     }
 
     /// `markup` with the reading of each kanji in parentheses after it,
@@ -61,10 +67,16 @@ public struct RubyConverter: Sendable {
     ///   - parentheses: What the readings are put between. Full width, as
     ///     Japanese text writes them, by default.
     public func annotate(_ markup: String, with script: RubyScript, parentheses: (open: String, close: String) = ("（", "）")) -> String {
-        content(for: markup).withInlineReadings(in: script, parentheses: parentheses).string
+        annotate(RubyString(markup: markup), with: script, parentheses: parentheses)
     }
 
-    private func content(for markup: String) -> RubyContent {
-        RubyContent.content(for: markup, analyzer: analyzer)
+    /// `string` with the reading of each kanji in parentheses after it, in
+    /// `script`, outside its verbatim text.
+    public func annotate(_ string: RubyString, with script: RubyScript, parentheses: (open: String, close: String) = ("（", "）")) -> String {
+        content(for: string).withInlineReadings(in: script, parentheses: parentheses).string
+    }
+
+    private func content(for string: RubyString) -> RubyContent {
+        RubyContent.content(for: string, analyzer: analyzer)
     }
 }

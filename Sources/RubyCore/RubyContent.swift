@@ -151,16 +151,16 @@ package final class RubyContent {
         "あげる", "くれる", "もらう", "いただく", "くださる", "やる",
     ]
 
-    private static let markupCache = NSCache<RubyCacheKey<MarkupKey>, RubyContent>()
+    private static let stringCache = NSCache<RubyCacheKey<StringKey>, RubyContent>()
     private static let segmentsCache = NSCache<RubyCacheKey<[RubySegment]>, RubyContent>()
 
-    /// Markup analyzed by a particular analyzer, or by none.
-    private struct MarkupKey: Hashable {
-        let markup: String
+    /// A string analyzed by a particular analyzer, or by none.
+    private struct StringKey: Hashable {
+        let string: RubyString
         let analyzer: AnyHashable?
 
-        init(markup: String, analyzer: (any RubyAnalyzer)?) {
-            self.markup = markup
+        init(string: RubyString, analyzer: (any RubyAnalyzer)?) {
+            self.string = string
             self.analyzer = analyzer.map { AnyHashable($0) }
         }
     }
@@ -169,11 +169,19 @@ package final class RubyContent {
     /// markup doesn't supply them. Without an analyzer, only the markup's
     /// readings show.
     package static func content(for markup: String, analyzer: (any RubyAnalyzer)?) -> RubyContent {
-        let key = RubyCacheKey(MarkupKey(markup: markup, analyzer: analyzer))
-        if let cached = markupCache.object(forKey: key) { return cached }
-        let (string, manual) = parse(markup)
-        let content = RubyContent(string: string, manual: manual, segments: segments(in: string, analyzer: analyzer))
-        markupCache.setObject(content, forKey: key)
+        content(for: RubyString(markup: markup), analyzer: analyzer)
+    }
+
+    /// Content for `string`, analyzed as one text, with the readings it
+    /// gives and those `analyzer` finds for the rest. Its verbatim text
+    /// isn't annotated.
+    package static func content(for string: RubyString, analyzer: (any RubyAnalyzer)?) -> RubyContent {
+        let key = RubyCacheKey(StringKey(string: string, analyzer: analyzer))
+        if let cached = stringCache.object(forKey: key) { return cached }
+        let (text, manual, verbatim) = parse(string)
+        let segments = unannotated(segments(in: text, analyzer: analyzer), in: verbatim)
+        let content = RubyContent(string: text, manual: manual, segments: segments)
+        stringCache.setObject(content, forKey: key)
         return content
     }
 
@@ -184,13 +192,24 @@ package final class RubyContent {
         modelCache.removeAllObjects()
     }
 
-    /// Markup analyzed by a particular analyzer, with a chooser's readings.
+    /// A string analyzed by a particular analyzer, with a chooser's readings.
     private struct ModelKey: Hashable {
-        let markup: MarkupKey
+        let string: StringKey
         let chooser: AnyHashable
     }
 
-    /// Content for `markup` with the model layer on top: words whose
+    /// Content for `markup` with the model layer on top; see
+    /// `content(for:analyzer:chooser:onEachReading:)` for strings.
+    package static func content(
+        for markup: String,
+        analyzer: (any RubyAnalyzer)?,
+        chooser: some RubyReadingChooser,
+        onEachReading: ((RubyContent) async -> Void)? = nil
+    ) async -> RubyContent {
+        await content(for: RubyString(markup: markup), analyzer: analyzer, chooser: chooser, onEachReading: onEachReading)
+    }
+
+    /// Content for `string` with the model layer on top: words whose
     /// reading depends on their meaning, such as 辛い or 人気, read the way
     /// `chooser` judges the sentence means them.
     ///
@@ -201,31 +220,31 @@ package final class RubyContent {
     /// - Parameter onEachReading: Called with the content so far each time
     ///   an answer changes a reading, to show readings as they come.
     package static func content(
-        for markup: String,
+        for string: RubyString,
         analyzer: (any RubyAnalyzer)?,
         chooser: some RubyReadingChooser,
         onEachReading: ((RubyContent) async -> Void)? = nil
     ) async -> RubyContent {
         let key = RubyCacheKey(ModelKey(
-            markup: MarkupKey(markup: markup, analyzer: analyzer),
+            string: StringKey(string: string, analyzer: analyzer),
             chooser: AnyHashable(chooser)
         ))
         if let cached = modelCache.object(forKey: key) { return cached }
-        let (string, manual) = parse(markup)
-        let segments = Self.segments(in: string, analyzer: analyzer)
+        let (text, manual, verbatim) = parse(string)
+        let segments = unannotated(Self.segments(in: text, analyzer: analyzer), in: verbatim)
         let onChange: (([RubySegment]) async -> Void)? = onEachReading.map { update in
-            { segments in await update(RubyContent(string: string, manual: manual, segments: segments)) }
+            { segments in await update(RubyContent(string: text, manual: manual, segments: segments)) }
         }
         let chosen = await RubyModelReadings.apply(
             to: segments,
-            excluding: manual.map(\.range),
+            excluding: manual.map(\.range) + verbatim,
             chooser: chooser,
             onChange: onChange
         )
         // Unchanged, possibly because the chooser couldn't answer yet, so
         // only changed content is cached.
-        guard chosen != segments else { return Self.content(for: markup, analyzer: analyzer) }
-        let content = RubyContent(string: string, manual: manual, segments: chosen)
+        guard chosen != segments else { return Self.content(for: string, analyzer: analyzer) }
+        let content = RubyContent(string: text, manual: manual, segments: chosen)
         modelCache.setObject(content, forKey: key)
         return content
     }
@@ -243,15 +262,50 @@ package final class RubyContent {
     /// The text of `markup` without its markup, and a word for each
     /// manual reading in it.
     package static func parse(_ markup: String) -> (string: String, manual: [RubyWord]) {
-        var string = ""
-        var manual: [RubyWord] = []
-        for piece in RubyMarkup.parse(markup) {
-            if let reading = piece.reading {
-                manual.append(RubyReadings.word(manualBase: piece.base, reading: reading, offset: string.utf16.count))
-            }
-            string += piece.base
-        }
+        let (string, manual, _) = parse(RubyString(markup: markup))
         return (string, manual)
+    }
+
+    /// The text of `string`, a word for each reading it gives, and the
+    /// UTF-16 ranges of its verbatim text.
+    package static func parse(_ string: RubyString) -> (string: String, manual: [RubyWord], verbatim: [Range<Int>]) {
+        var text = ""
+        var manual: [RubyWord] = []
+        var verbatim: [Range<Int>] = []
+        for piece in string.pieces {
+            switch piece {
+            case .markup(let markup):
+                for part in RubyMarkup.parse(markup) {
+                    if let reading = part.reading {
+                        manual.append(RubyReadings.word(manualBase: part.base, reading: reading, offset: text.utf16.count))
+                    }
+                    text += part.base
+                }
+            case .text(let plain):
+                text += plain
+            case .ruby(let base, let reading):
+                manual.append(RubyReadings.word(manualBase: base, reading: reading, offset: text.utf16.count))
+                text += base
+            case .verbatim(let plain):
+                let start = text.utf16.count
+                text += plain
+                verbatim.append(start..<text.utf16.count)
+            }
+        }
+        return (text, manual, verbatim)
+    }
+
+    /// `segments` without readings or grammar where they touch `ranges`,
+    /// so text there gets no words: no furigana, romaji, or details.
+    private static func unannotated(_ segments: [RubySegment], in ranges: [Range<Int>]) -> [RubySegment] {
+        guard !ranges.isEmpty else { return segments }
+        var offset = 0
+        return segments.map { segment in
+            let range = offset..<(offset + segment.base.utf16.count)
+            offset = range.upperBound
+            guard ranges.contains(where: { $0.overlaps(range) }) else { return segment }
+            return RubySegment(segment.base, source: .dictionary)
+        }
     }
 
     /// Content for `string` from the automatic layers' `segments`, which

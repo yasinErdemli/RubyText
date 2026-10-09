@@ -15,6 +15,11 @@ import SwiftUI
 ///         .textSelection(.enabled)
 ///         .rubyStyle([.furigana, .romaji])
 ///
+/// Or give readings in code with string interpolation, where text you
+/// interpolate, such as from people using your app, can't add readings:
+///
+///     RubyText("\("今日", reading: "きょう")は\(user.name)さんと話した。")
+///
 /// Readings can also be written into the text itself: in parentheses
 /// after each kanji with `rubyFuriganaPosition(.inline)`, or as the whole
 /// text in hiragana, katakana, or romaji with `rubyTranscription(_:)`.
@@ -58,7 +63,7 @@ import SwiftUI
 /// to a word and double-tap for it.
 public struct RubyText: View {
     private enum Input {
-        case markup(String)
+        case string(RubyString)
         case segments([RubySegment])
     }
     private let input: Input
@@ -87,20 +92,39 @@ public struct RubyText: View {
     @State private var selectedRect = CGRect.zero
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// Creates ruby text from a localized string, like `Text("…")`.
-    public init(_ resource: LocalizedStringResource) {
-        input = .markup(String(localized: resource))
+    /// Creates ruby text from a string literal, with readings you give in
+    /// it:
+    ///
+    ///     RubyText("\("今日", reading: "きょう")は\(user.name)さんと話した。")
+    ///     RubyText("{今日|きょう}は晴れ。")
+    ///
+    /// See `RubyString` for what it can hold. Unlike `Text`, a literal isn't
+    /// localized; for localized text, pass a `LocalizedStringResource`, such
+    /// as a symbol your String Catalog generates, or `String(localized:)`.
+    public init(_ string: RubyString) {
+        input = .string(string)
     }
 
-    /// Creates ruby text from a string without localizing it.
+    /// Creates ruby text from a localized string, which can use
+    /// `{base|reading}` markup:
+    ///
+    ///     RubyText(.welcome)
+    @_disfavoredOverload
+    public init(_ resource: LocalizedStringResource) {
+        input = .string(RubyString(markup: String(localized: resource)))
+    }
+
+    /// Creates ruby text from a string without localizing it, which can use
+    /// `{base|reading}` markup.
     @_disfavoredOverload
     public init<S: StringProtocol>(_ content: S) {
-        input = .markup(String(content))
+        input = .string(RubyString(markup: String(content)))
     }
 
-    /// Creates ruby text from a string without localizing it.
+    /// Creates ruby text from a string without localizing it, which can use
+    /// `{base|reading}` markup, such as text you load at run time.
     public init(verbatim content: String) {
-        input = .markup(content)
+        input = .string(RubyString(markup: content))
     }
 
     /// Creates ruby text from segments you supply, such as readings from
@@ -117,7 +141,7 @@ public struct RubyText: View {
             modelContent.content
         } else {
             switch input {
-            case .markup(let markup): .content(for: markup, analyzer: analyzer)
+            case .string(let string): .content(for: string, analyzer: analyzer)
             case .segments(let segments): .content(for: segments)
             }
         }
@@ -180,15 +204,15 @@ public struct RubyText: View {
     /// What the model's readings depend on: the markup, the analyzer, and
     /// whether they're on and how they update.
     private struct ModelKey: Equatable {
-        let markup: String?
+        let string: RubyString?
         let analyzer: AnyHashable?
         let updates: RubyModelReadingUpdates?
         let options: RubyModelOptions
     }
 
     private var modelKey: ModelKey {
-        let markup: String? = if case .markup(let markup) = input { markup } else { nil }
-        return ModelKey(markup: markup, analyzer: analyzer.map { AnyHashable($0) }, updates: modelUpdates, options: modelOptions)
+        let string: RubyString? = if case .string(let string) = input { string } else { nil }
+        return ModelKey(string: string, analyzer: analyzer.map { AnyHashable($0) }, updates: modelUpdates, options: modelOptions)
     }
 
     /// Asks the model about words whose reading depends on their meaning,
@@ -196,7 +220,7 @@ public struct RubyText: View {
     /// supply are shown as they are.
     private func loadModelReadings() async {
         let key = modelKey
-        guard let updates = key.updates, let markup = key.markup, analyzer != nil, key.options.isAvailable else { return }
+        guard let updates = key.updates, let string = key.string, analyzer != nil, key.options.isAvailable else { return }
         #if canImport(FoundationModels)
         let onEachReading: ((RubyContent) async -> Void)? = if updates == .asAnswered {
             { content in
@@ -207,7 +231,7 @@ public struct RubyText: View {
             nil
         }
         let content = await RubyContent.content(
-            for: markup,
+            for: string,
             analyzer: analyzer,
             chooser: RubyFoundationModelsChooser(options: key.options),
             onEachReading: onEachReading

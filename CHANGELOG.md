@@ -25,6 +25,13 @@ The first release.
   and prewarms the model.
 - `{base|reading}` markup and `RubyText(segments:)` for readings you supply.
   Each reading records where it came from, as `ReadingSource`.
+- Readings in code with string interpolation, as `RubyString`:
+  `\(base, reading:)`, `\(verbatim:)` for text that's never annotated, and
+  `RubyStringConvertible` for your own types, with `PersonNameComponents`
+  read with their phonetic names. The pieces are analyzed as one text, and
+  markup in interpolated strings shows as written. `RubyText` literals
+  aren't localized; pass a `LocalizedStringResource` or
+  `String(localized:)` for localized text.
 - A benchmark of 255 words in context: 241 read correctly, 254 with the
   model.
 
