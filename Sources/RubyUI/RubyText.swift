@@ -26,7 +26,8 @@ import SwiftUI
 ///
 /// Changing the style animates: annotations fade in or out, and the line
 /// spacing and letter spacing they need ease to their new values. Text
-/// rewritten in another script crossfades.
+/// rewritten in another script rolls into the new text glyph by glyph,
+/// like `numericText()`.
 ///
 /// Furigana use the secondary foreground style and romaji the tertiary one,
 /// so they're quieter than the text by default and can be colored with the
@@ -331,6 +332,7 @@ private struct RubyTextContent: View {
             && wordGaps.isZero && content.spaces.isEmpty && !isTappable {
             Text(Self.plainText(content.string, language: lineBreaking.languageIdentifier))
                 .font(RubyMetrics(font: font ?? .body, in: fontResolutionContext).textFont)
+                .contentTransition(.numericText())
         } else {
             let metrics = RubyMetrics(font: font ?? .body, in: fontResolutionContext)
             let layout = RubyLayout(
@@ -373,8 +375,9 @@ private struct RubyTextContent: View {
 
         return Text(layout.text)
             .font(metrics.textFont)
-            // Text rewritten in another script fades into the new one.
-            .contentTransition(.opacity)
+            // Text rewritten in another script rolls into the new one, glyph
+            // by glyph, letters and kana as well as digits.
+            .contentTransition(.numericText())
             .lineSpacing(above + below)
             .padding(.top, above)
             .padding(.bottom, below)
