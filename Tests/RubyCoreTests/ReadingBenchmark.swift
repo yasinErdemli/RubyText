@@ -241,7 +241,7 @@ private let meaningCases = [
     c("最中", "さいちゅう", in: "食事の最中に電話が鳴った。", .meaning),
     c("最中", "もなか", in: "和菓子の最中を食べた。", .meaning, mecab: "さいちゅう"),
     c("何", "なに", in: "何を食べますか。", .meaning),
-    c("何", "なん", in: "これは何ですか。", .meaning, mecab: "なに"),
+    c("何", "なん", in: "これは何ですか。", .meaning),
     c("開いた", "あいた", in: "靴下に穴が開いた。", .meaning, mecab: "ひらいた"),
     c("開く", "ひらく", in: "会議を開く。", .meaning),
     c("空いた", "すいた", in: "お腹が空いた。", .meaning, mecab: "あいた"),

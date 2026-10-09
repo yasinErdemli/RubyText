@@ -1,6 +1,6 @@
 import Foundation
 
-/// The rule layer for fixed phrases, and for 中 after a word.
+/// The rule layer for fixed phrases, 中 after a word, and 何 before one.
 ///
 /// Fixed phrases run before the number rules, so idioms with numerals keep
 /// their own readings: 一足先 is ひとあしさき, not one pair of shoes. The 中
@@ -43,6 +43,27 @@ package enum RubyPhraseReadings {
         }
         return result
     }
+
+    /// `segments` with 何 read なん where なに shortens before the word
+    /// after it: before だ, で, の, と, て, な and じゃ (何ですか, 何の, 何と,
+    /// 何でも). Analyzers read it なに there.
+    ///
+    /// Elsewhere the analyzer's reading stays: なに before を, が, も, か
+    /// and に, and なん before counters (何人).
+    package static func applyNan(to segments: [RubySegment]) -> [RubySegment] {
+        var result = segments
+        for index in result.indices.dropLast() where result[index].base == "何" && result[index].source == .dictionary {
+            let next = result[index + 1].base
+            guard nanBefore.contains(where: next.hasPrefix) else { continue }
+            result[index].reading = "なん"
+            result[index].pronunciation = nil
+            result[index].source = .rule
+        }
+        return result
+    }
+
+    /// Kana that 何 reads なん before.
+    private static let nanBefore = ["だ", "で", "の", "と", "て", "な", "じゃ"]
 
     /// Words after which 中 reads じゅう, "throughout".
     private static let throughoutWords: Set<String> = [

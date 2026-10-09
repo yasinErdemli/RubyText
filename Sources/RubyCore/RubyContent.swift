@@ -290,6 +290,7 @@ package final class RubyContent {
         segments = RubyPhraseReadings.applyPhrases(to: segments)
         segments = RubyNumberReadings.apply(to: segments)
         segments = RubyPhraseReadings.applySuffixes(to: segments)
+        segments = RubyPhraseReadings.applyNan(to: segments)
         return segments
     }
 
