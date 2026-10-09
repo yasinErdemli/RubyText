@@ -81,8 +81,9 @@ package nonisolated enum RubyHomographs {
 }
 
 /// A reading a word on the homograph list may have, with its meaning.
-package struct RubyReadingChoice: Hashable, Sendable {
+public struct RubyReadingChoice: Hashable, Sendable {
     /// The reading of the word as written in the text, in hiragana.
-    package let reading: String
-    package let meaning: String
+    public let reading: String
+    /// What the word means read this way, in English, as the model is told.
+    public let meaning: String
 }

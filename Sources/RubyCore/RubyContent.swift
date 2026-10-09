@@ -225,7 +225,7 @@ package final class RubyContent {
 
     /// The text of `markup` without its markup, and a word for each
     /// manual reading in it.
-    private static func parse(_ markup: String) -> (string: String, manual: [RubyWord]) {
+    package static func parse(_ markup: String) -> (string: String, manual: [RubyWord]) {
         var string = ""
         var manual: [RubyWord] = []
         for piece in RubyMarkup.parse(markup) {

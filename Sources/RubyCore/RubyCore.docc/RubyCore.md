@@ -30,6 +30,12 @@ dictionary. Each reading records its layer as a ``ReadingSource``.
 - ``ReadingSource``
 - ``RubyMarkup``
 
+### Readings by meaning
+
+- ``RubyModelReadings``
+- ``RubyReadingQuestion``
+- ``RubyReadingChoice``
+
 ### Writing text out
 
 - ``RubyConverter``

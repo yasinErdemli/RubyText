@@ -4,17 +4,20 @@ import Synchronization
 import FoundationModels
 #endif
 
-/// A word on the homograph list, in a sentence, with the readings it may
-/// have.
-package struct RubyReadingQuestion: Hashable, Sendable {
+/// A word whose reading depends on its meaning, in a sentence, with the
+/// readings it may have: what Apple's on-device model is asked about.
+public struct RubyReadingQuestion: Hashable, Sendable {
     /// The whole sentence the word is in.
-    package let sentence: String
+    public let sentence: String
     /// The word as written.
-    package let word: String
+    public let word: String
     /// The word with a few words around it, to point out which occurrence
     /// is meant: 人気のない早朝.
-    package let context: String
-    package let choices: [RubyReadingChoice]
+    public let context: String
+    /// The readings the model chooses among.
+    public let choices: [RubyReadingChoice]
+    /// The reading the dictionary gave the word, one of `choices`.
+    public let dictionaryReading: String
 }
 
 /// Chooses between the readings of a word whose reading depends on its
@@ -27,20 +30,62 @@ package protocol RubyReadingChooser: Hashable, Sendable {
     func choose(_ question: RubyReadingQuestion) async throws -> Int?
 }
 
-/// The model layer: a language model as a tie-breaker for words whose
-/// reading depends on their meaning (人気, 辛い, 方), which the dictionary
-/// reads the same way in every sentence.
+/// Apple's on-device model as a tie-breaker for words whose reading depends
+/// on their meaning (人気, 辛い, 方), which the dictionary reads the same way
+/// in every sentence. `rubyModelReadings()` turns it on for `RubyText`.
 ///
-/// It runs after the rules, only on words on the homograph list that the
-/// dictionary layer read, and only changes their readings, never where
-/// words begin and end.
-package nonisolated enum RubyModelReadings {
-    /// Whether the model is available on this device.
-    package static var isAvailable: Bool {
+/// It runs after the rules, only on words on a built-in list that the
+/// dictionary read, and only changes their readings, never where words
+/// begin and end. The questions it would ask, and asking them one by one,
+/// are public, to see what it does and how long it takes:
+///
+///     for question in RubyModelReadings.questions(in: text, analyzer: analyzer) {
+///         let start = ContinuousClock.now
+///         let choice = try await RubyModelReadings.ask(question)
+///         print(question.word, choice?.reading ?? "-", ContinuousClock.now - start)
+///     }
+public nonisolated enum RubyModelReadings {
+    /// Whether Apple's on-device model is available on this device, with
+    /// Apple Intelligence turned on and the model downloaded.
+    public static var isAvailable: Bool {
         #if canImport(FoundationModels)
         RubyFoundationModelsChooser.isAvailable
         #else
         false
+        #endif
+    }
+
+    /// The questions `rubyModelReadings()` asks about `markup`: one for each
+    /// word on the list whose reading the dictionary chose, outside
+    /// readings you supply in `{base|reading}` markup, in text order.
+    public static func questions(in markup: String, analyzer: some RubyAnalyzer) -> [RubyReadingQuestion] {
+        let (string, manual) = RubyContent.parse(markup)
+        let segments = RubyContent.segments(in: string, analyzer: analyzer)
+        return questions(in: segments, excluding: manual.map(\.range)).map(\.question)
+    }
+
+    /// Asks the model `question` now, and returns the reading it chose, or
+    /// `nil` where the model isn't available.
+    ///
+    /// Unlike `RubyText`, which asks each question once and keeps the
+    /// answer, this always asks, so it can be timed.
+    public static func ask(_ question: RubyReadingQuestion) async throws -> RubyReadingChoice? {
+        #if canImport(FoundationModels)
+        guard let index = try await RubyFoundationModelsChooser().choose(question),
+              question.choices.indices.contains(index)
+        else { return nil }
+        return question.choices[index]
+        #else
+        return nil
+        #endif
+    }
+
+    /// Loads the model and the instructions it's asked with ahead of the
+    /// first question, which otherwise waits for them. Call it when a screen
+    /// that will show model readings appears, or earlier.
+    public static func prewarm() {
+        #if canImport(FoundationModels)
+        RubyFoundationModelsChooser.prewarm()
         #endif
     }
 
@@ -67,7 +112,8 @@ package nonisolated enum RubyModelReadings {
                     sentence: text,
                     word: segment.base,
                     context: context(of: index, in: segments, within: sentence),
-                    choices: choices
+                    choices: choices,
+                    dictionaryReading: segment.reading ?? ""
                 )))
             }
         }
@@ -163,6 +209,17 @@ package struct RubyFoundationModelsChooser: RubyReadingChooser {
         SystemLanguageModel.default.isAvailable
     }
 
+    /// The session `prewarm()` loaded the model with, kept so loading
+    /// isn't cancelled.
+    private static let warmSession = Mutex<LanguageModelSession?>(nil)
+
+    static func prewarm() {
+        guard isAvailable else { return }
+        let session = LanguageModelSession(instructions: instructions)
+        session.prewarm()
+        warmSession.withLock { $0 = session }
+    }
+
     private static let instructions = """
         You read Japanese. Each listed word appears in the sentence and can be read \
         in more than one way, each reading with a different meaning. For each word, \
@@ -192,7 +249,7 @@ package struct RubyFoundationModelsChooser: RubyReadingChooser {
         let response = try await session.respond(
             to: prompt,
             schema: schema,
-            options: GenerationOptions(sampling: .greedy)
+            options: GenerationOptions(samplingMode: .greedy)
         )
         let meaning = try response.content.value(String.self, forProperty: "meaning")
         return meanings.firstIndex(of: meaning)
