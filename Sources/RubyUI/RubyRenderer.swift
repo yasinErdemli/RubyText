@@ -168,17 +168,17 @@ struct RubyRenderer: TextRenderer {
                 var annotationContext = layer
                 annotationContext.opacity *= fragment.annotation.opacity
                 let tinted = emphasize(fragment, in: &annotationContext, lines: emphasizedLines)
-                var resolved = annotationContext.resolve(metrics.annotationText(text))
                 // Romaji use the tertiary foreground style, so
                 // `.foregroundStyle(_:_:_:)` can give them their own color,
                 // unless the word they belong to is colored.
-                resolved.shading = if tinted {
-                    .style(.tint)
+                let style: AnyShapeStyle = if tinted {
+                    AnyShapeStyle(.tint)
                 } else if let color = fragment.annotation.color {
-                    .color(color)
+                    AnyShapeStyle(color)
                 } else {
-                    .style(.tertiary)
+                    AnyShapeStyle(.tertiary)
                 }
+                let resolved = annotationContext.resolve(metrics.annotationText(text).foregroundStyle(style))
                 annotationContext.translateBy(
                     x: center,
                     y: isAbove ? fragment.rect.minY - metrics.gap : fragment.rect.maxY + metrics.gap
@@ -405,19 +405,20 @@ struct RubyRenderer: TextRenderer {
         if spread, scale == 1, text.count > 1 {
             tracking = max(0, rect.width - width) / CGFloat(text.count)
         }
-        var resolved = context.resolve(
-            metrics.annotationText(text).tracking(tracking)
-        )
         // Furigana use the secondary foreground style, so
         // `.foregroundStyle(_:_:)` can color them separately from the text,
-        // unless the word they belong to is colored.
-        resolved.shading = if tinted {
-            .style(.tint)
+        // unless the word they belong to is colored. The style is part of
+        // the text: over a material, resolved text ignores its shading.
+        let style: AnyShapeStyle = if tinted {
+            AnyShapeStyle(.tint)
         } else if let color {
-            .color(color)
+            AnyShapeStyle(color)
         } else {
-            .style(.secondary)
+            AnyShapeStyle(.secondary)
         }
+        let resolved = context.resolve(
+            metrics.annotationText(text).tracking(tracking).foregroundStyle(style)
+        )
         // Offset by half the trailing tracking so the visible glyphs are centered.
         var drawing = context
         drawing.translateBy(x: center + tracking / 2, y: rect.minY - metrics.gap)

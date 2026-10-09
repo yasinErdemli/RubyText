@@ -406,6 +406,10 @@ private struct RubyTextContent: View {
                 romajiBelow: romajiBelow,
                 emphasis: emphasis
             ))
+            // Over a material, such as a popover's glass, foreground styles
+            // turn vibrant, and text the renderer draws in them, such as
+            // annotations, doesn't show. The text keeps the regular styles.
+            .environment(\.backgroundMaterial, nil)
             .modifier(RubyWordTapping(
                 isEnabled: isTappable,
                 words: accessibilityWords,
