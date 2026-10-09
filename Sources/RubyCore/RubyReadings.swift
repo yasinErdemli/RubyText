@@ -1,4 +1,5 @@
 import Foundation
+import RubyTransliteration
 
 /// A reading attached to a range of the source text. Offsets are UTF-16.
 package struct RubyReading: Hashable, Sendable {
@@ -68,7 +69,7 @@ package nonisolated enum RubyReadings {
     /// - Parameter force: Annotate the whole base even if it has no kanji,
     ///   for readings the author supplied explicitly.
     package static func furigana(base: String, reading written: String, offset: Int, force: Bool) -> [RubyReading] {
-        let reading = hiragana(written)
+        let reading = RubyKana.hiragana(written)
         guard !reading.isEmpty else { return [] }
         // Converting to hiragana keeps each character in place unless the
         // reading has half-width kana, which it combines (ｶﾞ → が); then
@@ -76,12 +77,12 @@ package nonisolated enum RubyReadings {
         let shown = written.utf16.count == reading.utf16.count ? written : reading
         let whole = [RubyReading(range: offset..<(offset + base.utf16.count), text: shown)]
 
-        guard base.contains(where: isKanji) else { return force ? whole : [] }
+        guard base.contains(where: RubyKana.isKanji) else { return force ? whole : [] }
 
         // Group the base into alternating runs of kanji and other characters.
         var runs: [(isKanji: Bool, text: String)] = []
         for character in base {
-            let kanji = isKanji(character)
+            let kanji = RubyKana.isKanji(character)
             if let last = runs.indices.last, runs[last].isKanji == kanji {
                 runs[last].text.append(character)
             } else {
@@ -93,7 +94,7 @@ package nonisolated enum RubyReadings {
         // Kana runs must appear literally in the reading; each kanji run
         // takes whatever lies between them.
         let pattern = "^" + runs.map {
-            $0.isKanji ? "(.+?)" : NSRegularExpression.escapedPattern(for: hiragana($0.text))
+            $0.isKanji ? "(.+?)" : NSRegularExpression.escapedPattern(for: RubyKana.hiragana($0.text))
         }.joined() + "$"
         guard let regex = try? NSRegularExpression(pattern: pattern),
               let match = regex.firstMatch(in: reading, range: NSRange(reading.startIndex..., in: reading))
@@ -113,64 +114,5 @@ package nonisolated enum RubyReadings {
             position += length
         }
         return readings
-    }
-
-    /// Converts katakana to hiragana, keeping the long-vowel mark:
-    /// コーヒー → こーひー. Half-width katakana is widened first (ｶﾞ → が).
-    ///
-    /// Foundation's hiragana transform isn't used because it spells out
-    /// long vowels (こおひい), which changes how a reading looks.
-    package static func hiragana(_ text: String) -> String {
-        var scalars = String.UnicodeScalarView()
-        for scalar in widened(text).unicodeScalars {
-            switch scalar.value {
-            // ァ through ヴ, and the repetition marks ヽヾ. ヵ and ヶ stay:
-            // they're read か and こ in 3ヶ月, so they act as kanji.
-            case 0x30A1...0x30F4, 0x30FD...0x30FE:
-                scalars.append(Unicode.Scalar(scalar.value - 0x60)!)
-            default:
-                scalars.append(scalar)
-            }
-        }
-        return String(scalars)
-    }
-
-    /// `text` with half-width katakana (U+FF65–U+FF9F) made full width and
-    /// its voicing marks combined; everything else unchanged.
-    private static func widened(_ text: String) -> String {
-        let isHalfWidth = { (scalar: Unicode.Scalar) in (0xFF65...0xFF9F).contains(scalar.value) }
-        guard text.unicodeScalars.contains(where: isHalfWidth) else { return text }
-        var result = ""
-        var run = ""
-        for character in text {
-            if character.unicodeScalars.allSatisfy(isHalfWidth) {
-                run.append(character)
-            } else {
-                result += run.precomposedStringWithCompatibilityMapping
-                run = ""
-                result.append(character)
-            }
-        }
-        return result + run.precomposedStringWithCompatibilityMapping
-    }
-
-    package static func isKanji(_ character: Character) -> Bool {
-        character.unicodeScalars.contains { scalar in
-            scalar.properties.isIdeographic || "々〆ヵヶ".unicodeScalars.contains(scalar)
-        }
-    }
-
-    package static func isJapanese(_ character: Character) -> Bool {
-        isKanji(character) || character.unicodeScalars.contains { scalar in
-            switch scalar.value {
-            case 0x3040...0x309F, // Hiragana
-                 0x30A0...0x30FF, // Katakana
-                 0x31F0...0x31FF, // Katakana phonetic extensions
-                 0xFF66...0xFF9F: // Half-width katakana
-                true
-            default:
-                false
-            }
-        }
     }
 }

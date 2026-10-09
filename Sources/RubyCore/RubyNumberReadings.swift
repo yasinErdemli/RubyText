@@ -1,4 +1,5 @@
 import Foundation
+import RubyTransliteration
 
 /// The rule layer for numbers: reads dates, times, amounts, and counted
 /// things, which the dictionary reads digit by digit or not at all.
@@ -139,7 +140,7 @@ package enum RubyNumberReadings {
     }
 
     private static func isLatinLetter(_ character: Character) -> Bool {
-        character.isLetter && !RubyReadings.isJapanese(character)
+        character.isLetter && !RubyKana.isJapanese(character)
     }
 
     /// Digits, with optional thousands separators and decimals: 2026,

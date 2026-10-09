@@ -1,4 +1,5 @@
 import Foundation
+import RubyTransliteration
 
 /// A stretch of text emphasized as one unit while reading aloud: a word plus
 /// the particles and endings attached to it, a reading phrase (文節) such as
@@ -55,7 +56,7 @@ package nonisolated enum RubyReadingUnits {
             // the tokenizer split, like 日本|語.
             // Likewise for letters and digits split apart, like iPhone|15.
             let continuesCompound = !previous.isEmpty
-                && (previous.allSatisfy(RubyReadings.isKanji) && token.first.map(RubyReadings.isKanji) == true
+                && (previous.allSatisfy(RubyKana.isKanji) && token.first.map(RubyKana.isKanji) == true
                     || previous.allSatisfy(isAlphanumeric) && token.first.map(isAlphanumeric) == true)
             let weight = spokenWeight(of: token, romaji: word.romaji)
             if let last = groups.indices.last,
@@ -85,7 +86,7 @@ package nonisolated enum RubyReadingUnits {
 
     /// ASCII or full-width letters and digits, which have no readings.
     private static func isAlphanumeric(_ character: Character) -> Bool {
-        (character.isLetter || character.isNumber) && !RubyReadings.isJapanese(character)
+        (character.isLetter || character.isNumber) && !RubyKana.isJapanese(character)
     }
 
     /// The unit being spoken at `time`, how far through it is, and how long

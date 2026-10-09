@@ -1,4 +1,5 @@
 import Foundation
+import RubyTransliteration
 import SQLite3
 import Synchronization
 
@@ -105,8 +106,8 @@ public nonisolated final class RubyDictionary: Sendable {
                 found.append(entry(from: row))
             }
             guard !found.isEmpty else { continue }
-            let reading = reading.map(RubyReadings.hiragana)
-            let termIsKana = term.allSatisfy { RubyReadings.isJapanese($0) && !RubyReadings.isKanji($0) }
+            let reading = reading.map(RubyKana.hiragana)
+            let termIsKana = term.allSatisfy { RubyKana.isJapanese($0) && !RubyKana.isKanji($0) }
             // Rank by, in order: a matching part of speech; a matching
             // reading, as the main reading, as another, or sharing the stem
             // of an inflected form (うまれた, うまれる); and, for kana, words
@@ -118,7 +119,7 @@ public nonisolated final class RubyDictionary: Sendable {
                     score += 4000
                 }
                 if let reading {
-                    score += entry.readings.map(RubyReadings.hiragana).enumerated().map { index, candidate in
+                    score += entry.readings.map(RubyKana.hiragana).enumerated().map { index, candidate in
                         candidate == reading ? (index == 0 ? 1000 : 800) : candidate.commonPrefix(with: reading).count
                     }.max() ?? 0
                 }

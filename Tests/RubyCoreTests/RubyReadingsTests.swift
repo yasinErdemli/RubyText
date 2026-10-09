@@ -2,15 +2,6 @@ import RubyCore
 import Testing
 
 @Suite struct RubyReadingsTests {
-    @Test(arguments: [
-        ("ビール", "びーる"), ("コーヒー", "こーひー"), ("エーアイ", "えーあい"),
-        ("ヴァイオリン", "ゔぁいおりん"), ("いすゞ", "いすゞ"), ("ヽヾ", "ゝゞ"),
-        ("ｶﾞｯｺｳ", "がっこう"), ("ﾋﾞｰﾙ2本", "びーる2本"), ("3ヶ月", "3ヶ月"), ("漢字", "漢字"),
-    ])
-    func hiragana(_ text: String, _ expected: String) {
-        #expect(RubyReadings.hiragana(text) == expected)
-    }
-
     /// Furigana from markup, as base:reading pairs.
     private func furigana(_ markup: String) -> [String] {
         let content = RubyContent.content(for: markup)

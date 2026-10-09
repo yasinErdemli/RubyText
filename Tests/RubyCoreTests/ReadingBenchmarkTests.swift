@@ -1,5 +1,6 @@
 import Foundation
 import RubyCore
+import RubyTransliteration
 import Testing
 
 /// The reading the default analyzer gives `word` in `sentence`: kana as
@@ -28,7 +29,7 @@ func reading(of word: String, in content: RubyContent) -> String? {
         position = reading.range.upperBound
     }
     result += RubyReadingUnits.substring(of: content.string, utf16Range: position..<span.upperBound)
-    return RubyReadings.hiragana(result)
+    return RubyKana.hiragana(result)
 }
 
 extension BenchmarkCase {

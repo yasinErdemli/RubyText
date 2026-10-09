@@ -1,4 +1,5 @@
 import Foundation
+import RubyTransliteration
 
 /// Words whose reading depends on what they mean, which only the sentence
 /// around them settles: 辛い is からい for spicy food and つらい for a hard
@@ -37,11 +38,11 @@ package nonisolated enum RubyHomographs {
     /// `sense`: 止め as やめる is やめ, 辛かっ as からい is からかっ.
     private static func reading(of text: String, as sense: Sense) -> String? {
         let word = Array(sense.word)
-        guard let lastKanji = word.lastIndex(where: RubyReadings.isKanji) else { return nil }
+        guard let lastKanji = word.lastIndex(where: RubyKana.isKanji) else { return nil }
         let stem = String(word[...lastKanji])
         let ending = String(word[(lastKanji + 1)...])
         guard text.hasPrefix(stem), sense.reading.hasSuffix(ending) else { return nil }
-        return String(sense.reading.dropLast(ending.count)) + RubyReadings.hiragana(String(text.dropFirst(stem.count)))
+        return String(sense.reading.dropLast(ending.count)) + RubyKana.hiragana(String(text.dropFirst(stem.count)))
     }
 
     /// The list, by the word's dictionary form.

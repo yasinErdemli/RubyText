@@ -1,4 +1,4 @@
-@testable import RubyCore
+@testable import RubyTransliteration
 import Testing
 
 @Suite struct RubyRomajiTests {
@@ -41,36 +41,31 @@ import Testing
         #expect(RubyRomaji.hepburn(reading, pronunciation: pronunciation, next: next) == expected)
     }
 
-    /// Romaji words for whole sentences, as shown below the text.
+    /// Text written in kana, with no dictionary to say what's a word.
     @Test(arguments: [
-        ("今日は東京へ行きたい。", "kyō wa tōkyō e ikitai"),
-        ("コーヒーを飲みながら日本語を勉強しています。", "kōhī o nominagara nihongo o benkyō shite imasu"),
-        ("漫画を読んだ。", "manga o yonda"),
-        ("気に入った店", "kiniitta mise"),
-        ("東京で会おう。", "tōkyō de aō"),
-        ("学校では静かだ。", "gakkō dewa shizuka da"),
-        ("映画でも見ましょう。", "eiga demo mimashō"),
-        ("食べてしまった。", "tabete shimatta"),
-        ("先生です。", "sensei desu"),
-        ("吾輩は猫である。", "wagahai wa neko de aru"),
-        ("湖を追う。", "mizuumi o ou"),
+        // Repeat marks and stretched vowels.
+        ("いすゞ", "isuzu"),
+        ("こゝろ", "kokoro"),
+        ("ねぇ", "nē"),
+        ("すごーい", "sugōi"),
+        ("ｶﾞｯｺｳ", "gakkō"),
+        // Punctuation, and words joined by a middle dot.
+        ("はい、そうです。", "hai, sōdesu."),
+        ("「はい」といった。", "“hai” toitta."),
+        ("ほんとう？うん！", "hontō? un!"),
+        ("あっ。", "a."),
+        ("ジョン・スミス", "jon sumisu"),
+        // Full-width Latin becomes ASCII; kanji stay as they are.
+        ("ＡＩ", "AI"),
+        ("漢じ", "漢ji"),
     ])
-    func romajiWords(_ text: String, _ expected: String) {
-        let content = RubyContent.content(for: text)
-        #expect(content.romajiWords.map(\.text).joined(separator: " ") == expected)
+    func kana(_ text: String, _ expected: String) {
+        #expect(RubyRomaji.hepburn(text) == expected)
     }
 
-    @Test(arguments: [
-        ("十日", "tōka"),
-        ("2026年", "nisen nijūrokunen"),
-        ("3500円", "sanzen gohyakuen"),
-        ("六百人", "roppyakunin"),
-        ("1,234,567", "hyaku nijūsanman yonsen gohyaku rokujūnana"),
-        ("100", "hyaku"),
-    ])
-    func numbersReadInParts(_ text: String, _ expected: String) {
-        let content = RubyContent.content(for: text)
-        let romaji = content.romajiWords.map(\.text).joined(separator: " ")
-        #expect(romaji == expected, "\(romaji)")
+    @Test func pronunciationDecidesLongVowelsAndParticles() {
+        #expect(RubyRomaji.hepburn("おもう") == "omō")
+        #expect(RubyRomaji.hepburn("おもう", pronunciation: "おもう") == "omou")
+        #expect(RubyRomaji.hepburn("きょうは", pronunciation: "きょーわ") == "kyōwa")
     }
 }

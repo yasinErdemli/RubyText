@@ -1,4 +1,5 @@
 import Foundation
+import RubyTransliteration
 
 /// Levels of the Japanese-Language Proficiency Test, from easiest to hardest.
 public enum RubyJLPTLevel: Int, CaseIterable, Comparable, Hashable, Sendable {
@@ -41,7 +42,7 @@ package nonisolated enum RubyJLPTKanji {
     /// Whether `character` is a kanji that has a difficulty, which excludes
     /// the repetition mark in 時々.
     package static func isGraded(_ character: Character) -> Bool {
-        RubyReadings.isKanji(character) && character != "々"
+        RubyKana.isKanji(character) && character != "々"
     }
 
     private static let levels: [Character: RubyJLPTLevel] = {

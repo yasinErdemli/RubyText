@@ -1,4 +1,5 @@
 import Foundation
+import RubyTransliteration
 
 /// Source text with markup removed, plus the words found in it.
 ///
