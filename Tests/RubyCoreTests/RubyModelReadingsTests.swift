@@ -1,5 +1,6 @@
 import Foundation
 @testable import RubyCore
+import RubyIPADic
 import Testing
 
 /// Picks the choice whose meaning mentions `keyword`, standing in for the
@@ -14,7 +15,7 @@ private struct KeywordChooser: RubyReadingChooser {
 
 @Suite struct RubyModelReadingsTests {
     private func questions(_ text: String) -> [RubyReadingQuestion] {
-        let segments = RubyContent.segments(in: text, analyzer: RubyMeCabAnalyzer.shared)
+        let segments = RubyContent.segments(in: text, analyzer: RubyMeCabAnalyzer.ipadic)
         return RubyModelReadings.questions(in: segments).map(\.question)
     }
 
@@ -62,7 +63,7 @@ private struct KeywordChooser: RubyReadingChooser {
 
     @Test func manualReadingsAreNeverAsked() {
         #expect(questions("夜の公園は人気がない。").count == 1)
-        let segments = RubyContent.segments(in: "夜の公園は人気がない。", analyzer: RubyMeCabAnalyzer.shared)
+        let segments = RubyContent.segments(in: "夜の公園は人気がない。", analyzer: RubyMeCabAnalyzer.ipadic)
         #expect(RubyModelReadings.questions(in: segments, excluding: [5..<7]).isEmpty)
     }
 }

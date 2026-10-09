@@ -1,6 +1,5 @@
 import Foundation
 import Dictionary
-import IPADic
 import Mecab_Swift
 import RubyTransliteration
 import Synchronization
@@ -8,10 +7,11 @@ import Synchronization
 /// Splits Japanese text into words with readings, using MeCab and the
 /// IPAdic dictionary. Its part-of-speech information also drives how words
 /// group into reading phrases and how they're colored for learners.
+///
+/// The dictionary isn't part of RubyCore. Add the RubyIPADic product and
+/// use `.ipadic`, or load a copy your app downloads with
+/// `init(dictionary:)`.
 public nonisolated final class RubyMeCabAnalyzer: RubyAnalyzer, @unchecked Sendable {
-    /// One shared instance; loading the dictionary is the expensive part.
-    public static let shared = RubyMeCabAnalyzer()
-
     private struct State {
         let recorder: PartOfSpeechRecorder
         let tokenizer: Tokenizer?
@@ -25,14 +25,20 @@ public nonisolated final class RubyMeCabAnalyzer: RubyAnalyzer, @unchecked Senda
     // also guards `recorder`.
     private let state: Mutex<State>
 
-    private init() {
+    /// Creates an analyzer using the compiled IPAdic dictionary in the
+    /// folder at `url`: sys.dic, matrix.bin, char.bin, unk.dic and dicrc.
+    ///
+    /// Loading the dictionary is the expensive part, so create one
+    /// analyzer and share it. If the dictionary can't be loaded, the
+    /// analyzer finds no words, and text shows without readings.
+    public init(dictionary url: URL) {
         let recorder = PartOfSpeechRecorder()
-        let tokenizer = try? Tokenizer(dictionary: RecordingIPADic(recorder: recorder))
-        let pronouncer = try? Tokenizer(dictionary: PronouncingIPADic())
+        let tokenizer = try? Tokenizer(dictionary: IPADicFormat(url: url, recorder: recorder))
+        let pronouncer = try? Tokenizer(dictionary: IPADicFormat(url: url, pronounces: true))
         state = Mutex(State(recorder: recorder, tokenizer: tokenizer, pronouncer: pronouncer))
     }
 
-    /// There's only one instance, so analyzers compare by identity.
+    /// Analyzers compare by identity, since each loads its own dictionary.
     public static func == (lhs: RubyMeCabAnalyzer, rhs: RubyMeCabAnalyzer) -> Bool {
         lhs === rhs
     }
@@ -153,34 +159,30 @@ private nonisolated final class PartOfSpeechRecorder {
     var ids: [UInt16] = []
 }
 
-/// IPAdic with pronunciations in place of readings.
-private nonisolated struct PronouncingIPADic: DictionaryProviding {
-    private let base = IPADic()
+/// Where IPAdic keeps each feature, and how MeCab should report a word's
+/// part of speech.
+private nonisolated struct IPADicFormat: DictionaryProviding {
+    let url: URL
+    /// Collects part-of-speech IDs as the tokenizer asks for them.
+    var recorder: PartOfSpeechRecorder?
+    /// Reports pronunciations (トーキョー) in place of readings (トウキョウ).
+    var pronounces = false
 
-    var url: URL { base.url }
-    var readingIndex: Int { base.pronunciationIndex }
-    var pronunciationIndex: Int { base.pronunciationIndex }
-    var dictionaryFormIndex: Int { base.dictionaryFormIndex }
-
-    func partOfSpeech(posID: UInt16) -> PartOfSpeech {
-        base.partOfSpeech(posID: posID)
-    }
-}
-
-/// IPAdic, recording part-of-speech IDs as the tokenizer asks for them.
-private nonisolated struct RecordingIPADic: DictionaryProviding {
-    private let base = IPADic()
-    let recorder: PartOfSpeechRecorder
-
-    var url: URL { base.url }
-    var readingIndex: Int { base.readingIndex }
-    var pronunciationIndex: Int { base.pronunciationIndex }
-    var dictionaryFormIndex: Int { base.dictionaryFormIndex }
+    var readingIndex: Int { pronounces ? pronunciationIndex : 7 }
+    var pronunciationIndex: Int { 8 }
+    var dictionaryFormIndex: Int { 6 }
 
     func partOfSpeech(posID: UInt16) -> PartOfSpeech {
-        recorder.ids.append(posID)
+        recorder?.ids.append(posID)
         // Reported when the recorded IDs can't be used.
-        let attaches = (11...25).contains(posID) || (32...33).contains(posID) || (50...58).contains(posID)
-        return attaches ? .particle : base.partOfSpeech(posID: posID)
+        switch posID {
+        case 11...25, 32...33, 50...58: return .particle
+        case 3...9: return .symbol
+        case 27...30: return .prefix
+        case 31: return .verb
+        case 34...35: return .adverb
+        case 36...67: return .noun
+        default: return .unknown
+        }
     }
 }

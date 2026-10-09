@@ -1,4 +1,6 @@
+import Foundation
 import RubyCore
+import RubyIPADic
 import Testing
 
 /// Reads all of its text as one noun with a fixed reading.
@@ -11,9 +13,20 @@ private struct FixedAnalyzer: RubyAnalyzer {
 }
 
 @Suite struct RubyAnalyzerTests {
-    @Test func mecabIsTheDefault() {
-        let content = RubyContent.content(for: "猫")
+    @Test func ipadicFindsReadings() {
+        let content = RubyContent.content(for: "猫", analyzer: RubyMeCabAnalyzer.ipadic)
         #expect(content.words.map(\.romaji) == ["neko"])
+    }
+
+    @Test func withoutAnAnalyzerOnlyMarkupIsRead() {
+        let content = RubyContent.content(for: "{猫|ねこ}と犬", analyzer: nil)
+        #expect(content.string == "猫と犬")
+        #expect(content.words.flatMap(\.furigana).map(\.text) == ["ねこ"])
+    }
+
+    @Test func aMissingDictionaryReadsNothing() {
+        let analyzer = RubyMeCabAnalyzer(dictionary: URL(filePath: "/nonexistent"))
+        #expect(analyzer.segments(in: "猫").compactMap(\.reading).isEmpty)
     }
 
     @Test func contentUsesTheGivenAnalyzer() {

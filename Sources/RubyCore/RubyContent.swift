@@ -123,19 +123,22 @@ package final class RubyContent {
     private static let markupCache = NSCache<RubyCacheKey<MarkupKey>, RubyContent>()
     private static let segmentsCache = NSCache<RubyCacheKey<[RubySegment]>, RubyContent>()
 
-    /// Markup analyzed by a particular analyzer.
+    /// Markup analyzed by a particular analyzer, or by none.
     private struct MarkupKey: Hashable {
         let markup: String
-        let analyzer: AnyHashable
+        let analyzer: AnyHashable?
+
+        init(markup: String, analyzer: (any RubyAnalyzer)?) {
+            self.markup = markup
+            self.analyzer = analyzer.map { AnyHashable($0) }
+        }
     }
 
     /// Content for `markup`, with readings `analyzer` finds wherever the
-    /// markup doesn't supply them.
-    package static func content(
-        for markup: String,
-        analyzer: any RubyAnalyzer = RubyMeCabAnalyzer.shared
-    ) -> RubyContent {
-        let key = RubyCacheKey(MarkupKey(markup: markup, analyzer: AnyHashable(analyzer)))
+    /// markup doesn't supply them. Without an analyzer, only the markup's
+    /// readings show.
+    package static func content(for markup: String, analyzer: (any RubyAnalyzer)?) -> RubyContent {
+        let key = RubyCacheKey(MarkupKey(markup: markup, analyzer: analyzer))
         if let cached = markupCache.object(forKey: key) { return cached }
         let (string, manual) = parse(markup)
         let content = RubyContent(string: string, manual: manual, segments: segments(in: string, analyzer: analyzer))
@@ -160,11 +163,11 @@ package final class RubyContent {
     /// cover the same ranges in both.
     package static func content(
         for markup: String,
-        analyzer: any RubyAnalyzer = RubyMeCabAnalyzer.shared,
+        analyzer: (any RubyAnalyzer)?,
         chooser: some RubyReadingChooser
     ) async -> RubyContent {
         let key = RubyCacheKey(ModelKey(
-            markup: MarkupKey(markup: markup, analyzer: AnyHashable(analyzer)),
+            markup: MarkupKey(markup: markup, analyzer: analyzer),
             chooser: AnyHashable(chooser)
         ))
         if let cached = modelCache.object(forKey: key) { return cached }
@@ -277,8 +280,12 @@ package final class RubyContent {
 
     /// Segments for `text` from the automatic layers, in priority order:
     /// rules, then the analyzer's dictionary readings. Each rule only
-    /// replaces segments still read by the analyzer.
-    package static func segments(in text: String, analyzer: any RubyAnalyzer) -> [RubySegment] {
+    /// replaces segments still read by the analyzer. Without an analyzer,
+    /// one segment with no reading covers the text.
+    package static func segments(in text: String, analyzer: (any RubyAnalyzer)?) -> [RubySegment] {
+        guard let analyzer else {
+            return text.isEmpty ? [] : [RubySegment(text, source: .dictionary)]
+        }
         var segments = analyzer.segments(in: text)
         segments = RubyPhraseReadings.applyPhrases(to: segments)
         segments = RubyNumberReadings.apply(to: segments)

@@ -1,4 +1,5 @@
 import RubyCore
+import RubyIPADic
 import Testing
 
 @Suite struct RubyNumberReadingsTests {
@@ -46,7 +47,7 @@ import Testing
 
     /// The reading `RubyContent` gives a stretch of text, as base/reading.
     private func segments(_ text: String) -> [String] {
-        RubyContent.segments(in: text, analyzer: RubyMeCabAnalyzer.shared)
+        RubyContent.segments(in: text, analyzer: RubyMeCabAnalyzer.ipadic)
             .map { "\($0.base)/\($0.reading ?? "-")" }
     }
 
@@ -67,7 +68,7 @@ import Testing
     }
 
     @Test func numbersAreRuleReadings() {
-        let segment = RubyContent.segments(in: "3日", analyzer: RubyMeCabAnalyzer.shared).first
+        let segment = RubyContent.segments(in: "3日", analyzer: RubyMeCabAnalyzer.ipadic).first
         #expect(segment?.source == .rule)
         #expect(segment?.reading == "みっか")
     }
@@ -79,7 +80,7 @@ import Testing
         "昨日は十分休んだ。", "三分の一", "第一", "一緒に", "iPhone15", "12:30", "2026/10/08", "090-1234-5678",
     ])
     func leavesWordsAlone(_ text: String) {
-        let analyzed = RubyMeCabAnalyzer.shared.segments(in: text)
-        #expect(RubyContent.segments(in: text, analyzer: RubyMeCabAnalyzer.shared) == analyzed)
+        let analyzed = RubyMeCabAnalyzer.ipadic.segments(in: text)
+        #expect(RubyContent.segments(in: text, analyzer: RubyMeCabAnalyzer.ipadic) == analyzed)
     }
 }

@@ -19,6 +19,8 @@ extension EnvironmentValues {
     @Entry var rubyShowsWordDetails = false
     /// What to do when someone taps a word in a `RubyText`, if anything.
     @Entry var rubyWordTapAction: RubyWordTapAction? = nil
+    /// Definitions for word details, if any.
+    @Entry var rubyDictionary: RubyDictionary? = nil
 }
 
 extension View {
@@ -34,6 +36,20 @@ extension View {
     public func onRubyWordTap(perform action: @escaping (RubyWordInfo) -> Void) -> some View {
         environment(\.rubyWordTapAction, RubyWordTapAction(handler: action))
     }
+
+    /// Sets the dictionary that word details in this hierarchy show
+    /// definitions from. Set it once, near the root of your app:
+    ///
+    ///     import RubyJMdict
+    ///
+    ///     ContentView()
+    ///         .rubyDictionary(.jmdict)
+    ///
+    /// Without one, word details show the reading, part of speech and JLPT
+    /// level, but no definitions.
+    public func rubyDictionary(_ dictionary: RubyDictionary?) -> some View {
+        environment(\.rubyDictionary, dictionary)
+    }
 }
 
 /// The card `rubyWordDetails()` shows for a tapped word.
@@ -45,9 +61,11 @@ public struct RubyWordDetailView: View {
     /// has its final size when the popover opens.
     @State private var entries: [RubyDictionary.Entry]
 
-    public init(word: RubyWordInfo) {
+    /// Creates a card for `word`, with definitions from `dictionary` if
+    /// there is one.
+    public init(word: RubyWordInfo, dictionary: RubyDictionary? = nil) {
         self.word = word
-        _entries = State(initialValue: word.dictionaryEntries())
+        _entries = State(initialValue: dictionary?.entries(for: word) ?? [])
     }
 
     public var body: some View {
@@ -244,7 +262,7 @@ enum RubySystemDictionary {
 #endif
 
 #Preview("Word details") {
-    let content = RubyContent.content(for: "どこで生まれたかとんと見当がつかぬ。")
-    let range = content.dictionaryWords[2]
-    RubyWordDetailView(word: .info(for: range, in: content))
+    // RubyUI doesn't include a dictionary, so the reading comes from markup.
+    let content = RubyContent.content(for: "{見当|けんとう}", analyzer: nil)
+    RubyWordDetailView(word: .info(for: content.words[0].range, in: content))
 }

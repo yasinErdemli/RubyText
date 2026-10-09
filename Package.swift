@@ -25,6 +25,12 @@ let package = Package(
         .library(name: "RubyCore", targets: ["RubyCore"]),
         /// SwiftUI views that draw furigana and romaji.
         .library(name: "RubyUI", targets: ["RubyUI"]),
+        /// The IPAdic dictionary MeCab finds words and readings with,
+        /// about 50 MB.
+        .library(name: "RubyIPADic", targets: ["RubyIPADic"]),
+        /// JMdict's English definitions for Word Details, about 35 MB,
+        /// under CC BY-SA 4.0.
+        .library(name: "RubyJMdict", targets: ["RubyJMdict"]),
     ],
     dependencies: [
         .package(url: "https://github.com/shinjukunian/Mecab-Swift", from: "0.8.0"),
@@ -39,8 +45,22 @@ let package = Package(
             dependencies: [
                 "RubyTransliteration",
                 .product(name: "Mecab-Swift", package: "Mecab-Swift"),
+            ],
+            swiftSettings: swiftSettings
+        ),
+        .target(
+            name: "RubyIPADic",
+            dependencies: [
+                "RubyCore",
                 .product(name: "IPADic", package: "Mecab-Swift"),
             ],
+            swiftSettings: swiftSettings
+        ),
+        .target(
+            name: "RubyJMdict",
+            dependencies: ["RubyCore"],
+            exclude: ["LICENSE.md"],
+            resources: [.copy("jmdict.sqlite")],
             swiftSettings: swiftSettings
         ),
         .target(
@@ -50,12 +70,12 @@ let package = Package(
         ),
         .testTarget(
             name: "RubyUITests",
-            dependencies: ["RubyCore", "RubyUI"],
+            dependencies: ["RubyCore", "RubyUI", "RubyIPADic"],
             swiftSettings: swiftSettings + [.defaultIsolation(MainActor.self)]
         ),
         .testTarget(
             name: "RubyCoreTests",
-            dependencies: ["RubyCore", "RubyTransliteration"],
+            dependencies: ["RubyCore", "RubyTransliteration", "RubyIPADic", "RubyJMdict"],
             swiftSettings: swiftSettings
         ),
         .testTarget(

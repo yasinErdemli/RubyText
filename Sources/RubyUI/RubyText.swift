@@ -33,8 +33,9 @@ import SwiftUI
 /// Attach a `RubyReader` with `rubyReader(_:)` to emphasize each word as it's
 /// read aloud, styled with `rubyEmphasis(_:)`.
 ///
-/// Readings come from MeCab with IPAdic unless you choose another analyzer
-/// with `rubyAnalyzer(_:)`. Add `rubyModelReadings()` to have Apple's
+/// Readings come from the analyzer you set with `rubyAnalyzer(_:)`, such as
+/// `.ipadic` from the RubyIPADic product; without one, only readings in
+/// `{base|reading}` markup show. Add `rubyModelReadings()` to have Apple's
 /// on-device model read words whose reading depends on their meaning.
 ///
 /// Annotations are drawn by `RubyRenderer` and aren't part of the text
@@ -52,6 +53,7 @@ public struct RubyText: View {
     @Environment(\.rubyDigitReadingsHidden) private var digitReadingsHidden
     @Environment(\.rubySpacing) private var spacing
     @Environment(\.rubyWordColoring) private var wordColoring
+    @Environment(\.rubyDictionary) private var dictionary
     @Environment(\.rubyModelReadings) private var usesModel
     /// Content with the model's readings, once it has answered, and the
     /// input it's for.
@@ -112,7 +114,7 @@ public struct RubyText: View {
             selectedRect: $selectedRect
         )
         .popover(item: $selectedWord, attachmentAnchor: .rect(.rect(selectedRect))) { word in
-            RubyWordDetailView(word: word)
+            RubyWordDetailView(word: word, dictionary: dictionary)
                 .presentationCompactAdaptation(.popover)
         }
         // Annotations slide and lines move apart, so with Reduce Motion the
@@ -130,13 +132,13 @@ public struct RubyText: View {
     /// whether they're on.
     private struct ModelKey: Equatable {
         let markup: String?
-        let analyzer: AnyHashable
+        let analyzer: AnyHashable?
         let usesModel: Bool
     }
 
     private var modelKey: ModelKey {
         let markup: String? = if case .markup(let markup) = input { markup } else { nil }
-        return ModelKey(markup: markup, analyzer: AnyHashable(analyzer), usesModel: usesModel)
+        return ModelKey(markup: markup, analyzer: analyzer.map { AnyHashable($0) }, usesModel: usesModel)
     }
 
     /// Asks the model about words whose reading depends on their meaning,
@@ -144,7 +146,7 @@ public struct RubyText: View {
     /// shown as they are.
     private func loadModelReadings() async {
         let key = modelKey
-        guard key.usesModel, let markup = key.markup, RubyModelReadings.isAvailable else { return }
+        guard key.usesModel, let markup = key.markup, analyzer != nil, RubyModelReadings.isAvailable else { return }
         #if canImport(FoundationModels)
         let content = await RubyContent.content(for: markup, analyzer: analyzer, chooser: RubyFoundationModelsChooser())
         guard !Task.isCancelled else { return }
@@ -192,9 +194,8 @@ public struct RubyText: View {
 }
 
 extension EnvironmentValues {
-    /// Finds words and readings for `RubyText` views. MeCab with IPAdic by
-    /// default.
-    @Entry var rubyAnalyzer: any RubyAnalyzer = RubyMeCabAnalyzer.shared
+    /// Finds words and readings for `RubyText` views, if anything does.
+    @Entry var rubyAnalyzer: (any RubyAnalyzer)? = nil
     /// Whether `RubyText` views ask Apple's on-device model about words
     /// whose reading depends on their meaning.
     @Entry var rubyModelReadings = false
@@ -202,11 +203,17 @@ extension EnvironmentValues {
 
 extension View {
     /// Sets the analyzer `RubyText` views in this hierarchy use to find
-    /// words and readings, such as one backed by another dictionary.
+    /// words and readings. Set it once, near the root of your app:
     ///
+    ///     import RubyIPADic
+    ///
+    ///     ContentView()
+    ///         .rubyAnalyzer(.ipadic)
+    ///
+    /// Without an analyzer, only readings in `{base|reading}` markup show.
     /// Give a `RubyReader` reading the same text the same analyzer, so the
     /// phrases it emphasizes match the views' words.
-    public func rubyAnalyzer(_ analyzer: any RubyAnalyzer) -> some View {
+    public func rubyAnalyzer(_ analyzer: some RubyAnalyzer) -> some View {
         environment(\.rubyAnalyzer, analyzer)
     }
 
@@ -952,8 +959,10 @@ struct RubyLayout {
     }
 }
 
+// RubyUI doesn't include a dictionary, so previews read from markup.
+
 #Preview("Ruby styles") {
-    let sentence = "吾輩は猫である。名前はまだ無い。日本語を勉強しています。"
+    let sentence = "{吾輩|わがはい}は{猫|ねこ}である。{名前|なまえ}はまだ{無|な}い。{日本語|にほんご}を{勉強|べんきょう}しています。"
 
     ScrollView {
         VStack(alignment: .leading, spacing: 28) {
@@ -969,13 +978,13 @@ struct RubyLayout {
             RubyText(verbatim: sentence)
                 .rubyStyle([])
 
-            // Manual readings override automatic ones; multiple paragraphs.
-            RubyText(verbatim: "{今日|きょう}は{東京|とうきょう}へ{行|い}きたい。\n\nコーヒーを飲みたい。")
+            // Multiple paragraphs.
+            RubyText(verbatim: "{今日|きょう}は{東京|とうきょう}へ{行|い}きたい。\n\nコーヒーを{飲|の}みたい。")
                 .font(.title2.bold())
                 .rubyStyle([.furigana, .romaji])
 
             // Long word forced to wrap: its reading is split, not duplicated.
-            RubyText(verbatim: "きのう日本語能力試験を受けた。")
+            RubyText(verbatim: "きのう{日本語能力試験|にほんごのうりょくしけん}を{受|う}けた。")
                 .frame(width: 160, alignment: .leading)
                 .rubyStyle()
         }
@@ -986,7 +995,7 @@ struct RubyLayout {
 }
 
 #Preview("Colors") {
-    let sentence = "吾輩は猫である。名前はまだ無い。"
+    let sentence = "{吾輩|わがはい}は{猫|ねこ}である。{名前|なまえ}はまだ{無|な}い。"
 
     VStack(alignment: .leading, spacing: 28) {
         // Default: furigana in secondary, romaji in tertiary.
@@ -1013,7 +1022,7 @@ struct RubyLayout {
     @Previewable @State var style: RubyStyle = .furigana
 
     VStack(alignment: .leading, spacing: 24) {
-        RubyText(verbatim: "吾輩は猫である。名前はまだ無い。")
+        RubyText(verbatim: "{吾輩|わがはい}は{猫|ねこ}である。{名前|なまえ}はまだ{無|な}い。")
             .font(.title2)
             .rubyStyle(style)
 

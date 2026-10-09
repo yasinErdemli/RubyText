@@ -6,7 +6,7 @@ import Synchronization
 /// Reads Japanese text aloud and tracks the phrase being spoken, so
 /// `RubyText` views attached with `rubyReader(_:)` can emphasize it.
 ///
-///     @State private var reader = RubyReader()
+///     @State private var reader = RubyReader(analyzer: .ipadic)
 ///
 ///     RubyText(text).rubyReader(reader)
 ///     Button("Read Aloud") { reader.speak(text) }
@@ -24,9 +24,9 @@ import Synchronization
 ///   spoken with on-device speech recognition.
 @Observable
 public final class RubyReader {
-    /// Finds the words and phrases to emphasize. Use the same analyzer as
-    /// the `RubyText` views showing the text.
-    public let analyzer: any RubyAnalyzer
+    /// Finds the words and phrases to emphasize, if anything does. Use the
+    /// same analyzer as the `RubyText` views showing the text.
+    public let analyzer: (any RubyAnalyzer)?
     /// Speech rate relative to the system default, from 0.5 (slow) to 2.
     /// Applies to synthesized speech.
     public var rate: Float = 1
@@ -77,9 +77,19 @@ public final class RubyReader {
     @ObservationIgnored private var interruptionObservers: [NotificationCenter.ObservationToken] = []
     @ObservationIgnored private var routeChangeObserver: Task<Void, Never>?
 
-    /// Creates a reader that finds phrases with `analyzer`, MeCab with
-    /// IPAdic by default.
-    public init(analyzer: any RubyAnalyzer = RubyMeCabAnalyzer.shared) {
+    /// Creates a reader that finds the phrases to emphasize with
+    /// `analyzer`, such as `.ipadic` from the RubyIPADic product.
+    public convenience init(analyzer: some RubyAnalyzer) {
+        self.init(analyzer as any RubyAnalyzer)
+    }
+
+    /// Creates a reader with no analyzer, which reads text aloud but
+    /// can't find phrases in it to emphasize.
+    public convenience init() {
+        self.init(nil)
+    }
+
+    private init(_ analyzer: (any RubyAnalyzer)?) {
         self.analyzer = analyzer
         #if os(iOS)
         interruptionObservers = [

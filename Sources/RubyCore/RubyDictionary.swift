@@ -3,16 +3,17 @@ import RubyTransliteration
 import SQLite3
 import Synchronization
 
-/// English definitions of Japanese words, from the bundled JMdict.
+/// English definitions of Japanese words, from a JMdict database.
+///
+/// The database isn't part of RubyCore. Add the RubyJMdict product and use
+/// `.jmdict`, or open a copy your app downloads with `init(url:)`.
+/// Tools/build-dictionary.py builds one.
 ///
 /// JMdict is the work of the Electronic Dictionary Research and
 /// Development Group (https://www.edrdg.org/jmdict/j_jmdict.html), used
-/// under CC BY-SA 4.0.
-/// Apps showing its definitions must credit it; `RubyDictionary.credit`
-/// has suitable wording. Tools/build-dictionary.py builds the database.
+/// under CC BY-SA 4.0. Apps showing its definitions must credit it;
+/// `RubyDictionary.credit` has suitable wording.
 public nonisolated final class RubyDictionary: Sendable {
-    /// The shared dictionary, or `nil` if the database isn't in the bundle.
-    package static let shared = RubyDictionary(url: Bundle.main.url(forResource: "jmdict", withExtension: "sqlite"))
 
     /// Attribution the JMdict license requires wherever definitions show.
     public static let credit = "Definitions from JMdict, © Electronic Dictionary Research and Development Group, CC BY-SA 4.0."
@@ -47,8 +48,9 @@ public nonisolated final class RubyDictionary: Sendable {
     private let database: Mutex<OpaquePointer?>
     private let tagDescriptions: [String: String]
 
-    private init?(url: URL?) {
-        guard let url else { return nil }
+    /// Opens the dictionary database at `url`, read only, or returns
+    /// `nil` if it can't be opened.
+    public init?(url: URL) {
         var database: OpaquePointer?
         guard sqlite3_open_v2(url.path, &database, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else {
             sqlite3_close(database)
@@ -237,16 +239,17 @@ public nonisolated final class RubyDictionary: Sendable {
     }
 }
 
-extension RubyWordInfo {
-    /// Dictionary entries for the word, best match first, or none if the
-    /// dictionary isn't bundled. Looks up the dictionary form, then the
-    /// word as written, then its reading.
-    public func dictionaryEntries(limit: Int = 3) -> [RubyDictionary.Entry] {
-        var terms = [dictionaryForm, text, reading].compactMap { $0 }
+extension RubyDictionary {
+    /// Entries for `word`, best match first: the entry whose reading
+    /// matches the one shown, so 人気 read ひとけ finds "human presence".
+    /// Looks up the dictionary form, then the word as written, then its
+    /// reading.
+    public func entries(for word: RubyWordInfo, limit: Int = 3) -> [Entry] {
+        var terms = [word.dictionaryForm, word.text, word.reading].compactMap { $0 }
         // JMdict lists 勉強する under the noun 勉強.
-        if let dictionaryForm, dictionaryForm.hasSuffix("する"), dictionaryForm.count > 2 {
+        if let dictionaryForm = word.dictionaryForm, dictionaryForm.hasSuffix("する"), dictionaryForm.count > 2 {
             terms.append(String(dictionaryForm.dropLast(2)))
         }
-        return RubyDictionary.shared?.entries(for: terms, reading: reading, partOfSpeech: partOfSpeech, limit: limit) ?? []
+        return entries(for: terms, reading: word.reading, partOfSpeech: word.partOfSpeech, limit: limit)
     }
 }
