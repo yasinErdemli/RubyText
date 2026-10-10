@@ -2,7 +2,7 @@
 
 import PackageDescription
 
-// Approachable concurrency, as in the demo app, in the Swift 6 language
+// Approachable concurrency, as in new Xcode projects, in the Swift 6 language
 // mode, which already has the rest of it. RubyUI also isolates to the main
 // actor by default; RubyCore, RubyMeCab and RubyTransliteration are plain
 // data and stay nonisolated.
@@ -76,6 +76,8 @@ let package = Package(
                 // Apps bundle their own dictionary; tests read with this one.
                 .product(name: "IPADic", package: "Mecab-Swift"),
             ],
+            // A few JMdict entries for the dictionary tests.
+            resources: [.copy("Fixtures")],
             swiftSettings: swiftSettings
         ),
         .testTarget(

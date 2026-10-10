@@ -2,15 +2,16 @@ import Foundation
 @testable import RubyCore
 import Testing
 
-/// The demo app's database. The library doesn't include one, so these
-/// tests are skipped without it.
-private let jmdict = RubyDictionary(url: URL(filePath: #filePath)
-    .deletingLastPathComponent()
-    .appending(path: "../../../Untitled Project/Dictionary/jmdict.sqlite")
-    .standardized)
+/// A few JMdict entries, in the format `Tools/build-dictionary.py` builds.
+private let jmdict = Bundle.module
+    .url(forResource: "jmdict-sample", withExtension: "sqlite", subdirectory: "Fixtures")
+    .flatMap(RubyDictionary.init(url:))
 
-@Suite(.enabled(if: jmdict != nil, "The demo app's JMdict isn't there"))
 struct RubyDictionaryTests {
+    @Test func theSampleOpens() {
+        #expect(jmdict != nil)
+    }
+
     private func firstEntry(for markup: String) -> RubyDictionary.Entry? {
         let content = RubyContent.content(for: markup)
         let word = RubyWordInfo.info(for: content.words[0].range, in: content)

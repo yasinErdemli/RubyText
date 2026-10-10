@@ -31,10 +31,6 @@ RubyText("{今日|きょう}は日本語を勉強しています。")
   and opens word details. Dynamic Type and Reduce Motion are respected, and
   copying gives the text without its readings.
 
-To try it first, run the demo app, `Untitled Project.xcodeproj` at the root
-of the repository. Its Try tab shows your own text with any settings, and
-gives you the code for them; Features shows each feature with its code.
-
 ## Requirements
 
 iOS 27, macOS 27 or visionOS 27, and Swift 6.2.
@@ -89,7 +85,7 @@ for MeCab with IPAdic.
 Without an analyzer, only readings in `{base|reading}` markup show.
 
 **JMdict** gives word details their definitions. Build an SQLite database
-from it with [`Tools/build-dictionary.py`](../Tools/build-dictionary.py),
+from it with [`Tools/build-dictionary.py`](Tools/build-dictionary.py),
 bundle it, and set it like the analyzer:
 
 ```swift

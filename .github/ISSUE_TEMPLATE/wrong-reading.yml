@@ -1,0 +1,63 @@
+name: Wrong reading
+description: RubyText reads a word wrong.
+labels: ["reading"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting it. Wrong readings are added to the accuracy benchmark, so they stay fixed.
+  - type: textarea
+    id: sentence
+    attributes:
+      label: Sentence
+      description: The whole sentence the word is in, since the right reading often depends on it.
+      placeholder: 夜の公園は人気がなくて怖い。
+    validations:
+      required: true
+  - type: input
+    id: word
+    attributes:
+      label: Word
+      placeholder: 人気
+    validations:
+      required: true
+  - type: input
+    id: shown
+    attributes:
+      label: Reading RubyText shows
+      placeholder: にんき
+    validations:
+      required: true
+  - type: input
+    id: correct
+    attributes:
+      label: Correct reading
+      description: In hiragana. If more than one is standard, list them.
+      placeholder: ひとけ
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind of word
+      options:
+        - Number, date or time
+        - Counter (一本, 三本)
+        - Read as a whole (今日, 大人)
+        - Reading depends on meaning (辛い, 生物)
+        - Phrase or compound (一日中, 本棚)
+        - Name of a person or place
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: model
+    attributes:
+      label: Setup
+      options:
+        - label: "`rubyModelReadings()` is on"
+  - type: input
+    id: version
+    attributes:
+      label: RubyText version and OS
+      placeholder: 1.0.0, iOS 27.0

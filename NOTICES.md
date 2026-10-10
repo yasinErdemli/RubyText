@@ -33,6 +33,15 @@ free software by Taku Kudo and Nippon Telegraph and Telephone Corporation,
 released under any of the GPL, the LGPL, or the BSD License. Its licence
 files are in Mecab-Swift's `Sources/mecab/mecab` folder.
 
+### JMdict sample in the tests
+
+`Tests/RubyCoreTests/Fixtures/jmdict-sample.sqlite` holds a few entries from
+JMdict, the property of the Electronic Dictionary Research and Development
+Group, used in conformance with the
+[Group's licence](https://www.edrdg.org/edrdg/licence.html) and under
+[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). It's only
+used by the tests, and isn't part of any product.
+
 ## Dictionaries apps supply
 
 RubyText bundles no dictionary. Apps choose and bundle their own, under the
