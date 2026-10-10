@@ -31,6 +31,10 @@ RubyText("{今日|きょう}は日本語を勉強しています。")
   and opens word details. Dynamic Type and Reduce Motion are respected, and
   copying gives the text without its readings.
 
+To try it first, run [RubyText Demo](<RubyText Demo repository URL>). Its Try
+tab shows your own text with any settings and gives you the code for them;
+Features shows each feature with its code.
+
 ## Requirements
 
 iOS 27, macOS 27 or visionOS 27, and Swift 6.2.
@@ -220,7 +224,8 @@ RubyText(text)
 A model from another provider, such as Claude, OpenAI or a local server,
 works once it conforms to `LanguageModel`. It must support guided
 generation, since RubyText limits its answer to the listed meanings with a
-schema. The demo app's `Language Models` folder has complete examples for
+schema. The `Language Models` folder of
+[RubyText Demo](<RubyText Demo repository URL>) has complete examples for
 Claude and for OpenAI-compatible APIs. Models off the device receive each
 sentence they're asked about, and an app you ship shouldn't contain a
 provider's API key.
@@ -281,11 +286,11 @@ fixed rather than an independent test. "With the model" is Apple's
 on-device model.
 
 Words whose reading depends on meaning have a benchmark of their own, on
-the demo app's Model Benchmark page: 55 sentences with one such word each,
+RubyText Demo's Model Benchmark page: 55 sentences with one such word each,
 24 pairs of sentences where only the first settles the word in the second,
 and a diary with 17 such words. Apple's on-device model reads 71 of the 79
 sentences and pairs right, measured on an iPhone 17e. Claude Haiku 5.5,
-through the demo's `ClaudeModel`, reads all 96 words right.
+through RubyText Demo's `ClaudeModel`, reads all 96 words right.
 
 ## Licence
 
