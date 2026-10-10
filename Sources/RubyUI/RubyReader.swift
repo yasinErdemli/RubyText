@@ -56,7 +56,8 @@ public final class RubyReader {
 
     public private(set) var isSpeaking = false
     public private(set) var isPaused = false
-    /// Whether a recording is being aligned to its text before playing.
+    /// Whether the reader is getting ready to read: analyzing long text,
+    /// or aligning a recording to its text.
     public private(set) var isPreparing = false
     /// The text being read, with `{base|reading}` markup removed.
     public private(set) var text: String?
@@ -146,9 +147,30 @@ public final class RubyReader {
     /// Starts reading `string` aloud, with the readings it gives,
     /// replacing anything being read. Pass `RubyString(markup:)` for
     /// markup you load at run time.
+    ///
+    /// Text a `RubyText` view shows has been analyzed already, so reading
+    /// starts at once. Other long text is analyzed first, off the main
+    /// actor, while `isPreparing` is true.
     public func speak(_ string: RubyString) {
         stop()
-        let content = RubyContent.content(for: string, analyzer: analyzer)
+        if let content = RubyContent.immediateContent(for: string, analyzer: analyzer) {
+            speak(content)
+            return
+        }
+        let token = session
+        let analyzer = analyzer
+        isPreparing = true
+        Task {
+            let content = await RubyContent.analyzing(string, analyzer: analyzer)
+            // Something else started or stopped meanwhile.
+            guard token == session else { return }
+            isPreparing = false
+            speak(content)
+        }
+    }
+
+    /// Starts reading `content` aloud.
+    private func speak(_ content: RubyContent) {
         // The readings themselves, rather than SSML, which voices may
         // ignore and which turns off the rate.
         let spoken = content.spokenString(spokenReadings)
@@ -195,10 +217,19 @@ public final class RubyReader {
     /// speech recognition, which can take a moment; results are cached.
     public func play(narration url: URL, for string: RubyString) async throws {
         stop()
-        let content = RubyContent.content(for: string, analyzer: analyzer)
+        let token = session
+        let content: RubyContent
+        if let immediate = RubyContent.immediateContent(for: string, analyzer: analyzer) {
+            content = immediate
+        } else {
+            isPreparing = true
+            content = await RubyContent.analyzing(string, analyzer: analyzer)
+        }
+        // Something else started or stopped meanwhile.
+        guard token == session else { return }
+        isPreparing = false
         let units = RubyReadingUnits.units(in: content.string, words: content.words)
         let key = url.absoluteString + "\n" + content.string
-        let token = session
 
         let anchors: [RubyTimelineAnchor]
         if let cached = alignments[key] {
@@ -282,6 +313,7 @@ public final class RubyReader {
 
     public func stop() {
         session += 1
+        isPreparing = false
         pausedByInterruption = false
         synthesizer.stopSpeaking(at: .immediate)
         speech?.stop()

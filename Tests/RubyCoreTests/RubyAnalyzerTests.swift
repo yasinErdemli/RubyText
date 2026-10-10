@@ -1,5 +1,6 @@
 import Foundation
-import RubyCore
+import Synchronization
+@_spi(Experiments) import RubyCore
 import RubyMeCab
 import Testing
 
@@ -50,4 +51,55 @@ private struct FixedAnalyzer: RubyAnalyzer {
         #expect(content.words.flatMap(\.furigana).map(\.text) == ["いきもの"])
         #expect(content.words.first?.source == .manual)
     }
+
+    @Test func shortTextIsAnalyzedAtOnce() {
+        let analyzer = FixedAnalyzer(reading: "みじかい")
+        let short = RubyString(markup: "短い文")
+        let content = RubyContent.immediateContent(for: short, analyzer: analyzer)
+        #expect(content?.words.flatMap(\.furigana).map(\.text) == ["みじかい"])
+        #expect(RubyContent.cachedContent(for: short, analyzer: analyzer) === content)
+    }
+
+    @Test func longTextIsAnalyzedLater() async {
+        let analyzer = FixedAnalyzer(reading: "ながい")
+        let long = RubyString(markup: String(repeating: "長", count: RubyContent.immediateLength + 1))
+        #expect(RubyContent.immediateContent(for: long, analyzer: analyzer) == nil)
+        // Without an analyzer, there's nothing to wait for.
+        #expect(RubyContent.immediateContent(for: long, analyzer: nil) != nil)
+
+        let content = await RubyContent.analyzing(long, analyzer: analyzer)
+        #expect(content.words.flatMap(\.furigana).map(\.text) == ["ながい"])
+        #expect(RubyContent.immediateContent(for: long, analyzer: analyzer) === content)
+    }
+
+    @MainActor
+    @Test func analysisLeavesTheMainActor() async {
+        let analyzer = ThreadRecordingAnalyzer()
+        _ = await RubyContent.analyzing(RubyString(markup: "本を読む"), analyzer: analyzer)
+        #expect(analyzer.ranOnMainThread == [false])
+
+        let chosen = ThreadRecordingAnalyzer()
+        _ = await RubyContent.content(for: "辛い", analyzer: chosen, chooser: FirstChooser())
+        #expect(chosen.ranOnMainThread == [false])
+    }
+}
+
+/// Reads each text as one noun, and records whether it did so on the main
+/// thread.
+private final class ThreadRecordingAnalyzer: RubyAnalyzer {
+    private let calls = Mutex<[Bool]>([])
+    var ranOnMainThread: [Bool] { calls.withLock { $0 } }
+
+    func segments(in text: String) -> [RubySegment] {
+        calls.withLock { $0.append(Thread.isMainThread) }
+        return [RubySegment(text, reading: "よむ", word: .init(partOfSpeech: .noun), source: .dictionary)]
+    }
+
+    static func == (lhs: ThreadRecordingAnalyzer, rhs: ThreadRecordingAnalyzer) -> Bool { lhs === rhs }
+    func hash(into hasher: inout Hasher) { hasher.combine(ObjectIdentifier(self)) }
+}
+
+/// Always picks the first reading.
+private struct FirstChooser: RubyReadingChooser {
+    func choose(_ question: RubyReadingQuestion) async throws -> Int? { 0 }
 }

@@ -53,6 +53,11 @@ The first release.
   inherited through the environment like other text styles, with animated
   changes that respect Reduce Motion. `import RubyUI` imports everything it
   uses.
+- Long text never holds up the interface: `RubyText` analyzes short text as
+  it appears, and text over 200 UTF-16 code units off the main actor,
+  showing it at once and fading its readings in. `RubyReader` analyzes long
+  text the same way before reading, while `isPreparing` is true, as do
+  readings by meaning and aligning a recording.
 - Furigana in hiragana, katakana or romaji, or inline in parentheses.
   Readings keep their natural spacing, centered over their kanji; long ones
   flow over neighboring kana and get space around their word, never inside

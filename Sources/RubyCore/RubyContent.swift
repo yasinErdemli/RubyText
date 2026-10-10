@@ -196,6 +196,41 @@ package final class RubyContent: Sendable {
         return content
     }
 
+    /// Content `content(for:analyzer:)` already made for `string`, if
+    /// it's still cached.
+    package static func cachedContent(for string: RubyString, analyzer: (any RubyAnalyzer)?) -> RubyContent? {
+        stringCache.object(forKey: RubyCacheKey(StringKey(string: string, analyzer: analyzer)))
+    }
+
+    /// The most UTF-16 code units `immediateContent(for:analyzer:)`
+    /// analyzes on the spot: with MeCab and IPAdic, about two milliseconds
+    /// on a recent iPhone.
+    package static let immediateLength = 200
+
+    /// Content for `string` if it's quick to make: cached, without an
+    /// analyzer, or short enough to analyze within a frame. `nil` for
+    /// longer text, which `analyzing(_:analyzer:)` analyzes off the
+    /// caller's actor.
+    package static func immediateContent(for string: RubyString, analyzer: (any RubyAnalyzer)?) -> RubyContent? {
+        if let cached = cachedContent(for: string, analyzer: analyzer) { return cached }
+        let length = string.pieces.reduce(0) { length, piece in
+            switch piece {
+            case .markup(let text), .text(let text), .unannotated(let text): length + text.utf16.count
+            case .ruby(let base, _): length + base.utf16.count
+            }
+        }
+        guard analyzer == nil || length <= immediateLength else { return nil }
+        return content(for: string, analyzer: analyzer)
+    }
+
+    /// Content for `string`, as `content(for:analyzer:)` makes it, but off
+    /// the caller's actor, so analyzing long text doesn't hold up the main
+    /// thread.
+    @concurrent
+    package static func analyzing(_ string: RubyString, analyzer: (any RubyAnalyzer)?) async -> RubyContent {
+        content(for: string, analyzer: analyzer)
+    }
+
     nonisolated(unsafe) private static let modelCache = NSCache<RubyCacheKey<ModelKey>, RubyContent>()
 
     /// Forgets content with the model's readings, so it's asked again.
@@ -215,7 +250,7 @@ package final class RubyContent: Sendable {
         for markup: String,
         analyzer: (any RubyAnalyzer)?,
         chooser: some RubyReadingChooser,
-        onEachReading: ((RubyContent) async -> Void)? = nil
+        onEachReading: (@Sendable (RubyContent) async -> Void)? = nil
     ) async -> RubyContent {
         await content(for: RubyString(markup: markup), analyzer: analyzer, chooser: chooser, onEachReading: onEachReading)
     }
@@ -226,15 +261,17 @@ package final class RubyContent: Sendable {
     ///
     /// The same as `content(for:analyzer:)` where the text has no such
     /// words or the chooser can't answer. Only readings change, so words
-    /// cover the same ranges in both.
+    /// cover the same ranges in both. Text is analyzed off the caller's
+    /// actor.
     ///
     /// - Parameter onEachReading: Called with the content so far each time
     ///   an answer changes a reading, to show readings as they come.
+    @concurrent
     package static func content(
         for string: RubyString,
         analyzer: (any RubyAnalyzer)?,
         chooser: some RubyReadingChooser,
-        onEachReading: ((RubyContent) async -> Void)? = nil
+        onEachReading: (@Sendable (RubyContent) async -> Void)? = nil
     ) async -> RubyContent {
         let key = RubyCacheKey(ModelKey(
             string: StringKey(string: string, analyzer: analyzer),
@@ -253,8 +290,14 @@ package final class RubyContent: Sendable {
             onChange: onChange
         )
         // Unchanged, possibly because the chooser couldn't answer yet, so
-        // only changed content is cached.
-        guard chosen != segments else { return Self.content(for: string, analyzer: analyzer) }
+        // only changed content is cached as the model's. It's the
+        // dictionary's content, already analyzed.
+        guard chosen != segments else {
+            if let cached = cachedContent(for: string, analyzer: analyzer) { return cached }
+            let content = RubyContent(string: text, manual: manual, segments: segments)
+            stringCache.setObject(content, forKey: RubyCacheKey(StringKey(string: string, analyzer: analyzer)))
+            return content
+        }
         let content = RubyContent(string: text, manual: manual, segments: chosen)
         modelCache.setObject(content, forKey: key)
         return content

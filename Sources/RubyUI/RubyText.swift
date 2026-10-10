@@ -94,6 +94,9 @@ public struct RubyText: View {
     @Environment(\.rubyShowsWordDetails) private var showsWordDetails
     @Environment(\.rubyWordTapAction) private var wordTapAction
     @Environment(\.rubyReader) private var reader
+    /// Content for text too long to analyze as the view appears, once
+    /// it's analyzed, and the input it's for.
+    @State private var analyzedContent: (key: AnalysisKey, content: RubyContent)?
     /// Content with the model's readings, once it has answered, and the
     /// input it's for.
     @State private var modelContent: (key: ModelKey, content: RubyContent)?
@@ -153,16 +156,11 @@ public struct RubyText: View {
     }
 
     public var body: some View {
-        // Cached per markup or segment array, so this is cheap after the
-        // first time. The dictionary's readings show until the model's
-        // arrive.
+        // The dictionary's readings show until the model's arrive.
         let analyzed: RubyContent = if let modelContent, modelContent.key == modelKey {
             modelContent.content
         } else {
-            switch input {
-            case .string(let string): .content(for: string, analyzer: analyzer)
-            case .segments(let segments): .content(for: segments)
-            }
+            dictionaryContent
         }
         let content = rewritten(analyzed)
         let speech = content.speech(spokenReadings)
@@ -203,6 +201,9 @@ public struct RubyText: View {
         .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: furiganaFilter)
         .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: digitReadingsHidden)
         .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: spacing)
+        .task(id: analysisKey) {
+            await analyze()
+        }
         .task(id: modelKey) {
             await loadModelReadings()
         }
@@ -236,6 +237,49 @@ public struct RubyText: View {
         return content
     }
 
+    /// The text with the analyzer's readings, and the rules', if it has
+    /// them yet.
+    ///
+    /// Cached per string or segment array, so this is cheap after the
+    /// first time. Short text is analyzed right away, which takes about a
+    /// millisecond. Longer text shows with only the readings it gives
+    /// until `analyze()` has analyzed it off the main actor.
+    private var dictionaryContent: RubyContent {
+        switch input {
+        case .segments(let segments):
+            return .content(for: segments)
+        case .string(let string):
+            if let analyzedContent, analyzedContent.key == analysisKey {
+                return analyzedContent.content
+            }
+            return RubyContent.immediateContent(for: string, analyzer: analyzer)
+                ?? .content(for: string, analyzer: nil)
+        }
+    }
+
+    /// What the analyzer's readings depend on: the text and the analyzer.
+    private struct AnalysisKey: Equatable {
+        let string: RubyString?
+        let analyzer: AnyHashable?
+    }
+
+    private var analysisKey: AnalysisKey {
+        let string: RubyString? = if case .string(let string) = input { string } else { nil }
+        return AnalysisKey(string: string, analyzer: analyzer.map { AnyHashable($0) })
+    }
+
+    /// Analyzes text too long to analyze as the view appears, off the main
+    /// actor, and shows its readings when they're ready.
+    private func analyze() async {
+        let key = analysisKey
+        guard let string = key.string, RubyContent.immediateContent(for: string, analyzer: analyzer) == nil else { return }
+        let content = await RubyContent.analyzing(string, analyzer: analyzer)
+        guard !Task.isCancelled else { return }
+        withAnimation(reduceMotion ? nil : .smooth(duration: 0.35)) {
+            analyzedContent = (key, content)
+        }
+    }
+
     /// What the model's readings depend on: the markup, the analyzer, and
     /// whether they're on and how they update.
     private struct ModelKey: Equatable {
@@ -256,8 +300,8 @@ public struct RubyText: View {
     private func loadModelReadings() async {
         let key = modelKey
         guard let updates = key.updates, let string = key.string, analyzer != nil, key.options.isAvailable else { return }
-        let onEachReading: ((RubyContent) async -> Void)? = if updates == .asAnswered {
-            { content in
+        let onEachReading: (@Sendable (RubyContent) async -> Void)? = if updates == .asAnswered {
+            { @MainActor content in
                 guard !Task.isCancelled else { return }
                 modelContent = (key, content)
             }

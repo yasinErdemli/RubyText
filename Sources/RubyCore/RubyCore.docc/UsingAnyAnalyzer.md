@@ -44,6 +44,14 @@ two that compare equal must return the same segments for the same text. A
 class that loads a dictionary usually compares by identity. They're also
 `Sendable`, since text is analyzed off the main actor.
 
+`RubyText` analyzes short text, up to 200 UTF-16 code units, as it appears,
+so lists of short texts show their readings at once; that's on the main
+actor, so an analyzer should take no more than a millisecond or two for
+it. Longer text shows at once with the readings its markup gives, and is
+analyzed in the background, its readings fading in when they're ready.
+`RubyReader` does the same before it reads, and RubyText caches what it
+analyzed, so text a view has shown reads at once.
+
 ### An analyzer with Apple's tokenizer
 
 Apple's tokenizer comes with the system, so it needs no dictionary. It gives

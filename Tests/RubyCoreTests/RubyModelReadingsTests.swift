@@ -106,16 +106,16 @@ private final class TogetherChooser: RubyReadingChooser {
     }
 
     @Test func readingsComeAsAnswered() async {
-        var updates: [[String]] = []
+        let updates = Mutex<[[String]]>([])
         let content = await RubyContent.content(
             for: "夜の公園は人気がない。このカレーは辛い！",
             analyzer: RubyMeCabAnalyzer.ipadic,
             chooser: KeywordsChooser(keywords: ["deserted", "spicy"])
         ) { content in
-            updates.append(content.words.filter { $0.source == .model }.flatMap(\.furigana).map(\.text))
+            updates.withLock { $0.append(content.words.filter { $0.source == .model }.flatMap(\.furigana).map(\.text)) }
         }
         // One update for each reading changed, each with the ones before.
-        #expect(updates == [["ひとけ"], ["ひとけ", "から"]])
+        #expect(updates.withLock { $0 } == [["ひとけ"], ["ひとけ", "から"]])
         #expect(content.words.filter { $0.source == .model }.flatMap(\.furigana).map(\.text) == ["ひとけ", "から"])
     }
 
@@ -149,13 +149,13 @@ private final class TogetherChooser: RubyReadingChooser {
 
     @Test func forgottenReadingsAreChosenAgain() async {
         func updates() async -> Int {
-            var count = 0
+            let count = Mutex(0)
             _ = await RubyContent.content(
                 for: "受付の方に聞いてください。",
                 analyzer: RubyMeCabAnalyzer.ipadic,
                 chooser: KeywordsChooser(keywords: ["polite"])
-            ) { _ in count += 1 }
-            return count
+            ) { _ in count.withLock { $0 += 1 } }
+            return count.withLock { $0 }
         }
         #expect(await updates() == 1)
         // Kept, so nothing changes as it's shown again.

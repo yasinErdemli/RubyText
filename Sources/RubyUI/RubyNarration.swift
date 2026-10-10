@@ -78,12 +78,16 @@ nonisolated enum RubyNarrationAligner {
     /// device. Segments describe the audio, not the text, so they stay valid
     /// when the text's markup changes.
     ///
+    /// Runs off the caller's actor: recognition, and reading what's
+    /// recognized, take a while.
+    ///
     /// - Parameter transcriptWords: Tokenizes recognized text, to read it in
     ///   context. Passed in so this file doesn't depend on the dictionary.
+    @concurrent
     static func anchors(
         for url: URL,
         units: [RubyReadingUnit],
-        transcriptWords: (String) -> [RubyWord]
+        transcriptWords: @Sendable (String) -> [RubyWord]
     ) async throws -> [RubyTimelineAnchor] {
         let segments: [Segment]
         if let data = try? Data(contentsOf: segmentsURL(for: url)) {
