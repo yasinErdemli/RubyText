@@ -19,4 +19,16 @@ import Testing
         #expect(reading(of: "何人", in: "何人いる？") == "なんにん")
         #expect(reading(of: "何時", in: "何時に会う？") == "なんじ")
     }
+
+    @Test(arguments: [
+        ("日本に住んでいる。", "日本", "にほん"), ("日本人の友達", "日本人", "にほんじん"),
+        ("日本中で話題になった。", "日本中", "にほんじゅう"), ("日本語を話す。", "日本語", "にほんご"),
+        // Names that are read にっぽん.
+        ("日本銀行が発表した。", "日本銀行", "にっぽんぎんこう"),
+        // Readings you give always win.
+        ("{日本|にっぽん}の空", "日本", "にっぽん"),
+    ])
+    func nihon(_ sentence: String, _ word: String, _ expected: String) {
+        #expect(reading(of: word, in: sentence) == expected)
+    }
 }

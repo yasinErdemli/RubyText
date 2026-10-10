@@ -82,6 +82,28 @@ package enum RubyPhraseReadings {
         return result
     }
 
+    /// `segments` with 日本 read にほん, as most people say it and learners
+    /// are taught, where the analyzer reads it にっぽん, as IPAdic and
+    /// UniDic both do: 日本, 日本人. Names that are read にっぽん keep it:
+    /// 日本銀行, 日本郵便.
+    package static func applyNihon(to segments: [RubySegment]) -> [RubySegment] {
+        var result = segments
+        for index in result.indices where result[index].source == .dictionary {
+            let segment = result[index]
+            guard segment.base.hasPrefix("日本"), let reading = segment.reading, reading.hasPrefix("にっぽん") else { continue }
+            // The rest of the name, in this word or the next.
+            let rest = segment.base.dropFirst(2) + (index + 1 < result.count ? result[index + 1].base : "")
+            guard !nipponNames.contains(where: rest.hasPrefix) else { continue }
+            result[index].reading = "にほん" + reading.dropFirst(4)
+            result[index].pronunciation = nil
+            result[index].source = .rule
+        }
+        return result
+    }
+
+    /// Words after 日本 in names that read it にっぽん.
+    private static let nipponNames = ["銀行", "放送協会", "武道館", "郵便", "製鉄", "通運"]
+
     /// Kana that 何 reads なん before.
     private static let nanBefore = ["だ", "で", "の", "と", "て", "な", "じゃ"]
 

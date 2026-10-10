@@ -525,6 +525,7 @@ package final class RubyContent: Sendable {
         segments = RubyNumberReadings.apply(to: segments)
         segments = RubyPhraseReadings.applySuffixes(to: segments)
         segments = RubyPhraseReadings.applyNan(to: segments)
+        segments = RubyPhraseReadings.applyNihon(to: segments)
         return segments
     }
 
