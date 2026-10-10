@@ -1,7 +1,7 @@
 # Notices
 
-RubyText's code is under the MIT License; see [LICENSE](LICENSE). The data
-and dependencies below keep their own licences.
+RubyText's code is under the Apache License 2.0; see [LICENSE](LICENSE).
+The data and dependencies below keep their own licences.
 
 ## In the package
 

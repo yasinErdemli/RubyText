@@ -293,5 +293,6 @@ through the demo's `ClaudeModel`, reads all 96 words right.
 
 ## Licence
 
-The code is under the MIT License; see [LICENSE](LICENSE). Data and
-dependencies keep their own licences; see [NOTICES.md](NOTICES.md).
+The code is under the Apache License 2.0, copyright 2026 Yasin Erdemli; see
+[LICENSE](LICENSE). Data and dependencies keep their own licences; see
+[NOTICES.md](NOTICES.md).
