@@ -20,4 +20,18 @@ import Testing
     @Test func dictionaryReadingsKeepLongVowels() {
         #expect(furigana("生ビール") == ["生:なま"])
     }
+
+    /// Readings you give that the analyzer agrees with are spoken as it
+    /// says: the う of 思う isn't a long vowel.
+    @Test func manualReadingsArePronouncedAsTheAnalyzerSays() {
+        func romaji(_ markup: String) -> [String?] {
+            RubyContent.content(for: markup).words.map(\.romaji)
+        }
+        #expect(romaji("{思う|おもう}") == ["omou"])
+        #expect(romaji("{追う|おう}") == ["ou"])
+        #expect(romaji("{東京|とうきょう}") == ["Tōkyō"])
+        // A reading the analyzer doesn't give is read as written.
+        #expect(romaji("{宇宙|そら}") == ["sora"])
+        #expect(romaji("{東京|トーキョー}") == ["tōkyō"])
+    }
 }

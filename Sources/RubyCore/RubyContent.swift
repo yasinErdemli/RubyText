@@ -419,15 +419,42 @@ package final class RubyContent: Sendable {
         // Manual words take their grammar from the token they replace, so
         // they're grouped and colored like the rest of the text.
         return words.sorted { $0.range.lowerBound < $1.range.lowerBound }.map { word in
+            var word = pronounced(word, as: automatic)
             guard word.partOfSpeech == nil,
                   let token = automatic.first(where: { $0.range.overlaps(word.range) })
             else { return word }
-            var word = word
             word.attachesToPrevious = word.attachesToPrevious ?? token.attachesToPrevious
             word.partOfSpeech = token.partOfSpeech
             word.dictionaryForm = token.range == word.range ? token.dictionaryForm : nil
             return word
         }
+    }
+
+    /// `word`, a manual word, with the romaji of the automatic words it
+    /// covers where they read the same: the analyzer knows how they're
+    /// spoken, so {思う|おもう} is omou, not omō, and which are names.
+    private static func pronounced(_ word: RubyWord, as automatic: [RubyWord]) -> RubyWord {
+        guard word.source == .manual, !word.romajiSources.isEmpty else { return word }
+        let covered = automatic.filter { word.range.contains($0.range.lowerBound) && $0.range.upperBound <= word.range.upperBound }
+        func reading(_ words: [RubyWord]) -> String {
+            RubyKana.hiragana(words.flatMap(\.romajiSources).map(\.word.reading).joined())
+        }
+        guard let first = covered.first, let last = covered.last,
+              first.range.lowerBound == word.range.lowerBound, last.range.upperBound == word.range.upperBound,
+              zip(covered, covered.dropFirst()).allSatisfy({ $0.range.upperBound == $1.range.lowerBound }),
+              covered.allSatisfy({ !$0.romajiSources.isEmpty }),
+              reading(covered) == reading([word])
+        else { return word }
+        return RubyWord(
+            range: word.range,
+            furigana: word.furigana,
+            romaji: covered.compactMap(\.romaji).joined(),
+            romajiSources: covered.flatMap(\.romajiSources),
+            attachesToPrevious: word.attachesToPrevious,
+            partOfSpeech: word.partOfSpeech,
+            dictionaryForm: word.dictionaryForm,
+            source: .manual
+        )
     }
 
     private convenience init(segments: [RubySegment]) {
