@@ -269,7 +269,15 @@ words as a control. It runs with the tests, in
 kuroshiro is the JavaScript library for furigana, measured at version 1.2.1
 with its Kuromoji analyzer, which also uses IPAdic. RubyText's rules were
 written against this benchmark, so treat the score as a measure of what's
-fixed rather than an independent test.
+fixed rather than an independent test. "With the model" is Apple's
+on-device model.
+
+Words whose reading depends on meaning have a benchmark of their own, on
+the demo app's Model Benchmark page: 55 sentences with one such word each,
+24 pairs of sentences where only the first settles the word in the second,
+and a diary with 17 such words. Apple's on-device model reads 71 of the 79
+sentences and pairs right, measured on an iPhone 17e. Claude Haiku 5.5,
+through the demo's `ClaudeModel`, reads all 96 words right.
 
 ## Licence
 
