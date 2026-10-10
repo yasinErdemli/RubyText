@@ -24,7 +24,9 @@ The first release.
   `RubyAnalyzer` protocol, with rules for numbers, dates and counters (3日 →
   みっか, 2026年 → にせんにじゅうろくねん) and for set phrases (一日中,
   大家さん, お母さん, 十人十色), which also cover for analyzers that split
-  them into shorter words.
+  them into shorter words. 日本 reads にほん, as most people say it, though
+  analyzers read it にっぽん; names that use にっぽん, such as 日本銀行, keep
+  it.
 - Readings that depend on meaning chosen by a language model with
   `rubyModelReadings()`: 辛い as からい for spicy food, 人気 as ひとけ for
   people around. Apple's on-device model answers by default, where Apple
