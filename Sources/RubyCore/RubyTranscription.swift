@@ -110,8 +110,9 @@ extension RubyContent {
     }
 
     // Rewritten content holds the content it came from, so while it's
-    // cached, no other content can take that content's identifier.
-    private static let rewrites = NSCache<RubyCacheKey<RewriteKey>, RubyContent>()
+    // cached, no other content can take that content's identifier. Like
+    // the analysis caches, it's shared by every thread.
+    nonisolated(unsafe) private static let rewrites = NSCache<RubyCacheKey<RewriteKey>, RubyContent>()
 
     private func rewritten(_ rewrite: Rewrite) -> RubyContent {
         let key = RubyCacheKey(RewriteKey(content: ObjectIdentifier(self), rewrite: rewrite))

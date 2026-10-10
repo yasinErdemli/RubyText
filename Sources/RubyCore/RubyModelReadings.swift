@@ -41,6 +41,11 @@ package protocol RubyReadingChooser: Hashable, Sendable {
 extension RubyReadingChooser {
     package var asksTogether: Bool { false }
 
+    /// Whether `other` is this chooser: of the same type, and equal.
+    fileprivate func isSameChooser(as other: any RubyReadingChooser) -> Bool {
+        other as? Self == self
+    }
+
     package func choose(_ questions: [RubyReadingQuestion]) async throws -> [Int?] {
         var choices: [Int?] = []
         for question in questions {
@@ -124,7 +129,7 @@ public nonisolated enum RubyModelReadings {
         }
         return zip(questions, indices).map { question, index in
             guard let index, question.choices.indices.contains(index) else { return nil }
-            let key = AnswerKey(question: question, chooser: AnyHashable(chooser))
+            let key = AnswerKey(question: question, chooser: chooser)
             answers.withLock { $0[key] = Task { index } }
             return question.choices[index]
         }
@@ -245,9 +250,18 @@ public nonisolated enum RubyModelReadings {
     /// chooser, however many views ask about it at the same time.
     private static let answers = Mutex<[AnswerKey: Task<Int?, Never>]>([:])
 
-    private struct AnswerKey: Hashable {
+    private struct AnswerKey: Hashable, Sendable {
         let question: RubyReadingQuestion
-        let chooser: AnyHashable
+        let chooser: any RubyReadingChooser
+
+        static func == (lhs: Self, rhs: Self) -> Bool {
+            lhs.question == rhs.question && lhs.chooser.isSameChooser(as: rhs.chooser)
+        }
+
+        func hash(into hasher: inout Hasher) {
+            hasher.combine(question)
+            chooser.hash(into: &hasher)
+        }
     }
 
     /// The most questions asked about in one request, so a long text's
@@ -261,7 +275,7 @@ public nonisolated enum RubyModelReadings {
     }
 
     private static func answer(_ question: RubyReadingQuestion, chooser: some RubyReadingChooser) async -> Int? {
-        let key = AnswerKey(question: question, chooser: AnyHashable(chooser))
+        let key = AnswerKey(question: question, chooser: chooser)
         let task = answers.withLock { answers in
             if let task = answers[key] { return task }
             if answers.count >= 1000 { answers.removeAll() }
@@ -275,7 +289,7 @@ public nonisolated enum RubyModelReadings {
     /// Tasks answering each of `questions`: the ones already asked about,
     /// and requests together for the rest.
     private static func startAnswering(_ questions: [RubyReadingQuestion], chooser: some RubyReadingChooser) -> [Task<Int?, Never>] {
-        let keys = questions.map { AnswerKey(question: $0, chooser: AnyHashable(chooser)) }
+        let keys = questions.map { AnswerKey(question: $0, chooser: chooser) }
         return answers.withLock { answers in
             if answers.count >= 1000 { answers.removeAll() }
             let unasked = keys.indices.filter { answers[keys[$0]] == nil }
@@ -299,7 +313,7 @@ public nonisolated enum RubyModelReadings {
     private static func finish(_ task: Task<Int?, Never>, for question: RubyReadingQuestion, chooser: some RubyReadingChooser) async -> Int? {
         let choice = await task.value
         if choice == nil {
-            let key = AnswerKey(question: question, chooser: AnyHashable(chooser))
+            let key = AnswerKey(question: question, chooser: chooser)
             answers.withLock { answers in
                 if answers[key] == task { answers[key] = nil }
             }

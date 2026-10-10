@@ -2,14 +2,12 @@
 
 import PackageDescription
 
-// Approachable concurrency, as in the demo app, in the Swift 5 language
-// mode. RubyUI also isolates to the main actor by default; RubyCore,
-// RubyMeCab and RubyTransliteration are plain data and stay nonisolated.
+// Approachable concurrency, as in the demo app, in the Swift 6 language
+// mode, which already has the rest of it. RubyUI also isolates to the main
+// actor by default; RubyCore, RubyMeCab and RubyTransliteration are plain
+// data and stay nonisolated.
 let swiftSettings: [SwiftSetting] = [
-    .enableUpcomingFeature("DisableOutwardActorInference"),
-    .enableUpcomingFeature("GlobalActorIsolatedTypesUsability"),
     .enableUpcomingFeature("InferIsolatedConformances"),
-    .enableUpcomingFeature("InferSendableFromCaptures"),
     .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
     .enableUpcomingFeature("MemberImportVisibility"),
 ]
@@ -86,5 +84,5 @@ let package = Package(
             swiftSettings: swiftSettings
         ),
     ],
-    swiftLanguageModes: [.v5]
+    swiftLanguageModes: [.v6]
 )

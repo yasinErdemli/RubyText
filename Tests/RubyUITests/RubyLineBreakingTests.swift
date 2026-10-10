@@ -10,7 +10,8 @@ import Testing
 @MainActor @Suite struct RubyLineBreakingTests {
     private static let sentence = "今日は東京へ行きたい。コーヒーを飲みながら日本語を勉強しています。"
 
-    private static let fonts: [Font] = [
+    // Test arguments are read off the main actor.
+    nonisolated private static let fonts: [Font] = [
         .body, .title3, .title3.bold(), .title3.italic(), .largeTitle,
         .system(.title3, design: .rounded), .system(.body, design: .serif),
         .system(size: 20), .custom("HiraginoSans-W3", size: 20, relativeTo: .body),

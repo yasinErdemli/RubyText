@@ -1,33 +1,37 @@
 import Foundation
 import RubyTransliteration
+import Synchronization
 
 /// Source text with markup removed, plus the words found in it.
 ///
 /// Tokenizing is relatively expensive, so results are cached per markup
 /// string, or per segment array, rather than recomputed on every view update.
-package final class RubyContent {
+/// The caches are shared by every thread, so content is too.
+package final class RubyContent: Sendable {
     package let string: String
     package let words: [RubyWord]
 
     /// For text rewritten from other content, such as in hiragana or with
     /// readings in parentheses, the content it was rewritten from. Its
     /// words correspond one to one with this content's.
-    package private(set) var original: RubyContent?
+    package let original: RubyContent?
     /// For rewritten text, where each UTF-16 offset of the original moved
     /// to, as the start of a range and as its end. The two differ where a
     /// space was put between romaji words.
-    private var offsetMap: RubyOffsetMap?
+    private let offsetMap: RubyOffsetMap?
     /// UTF-16 offsets of the spaces kana text was given between phrases
     /// or words, which aren't in the original.
-    package private(set) var spaces: [Int] = []
+    package let spaces: [Int]
     /// How rewritten text writes its words, if it was rewritten.
-    private(set) var rewriteForm: RubyRewriteForm?
+    let rewriteForm: RubyRewriteForm?
 
     /// Words as a dictionary lists them, for word details: a verb or
     /// adjective with its conjugated endings (生まれ|た), a noun with its
     /// suffixes (田中|さん), or a noun with する as one verb (勉強|し|た).
     /// Particles and other auxiliaries stand alone.
-    package private(set) lazy var dictionaryWords: [Range<Int>] = {
+    package let dictionaryWords: [Range<Int>]
+
+    private static func dictionaryWords(in words: [RubyWord]) -> [Range<Int>] {
         var groups: [(range: Range<Int>, head: RubyPartOfSpeech?)] = []
         for word in words {
             // する after a noun makes a verb, though MeCab tags it independent.
@@ -49,12 +53,12 @@ package final class RubyContent {
             groups.append((word.range, word.partOfSpeech))
         }
         return groups.map(\.range)
-    }()
+    }
 
     /// Words as Hepburn romaji writes them.
     package var romajiWords: [RubyRomajiWord] { romajiWords(in: .hepburn) }
 
-    private var romajiWordsBySystem: [RubyRomanization: [RubyRomajiWord]] = [:]
+    private let romajiWordsBySystem = Mutex<[RubyRomanization: [RubyRomajiWord]]>([:])
 
     /// Words as romaji in `system` write them, each one annotation.
     /// Verb and adjective endings join their word (読ん|だ → yonda,
@@ -62,14 +66,14 @@ package final class RubyContent {
     /// stay separate (benkyō shite imasu, kōhī o), except は and も after
     /// another particle (demo, niwa).
     package func romajiWords(in system: RubyRomanization) -> [RubyRomajiWord] {
-        if let cached = romajiWordsBySystem[system] { return cached }
+        if let cached = romajiWordsBySystem.withLock({ $0[system] }) { return cached }
         let romajiWords: [RubyRomajiWord] = if let original, let offsetMap {
             // Rewritten text keeps the original's romaji, moved with it.
             rewriteForm != .romaji ? original.romajiWords(in: system).map { RubyRomajiWord(range: offsetMap.range($0.range), text: $0.text) } : []
         } else {
             groupingRomaji(in: system)
         }
-        romajiWordsBySystem[system] = romajiWords
+        romajiWordsBySystem.withLock { $0[system] = romajiWords }
         return romajiWords
     }
 
@@ -156,8 +160,10 @@ package final class RubyContent {
         "あげる", "くれる", "もらう", "いただく", "くださる", "やる",
     ]
 
-    private static let stringCache = NSCache<RubyCacheKey<StringKey>, RubyContent>()
-    private static let segmentsCache = NSCache<RubyCacheKey<[RubySegment]>, RubyContent>()
+    // NSCache is safe to use from any thread, though it isn't marked
+    // Sendable; the content in it is.
+    nonisolated(unsafe) private static let stringCache = NSCache<RubyCacheKey<StringKey>, RubyContent>()
+    nonisolated(unsafe) private static let segmentsCache = NSCache<RubyCacheKey<[RubySegment]>, RubyContent>()
 
     /// A string analyzed by a particular analyzer, or by none.
     private struct StringKey: Hashable {
@@ -190,7 +196,7 @@ package final class RubyContent {
         return content
     }
 
-    private static let modelCache = NSCache<RubyCacheKey<ModelKey>, RubyContent>()
+    nonisolated(unsafe) private static let modelCache = NSCache<RubyCacheKey<ModelKey>, RubyContent>()
 
     /// Forgets content with the model's readings, so it's asked again.
     package static func forgetModelReadings() {
@@ -318,13 +324,13 @@ package final class RubyContent {
     ///
     /// The segments come from the whole string so manual readings don't
     /// cut words apart: 行き in "{行|い}きたい" still reads "iki".
-    private init(string: String, manual: [RubyWord], segments: [RubySegment]) {
-        self.string = string
-        let automatic = Self.words(from: segments)
-        guard !manual.isEmpty else {
-            words = automatic
-            return
-        }
+    private convenience init(string: String, manual: [RubyWord], segments: [RubySegment]) {
+        self.init(string: string, words: Self.words(merging: manual, into: Self.words(from: segments)))
+    }
+
+    /// `automatic` words, with `manual` ones in place of those they cover.
+    private static func words(merging manual: [RubyWord], into automatic: [RubyWord]) -> [RubyWord] {
+        guard !manual.isEmpty else { return automatic }
 
         var words: [RubyWord] = []
         var pending = manual[...]
@@ -369,7 +375,7 @@ package final class RubyContent {
 
         // Manual words take their grammar from the token they replace, so
         // they're grouped and colored like the rest of the text.
-        self.words = words.sorted { $0.range.lowerBound < $1.range.lowerBound }.map { word in
+        return words.sorted { $0.range.lowerBound < $1.range.lowerBound }.map { word in
             guard word.partOfSpeech == nil,
                   let token = automatic.first(where: { $0.range.overlaps(word.range) })
             else { return word }
@@ -381,9 +387,18 @@ package final class RubyContent {
         }
     }
 
-    private init(segments: [RubySegment]) {
-        self.string = segments.map(\.base).joined()
-        self.words = Self.words(from: segments)
+    private convenience init(segments: [RubySegment]) {
+        self.init(string: segments.map(\.base).joined(), words: Self.words(from: segments))
+    }
+
+    private init(string: String, words: [RubyWord]) {
+        self.string = string
+        self.words = words
+        original = nil
+        offsetMap = nil
+        spaces = []
+        rewriteForm = nil
+        dictionaryWords = Self.dictionaryWords(in: words)
     }
 
     /// `original` rewritten as `string` in `form`, its words moved
