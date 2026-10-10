@@ -62,6 +62,11 @@ import Testing
         ("何本", ["何本/なんぼん"]),
         ("六日間", ["六日間/むいかかん"]),
         ("十分間", ["十分間/じゅっぷんかん"]),
+        // Rough counts: two or three days, four or five people.
+        ("二三日", ["二三日/にさんにち"]),
+        ("四五人", ["四五人/しごにん"]),
+        ("三四本", ["三四本/さんよんほん"]),
+        ("五六回", ["五六回/ごろっかい"]),
     ])
     func readsSpans(_ text: String, _ expected: [String]) {
         #expect(segments(text) == expected)

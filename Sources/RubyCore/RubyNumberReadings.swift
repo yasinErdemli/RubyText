@@ -76,6 +76,14 @@ package enum RubyNumberReadings {
     }
 
     private static func reading(of number: ParsedNumber, counter rule: Counter, in text: [Character], end: Int) -> String? {
+        if let rough = number.rough {
+            // Both numbers, with the counter as it is after the second,
+            // but none of the readings for whole numbers: にさんにち, not
+            // にみっか; しごにん.
+            let second = Spoken(rough.second)
+            let counted = rule.kana == "にち" ? second.text + "にち" : rule.read(second, value: -1, afterMonth: false)
+            return counted.map { roughKana[rough.first]! + $0 }
+        }
         guard let value = number.value else {
             // A decimal, or digits with leading zeros: no sound changes.
             return number.spoken.text + rule.kana
@@ -111,7 +119,12 @@ package enum RubyNumberReadings {
         let value: Int?
         let spoken: Spoken
         let isDigits: Bool
+        /// For a rough count such as 二三 (two or three), the two numbers.
+        var rough: (first: Int, second: Int)? = nil
     }
+
+    /// How the first number of a rough count reads: し in 四五人.
+    private static let roughKana = [1: "いち", 2: "に", 3: "さん", 4: "し", 5: "ご", 6: "ろく", 7: "しち", 8: "はち"]
 
     private static let kanjiDigits: [Character: Int] = [
         "〇": 0, "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9,
@@ -197,6 +210,14 @@ package enum RubyNumberReadings {
         }
         guard end > start, kanjiGroups[text[start]] == nil else { return nil }
         let characters = text[start..<end]
+
+        // Two numerals in a row, the second one more, are a rough count:
+        // 二三日 is two or three days, 四五人 four or five people.
+        if characters.count == 2, let first = kanjiDigits[characters.first!], let second = kanjiDigits[characters.last!],
+           first > 0, second == first + 1 {
+            let spoken = Spoken(pieces: [roughKana[first]!] + Spoken(second).pieces, onesDigit: second)
+            return ParsedNumber(start: start, end: end, text: String(characters), value: second, spoken: spoken, isDigits: false, rough: (first, second))
+        }
 
         let value: Int
         if characters.contains("〇") || (characters.count > 1 && characters.allSatisfy { kanjiDigits[$0] != nil }) {
