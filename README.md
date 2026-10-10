@@ -306,8 +306,16 @@ written against this benchmark, so treat the score as a measure of what's
 fixed rather than an independent test. "With the model" is Apple's
 on-device model.
 
-Words whose reading depends on meaning have a benchmark of their own, on
-RubyText Demo's Model Benchmark page: 55 sentences with one such word each,
+The model knows 64 words whose reading depends on meaning, and the tests
+have 259 sentences for them, each reading in turn, in
+[`ModelReadingsBenchmarkTests.swift`](Tests/RubyCoreTests/ModelReadingsBenchmarkTests.swift).
+Half were written after the meanings the model chooses between, and scored
+once. The dictionary reads 140 of them right; with Apple's on-device model,
+240, measured on a Mac, and the model changes none the dictionary read
+right.
+
+They also have a benchmark of their own on RubyText Demo's Model
+Benchmark page: 55 sentences with one such word each,
 24 pairs of sentences where only the first settles the word in the second,
 and a diary with 17 such words. Apple's on-device model reads 71 of the 79
 sentences and pairs right, measured on an iPhone 17e. Claude Haiku 5.5,

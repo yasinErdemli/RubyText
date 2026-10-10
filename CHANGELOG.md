@@ -11,28 +11,34 @@ The first release.
 
 - `RubyCore` finds words with any analyzer you choose, and links no
   tokenizer. `RubyMeCab` is the analyzer RubyText includes: MeCab with a
-  dictionary in IPAdic's format, which you supply. An analyzer only has to
-  give segments with readings, in hiragana or katakana; grammar is
-  optional, and the "Using Any Analyzer" article lists what each part
-  adds, with an example on Apple's built-in tokenizer.
+  dictionary in IPAdic's or UniDic's format, which you supply, told apart
+  by its `dicrc`. UniDic, larger than IPAdic, reads more recent words
+  right: 39 or 42 of 50 for UniDic 2.1.2 or 3.1, against 36. An analyzer
+  only has to give segments with readings, in hiragana or katakana;
+  grammar is optional, and the "Using Any Analyzer" article lists what
+  each part adds, with an example on Apple's built-in tokenizer.
 
 ### Readings
 
-- Readings found on device: MeCab with IPAdic, behind the `RubyAnalyzer`
-  protocol, with rules for numbers, dates and counters (3日 → みっか,
-  2026年 → にせんにじゅうろくねん) and for set phrases (一日中, 大家さん).
+- Readings found on device: MeCab with IPAdic or UniDic, behind the
+  `RubyAnalyzer` protocol, with rules for numbers, dates and counters (3日 →
+  みっか, 2026年 → にせんにじゅうろくねん) and for set phrases (一日中,
+  大家さん, お母さん, 十人十色), which also cover for analyzers that split
+  them into shorter words.
 - Readings that depend on meaning chosen by a language model with
   `rubyModelReadings()`: 辛い as からい for spicy food, 人気 as ひとけ for
   people around. Apple's on-device model answers by default, where Apple
   Intelligence is available; `model:` takes any FoundationModels
   `LanguageModel`, such as `PrivateCloudComputeLanguageModel()` for apps
   with its entitlement, or a model from another provider that supports
-  guided generation. The model says what the word means before choosing,
-  with the sentences around it. With `updates: .asAnswered`, each reading
-  changes as soon as the model answers, so long texts correct themselves
-  as it works. `RubyModelReadings.prewarm(_:)` loads a model ahead of time;
-  the questions it's asked and the ways of asking that the benchmark
-  compares are SPI, with `@_spi(Experiments)`.
+  guided generation. It knows 64 such words, from 金 (かね or きん) and
+  表 (おもて or ひょう) to 一途 (いちず or いっと). The model says what the
+  word means before choosing, with the sentences around it. With
+  `updates: .asAnswered`, each reading changes as soon as the model
+  answers, so long texts correct themselves as it works.
+  `RubyModelReadings.prewarm(_:)` loads a model ahead of time; the
+  questions it's asked and the ways of asking that the benchmark compares
+  are SPI, with `@_spi(Experiments)`.
 - `{base|reading}` markup and `RubyText(segments:)` for readings you supply.
   Markup is read the way `Text` reads Markdown: in literals and with
   `RubyText(markup:)`, while a `String` is shown as written. Each reading
@@ -44,6 +50,8 @@ The first release.
   analyzed as one text, and markup in interpolated strings shows as
   written. `RubyText` literals aren't localized; pass a
   `LocalizedStringResource` for localized text.
+- 259 sentences for the words read by meaning: 140 read correctly by the
+  dictionary, 240 with Apple's on-device model.
 - A benchmark of 255 words in context: 241 read correctly, 254 with the
   model.
 
