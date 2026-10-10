@@ -51,7 +51,7 @@ nonisolated final class RubyNarrationPlayback: NSObject, AVAudioPlayerDelegate, 
 /// speech recognition. The recognizer may write words differently from the
 /// text (我輩 for 吾輩), so recognized and expected text are compared by
 /// pronunciation: both are converted to romaji and aligned letter by letter.
-nonisolated enum RubyNarrationAligner {
+package nonisolated enum RubyNarrationAligner {
     enum AlignmentError: LocalizedError {
         case recognitionUnavailable
         case nothingRecognized
@@ -65,10 +65,10 @@ nonisolated enum RubyNarrationAligner {
     }
 
     /// A recognized piece of the recording.
-    struct Segment: Codable, Sendable {
-        let text: String
-        let start: Double
-        let end: Double
+    package struct Segment: Codable, Sendable {
+        package let text: String
+        package let start: Double
+        package let end: Double
     }
 
     /// One anchor per unit, with start and end times in the recording.
@@ -102,13 +102,13 @@ nonisolated enum RubyNarrationAligner {
 
     /// Where precomputed segments for a recording are stored: `natsume.m4a`
     /// uses `natsume.segments.json`.
-    static func segmentsURL(for url: URL) -> URL {
+    package static func segmentsURL(for url: URL) -> URL {
         url.deletingPathExtension().appendingPathExtension("segments.json")
     }
 
     // MARK: Recognition
 
-    static func transcribe(_ url: URL) async throws -> [Segment] {
+    package static func transcribe(_ url: URL) async throws -> [Segment] {
         let japanese = Locale(identifier: "ja-JP")
         let file = try AVAudioFile(forReading: url)
 

@@ -1,17 +1,14 @@
-// Precomputes speech-recognition segments for a narration recording, so the
+// Precomputes speech-recognition segments for a narration recording, so an
 // app can align it to text without on-device recognition.
 //
-// Build (from the repository root):
-//   xcrun swiftc -parse-as-library -O Tools/align-narration.swift \
-//     MyApp/Ruby/RubyReadings.swift MyApp/Ruby/RubyReadingUnits.swift \
-//     MyApp/Ruby/RubyNarration.swift -o /tmp/align-narration
-//
-// Run:
-//   /tmp/align-narration MyApp/Narration/natsume.m4a
+// Run from the repository root:
+//   swift run align-narration path/to/natsume.m4a
 //
 // Writes natsume.segments.json next to the recording and prints the
-// recognized segments.
+// recognized segments. RubyReader reads that file when it plays the
+// recording, instead of recognizing it on device.
 import Foundation
+import RubyUI
 
 @main
 struct AlignNarration {

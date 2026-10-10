@@ -55,6 +55,16 @@ let package = Package(
             dependencies: ["RubyCore", "RubyTransliteration"],
             swiftSettings: swiftSettings + [.defaultIsolation(MainActor.self)]
         ),
+        // Precomputes speech recognition for a narration recording:
+        // swift run align-narration <recording>
+        .executableTarget(
+            name: "align-narration",
+            dependencies: ["RubyUI"],
+            path: "Tools",
+            exclude: ["build-dictionary.py"],
+            sources: ["align-narration.swift"],
+            swiftSettings: swiftSettings
+        ),
         .testTarget(
             name: "RubyUITests",
             dependencies: [
