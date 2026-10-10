@@ -24,3 +24,8 @@ jobs:
           xcodebuild build
           -scheme RubyText-Package
           -destination "platform=macOS"
+      - name: Build for visionOS
+        run: >
+          xcodebuild build
+          -scheme RubyText-Package
+          -destination "generic/platform=visionOS"
