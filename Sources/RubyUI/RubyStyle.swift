@@ -61,7 +61,7 @@ extension RubyPlacement {
 /// Which kanji get furigana, so learners only see readings they need.
 ///
 ///     RubyText("今日、政府は新しい経済政策を発表した。")
-/// ///         .rubyFurigana(.above(.n4))   // readings for 政府, 経済, 政策, 発表
+///         .rubyFurigana(.above(.n4))   // readings for 政府, 経済, 政策, 発表
 ///
 /// A reading spanning several kanji, like せいさく over 政策, shows if any
 /// of them is unknown. Changing the filter fades readings in and out.
@@ -320,7 +320,7 @@ extension View {
     /// the text, or in parentheses after each kanji.
     ///
     ///     RubyText("東京へ行きたい。")
-    ///     ///         .rubyFuriganaPosition(.inline)   // 東京（とうきょう）へ行（い）きたい。
+    ///         .rubyFuriganaPosition(.inline)   // 東京（とうきょう）へ行（い）きたい。
     ///
     /// Inline readings are part of the text, so selecting and copying
     /// includes them. Romaji, if shown, move above the text.
