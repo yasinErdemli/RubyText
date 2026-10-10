@@ -1,5 +1,6 @@
 import IPADic
 import RubyCore
+import RubyMeCab
 
 extension RubyMeCabAnalyzer {
     /// MeCab with IPAdic, from the Mecab-Swift package. Apps bundle their

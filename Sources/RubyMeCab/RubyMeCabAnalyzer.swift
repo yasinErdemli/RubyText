@@ -1,6 +1,7 @@
 import Foundation
 import Dictionary
 import Mecab_Swift
+import RubyCore
 import RubyTransliteration
 import Synchronization
 
@@ -8,9 +9,11 @@ import Synchronization
 /// IPAdic dictionary. Its part-of-speech information also drives how words
 /// group into reading phrases and how they're colored for learners.
 ///
-/// The dictionary isn't part of RubyCore: bundle a compiled IPAdic folder
-/// in your app, or download one, and pass its location to
-/// `init(dictionary:)`.
+/// The dictionary isn't part of RubyText: use the one Mecab-Swift's
+/// `IPADic` product provides, bundle a compiled IPAdic folder in your app,
+/// or download one, and pass its location to `init(dictionary:)`. It reads
+/// IPAdic's format only; for another dictionary or analyzer, write your
+/// own `RubyAnalyzer`.
 public nonisolated final class RubyMeCabAnalyzer: RubyAnalyzer, @unchecked Sendable {
     private struct State {
         let recorder: PartOfSpeechRecorder

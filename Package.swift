@@ -3,8 +3,8 @@
 import PackageDescription
 
 // Approachable concurrency, as in the demo app, in the Swift 5 language
-// mode. RubyUI also isolates to the main actor by default; RubyCore and
-// RubyTransliteration are plain data and stay nonisolated.
+// mode. RubyUI also isolates to the main actor by default; RubyCore,
+// RubyMeCab and RubyTransliteration are plain data and stay nonisolated.
 let swiftSettings: [SwiftSetting] = [
     .enableUpcomingFeature("DisableOutwardActorInference"),
     .enableUpcomingFeature("GlobalActorIsolatedTypesUsability"),
@@ -21,8 +21,12 @@ let package = Package(
         /// Kana to romaji, hiragana to katakana and back, with no
         /// dictionary and only the standard library.
         .library(name: "RubyTransliteration", targets: ["RubyTransliteration"]),
-        /// Readings as plain data: analysis, markup, dictionary lookups.
+        /// Readings as plain data: analysis, markup, dictionary lookups,
+        /// with whichever analyzer you give it.
         .library(name: "RubyCore", targets: ["RubyCore"]),
+        /// An analyzer using MeCab and a dictionary in IPAdic's format,
+        /// which you supply.
+        .library(name: "RubyMeCab", targets: ["RubyMeCab"]),
         /// SwiftUI views that draw furigana and romaji.
         .library(name: "RubyUI", targets: ["RubyUI"]),
     ],
@@ -36,7 +40,13 @@ let package = Package(
         ),
         .target(
             name: "RubyCore",
+            dependencies: ["RubyTransliteration"],
+            swiftSettings: swiftSettings
+        ),
+        .target(
+            name: "RubyMeCab",
             dependencies: [
+                "RubyCore",
                 "RubyTransliteration",
                 .product(name: "Mecab-Swift", package: "Mecab-Swift"),
             ],
@@ -51,6 +61,7 @@ let package = Package(
             name: "RubyUITests",
             dependencies: [
                 "RubyCore",
+                "RubyMeCab",
                 "RubyTransliteration",
                 "RubyUI",
                 // Apps bundle their own dictionary; tests read with this one.
@@ -62,6 +73,7 @@ let package = Package(
             name: "RubyCoreTests",
             dependencies: [
                 "RubyCore",
+                "RubyMeCab",
                 "RubyTransliteration",
                 // Apps bundle their own dictionary; tests read with this one.
                 .product(name: "IPADic", package: "Mecab-Swift"),

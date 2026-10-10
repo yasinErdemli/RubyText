@@ -58,10 +58,10 @@ import SwiftUI
 /// read aloud, styled with `rubyEmphasis(_:)`.
 ///
 /// Readings come from the analyzer you set with `rubyAnalyzer(_:)`, such as
-/// a `RubyMeCabAnalyzer` with the IPAdic dictionary your app bundles;
-/// without one, only readings in `{base|reading}` markup show. Add
-/// `rubyModelReadings()` to have Apple's on-device model read words whose
-/// reading depends on their meaning.
+/// RubyMeCab's `RubyMeCabAnalyzer` with the IPAdic dictionary your app
+/// bundles, or your own; without one, only readings in `{base|reading}`
+/// markup show. Add `rubyModelReadings()` to have a language model read
+/// words whose reading depends on their meaning.
 ///
 /// Annotations are drawn by `RubyRenderer` and aren't part of the text
 /// content, so selection and copy only see the text, as written or as
@@ -340,8 +340,8 @@ public enum RubyModelReadingUpdates: Hashable, Sendable {
 
 extension View {
     /// Sets the analyzer `RubyText` views in this hierarchy use to find
-    /// words and readings. Set it once, near the root of your app, with a
-    /// dictionary your app bundles:
+    /// words and readings. Set it once, near the root of your app, such as
+    /// RubyMeCab's analyzer with a dictionary your app bundles:
     ///
     ///     let analyzer = RubyMeCabAnalyzer(
     ///         dictionary: Bundle.main.url(forResource: "ipadic", withExtension: "bundle")!
@@ -350,7 +350,9 @@ extension View {
     ///     ContentView()
     ///         .rubyAnalyzer(analyzer)
     ///
-    /// Without an analyzer, only readings in `{base|reading}` markup show.
+    /// Any type conforming to `RubyAnalyzer` works, such as one on Apple's
+    /// built-in tokenizer or a server. Without an analyzer, only readings
+    /// in `{base|reading}` markup show.
     /// A `RubyReader` attached to the views reads with the same analyzer.
     public func rubyAnalyzer(_ analyzer: some RubyAnalyzer) -> some View {
         environment(\.rubyAnalyzer, analyzer)

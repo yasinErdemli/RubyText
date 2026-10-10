@@ -8,6 +8,9 @@ RubyCore finds words and their readings, and writes text out in kana or
 romaji, without any user interface. `RubyUI` draws with it; use it directly
 for search, sharing, export, or your own views.
 
+Words and readings come from an analyzer you choose: `RubyMeCabAnalyzer`,
+from the `RubyMeCab` product, or your own; see <doc:UsingAnyAnalyzer>.
+
 ```swift
 let analyzer = RubyMeCabAnalyzer(dictionary: dictionaryURL)
 let converter = RubyConverter(analyzer: analyzer)
@@ -26,8 +29,8 @@ provider. Each reading records its layer as a ``RubyReadingSource``.
 
 ### Finding readings
 
+- <doc:UsingAnyAnalyzer>
 - ``RubyAnalyzer``
-- ``RubyMeCabAnalyzer``
 - ``RubySegment``
 - ``RubyReadingSource``
 

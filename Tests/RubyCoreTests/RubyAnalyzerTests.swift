@@ -1,5 +1,6 @@
 import Foundation
 import RubyCore
+import RubyMeCab
 import Testing
 
 /// Reads all of its text as one noun with a fixed reading.

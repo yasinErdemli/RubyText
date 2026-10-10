@@ -1,4 +1,5 @@
 import RubyCore
+import RubyMeCab
 @testable import RubyUI
 import SwiftUI
 import Testing

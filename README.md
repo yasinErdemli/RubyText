@@ -48,24 +48,28 @@ Dependencies, or in `Package.swift`:
 .package(url: "<repository URL>", from: "1.0.0")
 ```
 
-It has three products; take the one you need:
+It has four products; take the ones you need:
 
 | Product | What it does | Needs |
 | --- | --- | --- |
 | `RubyUI` | `RubyText` and the views around it | `RubyCore` |
-| `RubyCore` | Readings as data: analysis, markup, conversion, dictionary lookups | `RubyTransliteration`, [Mecab-Swift](https://github.com/shinjukunian/Mecab-Swift) |
+| `RubyCore` | Readings as data: markup, rules, conversion, dictionary lookups, with the analyzer you choose | `RubyTransliteration` |
+| `RubyMeCab` | An analyzer: MeCab with a dictionary in IPAdic's format | `RubyCore`, [Mecab-Swift](https://github.com/shinjukunian/Mecab-Swift) |
 | `RubyTransliteration` | Kana to romaji, hiragana and katakana | Only the standard library |
 
-### Dictionaries
+### Analyzers and dictionaries
 
-RubyText bundles no dictionary, so your app chooses its own.
+RubyText bundles no dictionary, and finds words and readings with whichever
+analyzer your app chooses.
 
-**IPAdic** finds words and readings. The simplest way to get it is the
-`IPADic` product of Mecab-Swift, which RubyText already depends on. Set the
-analyzer once, near the root of your app:
+**MeCab with IPAdic**, from the `RubyMeCab` product, is the most complete.
+The simplest way to get IPAdic is the `IPADic` product of Mecab-Swift,
+which RubyMeCab depends on. Set the analyzer once, near the root of your
+app:
 
 ```swift
 import IPADic
+import RubyMeCab
 import RubyUI   // also imports RubyCore and RubyTransliteration
 
 let analyzer = RubyMeCabAnalyzer(dictionary: IPADic().url)
@@ -73,6 +77,14 @@ let analyzer = RubyMeCabAnalyzer(dictionary: IPADic().url)
 ContentView()
     .rubyAnalyzer(analyzer)
 ```
+
+**Any other analyzer** works too: conform to `RubyAnalyzer`, which has one
+method that splits text into words with readings. RubyText's rules for
+numbers, counters and phrases, and readings by meaning, work on top of it.
+The documentation's "Using Any Analyzer" article lists what each part of a
+word gives, with an analyzer on Apple's built-in tokenizer: it needs no
+dictionary, and reads 225 of the benchmark's 255 words right, against 241
+for MeCab with IPAdic.
 
 Without an analyzer, only readings in `{base|reading}` markup show.
 

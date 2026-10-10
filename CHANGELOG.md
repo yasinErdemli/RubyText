@@ -7,6 +7,15 @@ are listed here, newest first.
 
 The first release.
 
+### Products
+
+- `RubyCore` finds words with any analyzer you choose, and links no
+  tokenizer. `RubyMeCab` is the analyzer RubyText includes: MeCab with a
+  dictionary in IPAdic's format, which you supply. An analyzer only has to
+  give segments with readings, in hiragana or katakana; grammar is
+  optional, and the "Using Any Analyzer" article lists what each part
+  adds, with an example on Apple's built-in tokenizer.
+
 ### Readings
 
 - Readings found on device: MeCab with IPAdic, behind the `RubyAnalyzer`

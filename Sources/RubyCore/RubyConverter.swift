@@ -20,8 +20,9 @@ import RubyTransliteration
 public struct RubyConverter: Sendable {
     private let analyzer: (any RubyAnalyzer)?
 
-    /// A converter reading text with `analyzer`, such as a
-    /// `RubyMeCabAnalyzer` with the IPAdic dictionary your app bundles.
+    /// A converter reading text with `analyzer`, such as RubyMeCab's
+    /// `RubyMeCabAnalyzer` with the IPAdic dictionary your app bundles, or
+    /// your own.
     public init(analyzer: some RubyAnalyzer) {
         self.analyzer = analyzer
     }

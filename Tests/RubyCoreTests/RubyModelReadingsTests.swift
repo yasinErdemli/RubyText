@@ -1,5 +1,6 @@
 import Foundation
 @_spi(Experiments) @testable import RubyCore
+import RubyMeCab
 import Synchronization
 import Testing
 

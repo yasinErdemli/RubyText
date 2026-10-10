@@ -435,12 +435,31 @@ package final class RubyContent {
         guard let analyzer else {
             return text.isEmpty ? [] : [RubySegment(text, source: .dictionary)]
         }
-        var segments = analyzer.segments(in: text)
+        var segments = analyzer.segments(in: text).map(Self.normalized)
         segments = RubyPhraseReadings.applyPhrases(to: segments)
         segments = RubyNumberReadings.apply(to: segments)
         segments = RubyPhraseReadings.applySuffixes(to: segments)
         segments = RubyPhraseReadings.applyNan(to: segments)
         return segments
+    }
+
+    /// `segment` from an analyzer, the way the rest of RubyText expects
+    /// it: readings in hiragana, and a word whenever there's something to
+    /// read, even if the analyzer knows nothing of its grammar. Only
+    /// segments with nothing to say, such as punctuation, stay plain.
+    /// Readings an analyzer finds are the dictionary's, even if it left
+    /// `source` at `.manual`, the default for readings you write.
+    private static func normalized(_ segment: RubySegment) -> RubySegment {
+        var segment = segment
+        if segment.source == .manual {
+            segment.source = .dictionary
+        }
+        segment.reading = segment.reading.flatMap { $0.isEmpty ? nil : RubyKana.hiragana($0) }
+        segment.pronunciation = segment.pronunciation.flatMap { $0.isEmpty ? nil : RubyKana.hiragana($0) }
+        if segment.word == nil, segment.reading != nil || segment.base.contains(where: { $0.isLetter || $0.isNumber }) {
+            segment.word = RubySegment.Word()
+        }
+        return segment
     }
 
     /// Converts segments into ranged words, computing furigana and romaji

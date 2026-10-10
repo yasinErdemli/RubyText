@@ -16,6 +16,7 @@ public struct RubySegment: Hashable, Sendable {
     public var base: String
     /// Hiragana reading of the whole segment, covering any kanji and
     /// okurigana together. `nil` for kana, punctuation, and numbers.
+    /// Analyzers may give it in katakana; RubyText reads either.
     public var reading: String?
     /// How the reading is spoken, if the analyzer knows: とーきょー for
     /// とうきょう, わ for the particle は, おう for 追う. Romaji use it for
@@ -27,7 +28,9 @@ public struct RubySegment: Hashable, Sendable {
     /// in parts: nisen nijūroku.
     package var romajiBreaks: [Int] = []
 
-    /// What's known about a segment's grammar.
+    /// What's known about a segment's grammar. An analyzer that knows
+    /// nothing about it can leave `word` `nil`: segments with a reading or
+    /// any letters or digits are still words.
     public struct Word: Hashable, Sendable {
         public var partOfSpeech: RubyPartOfSpeech?
         /// The uninflected form, such as 生まれる for 生まれ.

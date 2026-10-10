@@ -1,6 +1,7 @@
 import Foundation
 import FoundationModels
 @_spi(Experiments) @testable import RubyCore
+import RubyMeCab
 import Synchronization
 import Testing
 

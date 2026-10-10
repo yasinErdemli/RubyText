@@ -1,4 +1,5 @@
 import RubyCore
+import RubyMeCab
 import Testing
 
 @Suite struct RubyNumberReadingsTests {
