@@ -14,7 +14,7 @@ import Synchronization
 /// or download one, and pass its location to `init(dictionary:)`. It reads
 /// IPAdic's format only; for another dictionary or analyzer, write your
 /// own `RubyAnalyzer`.
-public nonisolated final class RubyMeCabAnalyzer: RubyAnalyzer, @unchecked Sendable {
+public nonisolated final class RubyMeCabAnalyzer: RubyAnalyzer, Sendable {
     private struct State {
         let recorder: PartOfSpeechRecorder
         let tokenizer: Tokenizer?
