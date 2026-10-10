@@ -91,19 +91,27 @@ struct RubyMetrics {
 
     private static let phraseBreakingFonts = NSCache<CTFont, CTFont>()
 
+    /// The font descriptor attribute holding a font's text style. AppKit
+    /// fonts have the same attribute, but only UIKit names it.
+    private static let textStyleAttribute: CFString = {
+        #if canImport(UIKit)
+        UIFontDescriptor.AttributeName.textStyle.rawValue as CFString
+        #else
+        "NSCTFontUIUsageAttribute" as CFString
+        #endif
+    }()
+
     /// The same font without its text style.
     ///
     /// Japanese text breaks lines between phrases (東京へ|行きたい) only in
-    /// fonts without a Dynamic Type text style; in a text-style font such
-    /// as `.body` it breaks between almost any two characters (東京|へ).
+    /// fonts without a text style; in a text-style font such as `.body` it
+    /// breaks between almost any two characters (東京|へ).
     /// The font keeps its face, size, weight, and design, so the text looks
     /// the same, and is resolved again whenever Dynamic Type changes.
     static func phraseBreaking(_ font: CTFont) -> CTFont {
-        #if canImport(UIKit)
         if let cached = phraseBreakingFonts.object(forKey: font) { return cached }
         var attributes = CTFontDescriptorCopyAttributes(CTFontCopyFontDescriptor(font)) as? [CFString: Any] ?? [:]
-        guard attributes.removeValue(forKey: UIFontDescriptor.AttributeName.textStyle.rawValue as CFString) != nil
-        else { return font }
+        guard attributes.removeValue(forKey: textStyleAttribute) != nil else { return font }
         // The traits keep the design (rounded, serif); the variation keeps
         // the exact weight, since an emphasized style reports bold but
         // draws semibold.
@@ -116,9 +124,6 @@ struct RubyMetrics {
         )
         phraseBreakingFonts.setObject(result, forKey: font)
         return result
-        #else
-        font
-        #endif
     }
 
     /// Identifies the resolved fonts, for caching measurements.
