@@ -13,10 +13,12 @@ RubyText("{今日|きょう}は日本語を勉強しています。")
     .rubyStyle([.furigana, .romaji])
 ```
 
-- **Readings found on device:** MeCab with IPAdic, rules for numbers, dates,
-  counters and set phrases, and optionally a language model for words whose
-  reading depends on their meaning: Apple's on-device model, or any
-  provider's. `{base|reading}` markup overrides any of them.
+- **Readings found on device:** MeCab with IPAdic or UniDic, rules for
+  numbers, dates, counters and set phrases, and optionally a language model
+  for words whose reading depends on their meaning: Apple's on-device
+  model, or any provider's. `{base|reading}` markup overrides any of them.
+  Long text is analyzed in the background, so it never holds up the
+  interface.
 - **Every way to write a reading:** furigana in hiragana, katakana or romaji;
   romaji above or below; inline readings, 東京（とうきょう）; or the whole text
   in hiragana, katakana or romaji. Romaji in Hepburn, Kunrei-shiki,
@@ -54,7 +56,7 @@ It has four products; take the ones you need:
 | --- | --- | --- |
 | `RubyUI` | `RubyText` and the views around it | `RubyCore` |
 | `RubyCore` | Readings as data: markup, rules, conversion, dictionary lookups, with the analyzer you choose | `RubyTransliteration` |
-| `RubyMeCab` | An analyzer: MeCab with a dictionary in IPAdic's format | `RubyCore`, [Mecab-Swift](https://github.com/shinjukunian/Mecab-Swift) |
+| `RubyMeCab` | An analyzer: MeCab with a dictionary in IPAdic's or UniDic's format | `RubyCore`, [Mecab-Swift](https://github.com/shinjukunian/Mecab-Swift) |
 | `RubyTransliteration` | Kana to romaji, hiragana and katakana | Only the standard library |
 
 ### Analyzers and dictionaries
@@ -62,10 +64,10 @@ It has four products; take the ones you need:
 RubyText bundles no dictionary, and finds words and readings with whichever
 analyzer your app chooses.
 
-**MeCab with IPAdic**, from the `RubyMeCab` product, is the most complete.
-The simplest way to get IPAdic is the `IPADic` product of Mecab-Swift,
-which RubyMeCab depends on. Set the analyzer once, near the root of your
-app:
+**MeCab**, from the `RubyMeCab` product, is the most complete, with
+either of its two main dictionaries. The simplest way to get IPAdic is the
+`IPADic` product of Mecab-Swift, which RubyMeCab depends on. Set the
+analyzer once, near the root of your app:
 
 ```swift
 import IPADic
@@ -78,13 +80,32 @@ ContentView()
     .rubyAnalyzer(analyzer)
 ```
 
+**UniDic**, MeCab's other main dictionary, is maintained by the National
+Institute for Japanese Language and Linguistics and knows more recent
+words. Of 50 that became common after IPAdic was last updated in 2007,
+such as 令和, 終活 and 自撮り, IPAdic reads 36 right, UniDic 2.1.2 39, and
+UniDic 3.1 42. It's larger, though: 250 MB and 770 MB, against IPAdic's
+50 MB. Pass a compiled UniDic folder, such as the `dicdir` folder of the
+`unidic-lite` or `unidic` Python packages, to the same initializer, which
+tells the two apart:
+
+```swift
+let analyzer = RubyMeCabAnalyzer(dictionary: unidicURL) // analyzer.format == .unidic
+```
+
 **Any other analyzer** works too: conform to `RubyAnalyzer`, which has one
 method that splits text into words with readings. RubyText's rules for
 numbers, counters and phrases, and readings by meaning, work on top of it.
 The documentation's "Using Any Analyzer" article lists what each part of a
 word gives, with an analyzer on Apple's built-in tokenizer: it needs no
-dictionary, and reads 225 of the benchmark's 255 words right, against 241
-for MeCab with IPAdic.
+dictionary, and reads 243 of the benchmark's 255 words right, as MeCab
+reads 241 with IPAdic, 243 with UniDic 2.1.2 and 242 with UniDic 3.1. The
+rules settle most of the benchmark whatever the analyzer; the words left
+are those whose reading depends on meaning.
+
+Short text is analyzed as it appears. Longer text, over 200 UTF-16 code
+units, shows at once and is analyzed in the background, its readings
+fading in, so a long passage never holds up the interface.
 
 Without an analyzer, only readings in `{base|reading}` markup show.
 

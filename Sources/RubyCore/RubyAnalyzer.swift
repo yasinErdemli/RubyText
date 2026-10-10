@@ -3,9 +3,13 @@ import Foundation
 /// Finds words and their readings in Japanese text.
 ///
 /// RubyText includes one analyzer, `RubyMeCabAnalyzer` in the `RubyMeCab`
-/// product. Any tokenizer that gives readings can be another, such as
-/// Apple's, Sudachi, or a server: see <doc:UsingAnyAnalyzer> for what each
-/// part of a segment gives.
+/// product, for MeCab with IPAdic or UniDic. Any tokenizer that gives
+/// readings can be another, such as Apple's or Sudachi: see
+/// <doc:UsingAnyAnalyzer> for what each part of a segment gives.
+///
+/// `RubyText` analyzes short text on the main actor as it appears, and
+/// longer text in the background, so analyzing a sentence should take no
+/// more than a millisecond or two.
 ///
 /// Analyzers are `Hashable` so results can be cached per analyzer: two
 /// analyzers that compare equal must return the same segments for the same

@@ -58,10 +58,15 @@ import SwiftUI
 /// read aloud, styled with `rubyEmphasis(_:)`.
 ///
 /// Readings come from the analyzer you set with `rubyAnalyzer(_:)`, such as
-/// RubyMeCab's `RubyMeCabAnalyzer` with the IPAdic dictionary your app
-/// bundles, or your own; without one, only readings in `{base|reading}`
-/// markup show. Add `rubyModelReadings()` to have a language model read
-/// words whose reading depends on their meaning.
+/// RubyMeCab's `RubyMeCabAnalyzer` with the IPAdic or UniDic dictionary
+/// your app bundles, or your own; without one, only readings in
+/// `{base|reading}` markup show. Add `rubyModelReadings()` to have a
+/// language model read words whose reading depends on their meaning.
+///
+/// Short text is analyzed as the view appears. Longer text, over 200
+/// UTF-16 code units, appears at once with the readings its markup gives,
+/// and is analyzed off the main actor, its readings fading in when they're
+/// ready, so a long passage doesn't hold up the interface.
 ///
 /// Annotations are drawn by `RubyRenderer` and aren't part of the text
 /// content, so selection and copy only see the text, as written or as

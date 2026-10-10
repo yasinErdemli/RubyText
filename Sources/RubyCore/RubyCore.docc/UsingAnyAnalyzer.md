@@ -7,9 +7,9 @@ else.
 
 RubyText doesn't find words itself: an analyzer does, behind the
 ``RubyAnalyzer`` protocol. RubyText includes one, `RubyMeCabAnalyzer` in the
-`RubyMeCab` product, for MeCab with a dictionary in IPAdic's format. For any
-other, write a type with one method that splits text into ``RubySegment``s,
-and set it once, near the root of your app:
+`RubyMeCab` product, for MeCab with a dictionary in IPAdic's or UniDic's
+format. For any other, write a type with one method that splits text into
+``RubySegment``s, and set it once, near the root of your app:
 
 ```swift
 ContentView()
@@ -97,14 +97,16 @@ nonisolated struct AppleTokenizerAnalyzer: RubyAnalyzer {
 }
 ```
 
-With RubyText's rules, it reads 225 of the 255 words in the reading
-benchmark right, against 241 for MeCab with IPAdic. It knows no grammar, so
+With RubyText's rules, it reads 243 of the 255 words in the reading
+benchmark right, as MeCab with IPAdic reads 241: the rules settle most of
+the benchmark, and the words left depend on meaning. It knows no grammar, so
 the features that need it fall back to simpler behavior, and turning romaji
 back into kana loses some distinctions: 手作り reads てずくり, not てづくり.
 
 ### Other analyzers
 
-Any tokenizer that gives readings fits the same shape: MeCab with another
-dictionary, such as UniDic, through the Mecab-Swift package; Sudachi or
-Lindera through a Swift wrapper; or a server you send text to. Map its
-features to a segment's properties, and leave out what it doesn't know.
+Any tokenizer that gives readings fits the same shape: Sudachi or Lindera
+through a Swift wrapper, or a server you send text to, though a server is
+too slow for short text, which is analyzed as it appears. Map its features
+to a segment's properties, and leave out what it doesn't know. For MeCab
+with UniDic, use `RubyMeCabAnalyzer`, which reads it as well as IPAdic.

@@ -54,6 +54,17 @@ Mecab-Swift's `IPADic` product provides, is Copyright Nara Institute of
 Science and Technology. It may be used and redistributed with its copyright
 notice and licence paragraphs, which are in its `COPYING` file.
 
+### UniDic
+
+UniDic, which MeCab can read in place of IPAdic, is copyrighted free
+software by the UniDic Consortium, released under any of the GPL, the LGPL,
+or the BSD License. Apps that bundle it can choose the BSD License, which
+asks them to reproduce its copyright notice and conditions; they're in the
+`BSD` file, or the `licenses` folder, of the copy they use.
+
+The tests read UniDic only where `RUBYTEXT_UNIDIC` points to a copy; none is
+part of this repository.
+
 ### JMdict
 
 Word details show definitions from a database apps build from
