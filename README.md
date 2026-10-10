@@ -39,7 +39,8 @@ RubyText("{今日|きょう}は日本語を勉強しています。")
 
 To try it first, run [RubyText Demo](<RubyText Demo repository URL>). Its Try
 tab shows your own text with any settings and gives you the code for them;
-Features shows each feature with its code.
+Features shows each feature with its code. If you code with an AI agent,
+install [RubyText's skill](#with-an-ai-coding-agent) so it knows the API.
 
 ## Requirements
 
@@ -124,6 +125,34 @@ ContentView()
 
 JMdict's licence asks your app to acknowledge it, for example in an About
 screen; see [NOTICES.md](NOTICES.md).
+
+### With an AI coding agent
+
+RubyText comes with a skill, in [`skills/rubytext`](skills/rubytext/SKILL.md),
+that teaches AI coding agents to use it: setting up an analyzer, where markup
+is read, every modifier with its options, readings by meaning with any
+model, and the mistakes to avoid, such as forgetting the analyzer. An agent
+loads it when you work on Japanese text, so it writes code for this API
+rather than guessing.
+
+In Claude Code, add this repository as a plugin marketplace and install the
+skill:
+
+```bash
+claude plugin marketplace add yasinErdemli/RubyText
+claude plugin install rubytext@rubytext
+```
+
+For Codex, Cursor, GitHub Copilot, Gemini CLI and other agents, the
+[skills](https://github.com/vercel-labs/skills) command installs it:
+
+```bash
+npx skills add yasinErdemli/RubyText
+```
+
+Or copy the `skills/rubytext` folder into your project's `.claude/skills`
+folder, or wherever your agent reads skills from. An agent that doesn't
+support skills can still be told to read `skills/rubytext/SKILL.md`.
 
 ## Usage
 

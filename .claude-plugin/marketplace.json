@@ -1,0 +1,27 @@
+{
+  "name": "rubytext",
+  "owner": {
+    "name": "Yasin Erdemli"
+  },
+  "metadata": {
+    "description": "RubyText's skill for AI coding agents: furigana and romaji in SwiftUI."
+  },
+  "plugins": [
+    {
+      "name": "rubytext",
+      "source": "./",
+      "description": "Teaches Claude to use the RubyText Swift package: setup, analyzers and dictionaries, markup, styles, word details, reading aloud and language-model readings.",
+      "license": "Apache-2.0",
+      "homepage": "https://github.com/yasinErdemli/RubyText",
+      "repository": "https://github.com/yasinErdemli/RubyText",
+      "keywords": [
+        "swift",
+        "swiftui",
+        "japanese",
+        "furigana",
+        "romaji",
+        "ruby"
+      ]
+    }
+  ]
+}

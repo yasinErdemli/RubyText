@@ -3,6 +3,13 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
+## Unreleased
+
+- A skill for AI coding agents, in `skills/rubytext`, with references for
+  the whole API, analyzers and language models. Claude Code installs it from
+  this repository as a plugin marketplace, and other agents with
+  `npx skills add yasinErdemli/RubyText`.
+
 ## 1.0.0 — 2026-10-11
 
 The first release.
