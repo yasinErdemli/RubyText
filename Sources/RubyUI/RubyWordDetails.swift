@@ -103,7 +103,7 @@ public struct RubyWordDetailView: View {
                     }
                 }
                 Spacer(minLength: 16)
-                Button("Listen", systemImage: "speaker.wave.2.fill") {
+                Button(.listen, systemImage: "speaker.wave.2.fill") {
                     // Said as VoiceOver says it in the text.
                     RubyWordSpeaker.shared.speak(spokenReadings.contains(word.source) ? word.reading : word.text)
                 }
@@ -114,20 +114,20 @@ public struct RubyWordDetailView: View {
 
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
                 if word.reading != word.text {
-                    row("Reading") { Text(verbatim: word.reading) }
+                    row(.reading) { Text(verbatim: word.reading) }
                 }
                 if let dictionaryForm = word.dictionaryForm {
-                    row("Dictionary form") { Text(verbatim: dictionaryForm) }
+                    row(.dictionaryForm) { Text(verbatim: dictionaryForm) }
                 }
                 // The dictionary's part of speech is more detailed than
                 // MeCab's (Ichidan verb, Intransitive), so prefer it.
                 if let partsOfSpeech = entries.first?.senses.first?.partsOfSpeech, !partsOfSpeech.isEmpty {
-                    row("Part of speech") { Text(partsOfSpeech.joined(separator: ", ")) }
+                    row(.partOfSpeech) { Text(partsOfSpeech.joined(separator: ", ")) }
                 } else if let partOfSpeech = word.partOfSpeech, partOfSpeech != .other {
-                    row("Part of speech") { Text(partOfSpeech.localizedName) }
+                    row(.partOfSpeech) { Text(partOfSpeech.localizedName) }
                 }
                 if let level = word.jlptLevel {
-                    row("JLPT") { RubyJLPTBadge(level: level) }
+                    row(.jlpt) { RubyJLPTBadge(level: level) }
                 }
             }
             .font(.subheadline)
@@ -138,7 +138,7 @@ public struct RubyWordDetailView: View {
 
             if word.kanji.count > 0 {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Kanji")
+                    Text(.kanji)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     HStack(spacing: 8) {
@@ -148,7 +148,7 @@ public struct RubyWordDetailView: View {
                                 if let level = kanji.level {
                                     RubyJLPTBadge(level: level)
                                 } else {
-                                    Text("Beyond N1")
+                                    Text(.beyondN1)
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
                                 }
@@ -162,7 +162,7 @@ public struct RubyWordDetailView: View {
 
             #if canImport(UIKit)
             if UIReferenceLibraryViewController.dictionaryHasDefinition(forTerm: lookUpTerm) {
-                Button("Look Up “\(lookUpTerm)”", systemImage: "character.book.closed") {
+                Button(.lookUp(lookUpTerm), systemImage: "character.book.closed") {
                     RubySystemDictionary.show(lookUpTerm)
                 }
             }
@@ -183,7 +183,7 @@ public struct RubyWordDetailView: View {
     /// sense only shows its own when it differs from the one before.
     private func meanings(of entry: RubyDictionary.Entry, others: ArraySlice<RubyDictionary.Entry>) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Meaning")
+            Text(.meaning)
                 .font(.caption)
                 .foregroundStyle(.secondary)
             ForEach(Array(entry.senses.enumerated()), id: \.offset) { index, sense in
@@ -204,7 +204,7 @@ public struct RubyWordDetailView: View {
                 }
             }
             if !others.isEmpty {
-                Text("Also: \(others.map { Self.summary(of: $0) }.joined(separator: " · "))")
+                Text(.alsoEntries(others.map { Self.summary(of: $0) }.joined(separator: " · ")))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -224,7 +224,7 @@ public struct RubyWordDetailView: View {
         word.dictionaryForm ?? word.text
     }
 
-    private func row(_ title: LocalizedStringKey, @ViewBuilder value: () -> some View) -> some View {
+    private func row(_ title: LocalizedStringResource, @ViewBuilder value: () -> some View) -> some View {
         GridRow {
             Text(title).foregroundStyle(.secondary)
             value()

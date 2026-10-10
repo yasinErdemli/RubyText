@@ -32,6 +32,10 @@ RubyText("{今日|きょう}は日本語を勉強しています。")
 - **Accessible:** VoiceOver says readings the way the furigana show them,
   and opens word details. Dynamic Type and Reduce Motion are respected, and
   copying gives the text without its readings.
+- **Localized:** word details, parts of speech and VoiceOver hints are in
+  English, Japanese, Chinese (Simplified and Traditional), Korean, Spanish,
+  French, German, Italian, Portuguese, Russian, Turkish, Arabic, Hindi,
+  Indonesian, Vietnamese and Thai.
 
 To try it first, run [RubyText Demo](<RubyText Demo repository URL>). Its Try
 tab shows your own text with any settings and gives you the code for them;

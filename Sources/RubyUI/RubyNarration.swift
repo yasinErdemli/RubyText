@@ -58,8 +58,8 @@ package nonisolated enum RubyNarrationAligner {
 
         var errorDescription: String? {
             switch self {
-            case .recognitionUnavailable: "Japanese speech recognition isn't available on this device."
-            case .nothingRecognized: "No speech was recognized in the recording."
+            case .recognitionUnavailable: String(localized: .speechRecognitionUnavailable)
+            case .nothingRecognized: String(localized: .nothingRecognized)
             }
         }
     }

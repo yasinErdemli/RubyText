@@ -103,6 +103,12 @@ The first release.
 - VoiceOver users open word details through each word's accessibility
   action.
 
+### Localization
+
+- RubyText's own text, in word details, part-of-speech names, VoiceOver
+  hints and errors, is in English and 16 other languages, from string
+  catalogs in RubyCore and RubyUI used through their generated symbols.
+
 ### Plain text
 
 - `RubyConverter` writes text in kana or romaji, or with inline readings,

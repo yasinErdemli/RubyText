@@ -67,17 +67,17 @@ extension RubyPartOfSpeech {
     /// A name to show learners.
     public var localizedName: LocalizedStringResource {
         switch self {
-        case .noun: "Noun"
-        case .verb: "Verb"
-        case .adjective: "Adjective"
-        case .adverb: "Adverb"
-        case .particle: "Particle"
-        case .auxiliary: "Auxiliary"
-        case .adnominal: "Pre-noun adjectival"
-        case .conjunction: "Conjunction"
-        case .prefix: "Prefix"
-        case .interjection: "Interjection"
-        case .other: "Other"
+        case .noun: .partOfSpeechNoun
+        case .verb: .partOfSpeechVerb
+        case .adjective: .partOfSpeechAdjective
+        case .adverb: .partOfSpeechAdverb
+        case .particle: .partOfSpeechParticle
+        case .auxiliary: .partOfSpeechAuxiliary
+        case .adnominal: .partOfSpeechAdnominal
+        case .conjunction: .partOfSpeechConjunction
+        case .prefix: .partOfSpeechPrefix
+        case .interjection: .partOfSpeechInterjection
+        case .other: .partOfSpeechOther
         }
     }
 }

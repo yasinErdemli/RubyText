@@ -14,6 +14,7 @@ let swiftSettings: [SwiftSetting] = [
 
 let package = Package(
     name: "RubyText",
+    defaultLocalization: "en",
     platforms: [.iOS("27.0"), .macOS("27.0"), .visionOS("27.0")],
     products: [
         /// Kana to romaji, hiragana to katakana and back, with no
@@ -39,6 +40,8 @@ let package = Package(
         .target(
             name: "RubyCore",
             dependencies: ["RubyTransliteration"],
+            // Part-of-speech names, in 16 languages and English.
+            resources: [.process("Localizable.xcstrings")],
             swiftSettings: swiftSettings
         ),
         .target(
@@ -53,6 +56,9 @@ let package = Package(
         .target(
             name: "RubyUI",
             dependencies: ["RubyCore", "RubyTransliteration"],
+            // Word details, VoiceOver hints and errors, in 16 languages
+            // and English.
+            resources: [.process("Localizable.xcstrings")],
             swiftSettings: swiftSettings + [.defaultIsolation(MainActor.self)]
         ),
         // Precomputes speech recognition for a narration recording:

@@ -813,7 +813,7 @@ private struct RubyWordTapping: ViewModifier {
                 .accessibilityAction {
                     if let geometry, let word = words.first { onActivate(word.id, geometry) }
                 }
-                .accessibilityHint("Swipe up or down to choose a word, then double-tap.")
+                .accessibilityHint(Text(.chooseWordHint))
         } else {
             tappable
         }
