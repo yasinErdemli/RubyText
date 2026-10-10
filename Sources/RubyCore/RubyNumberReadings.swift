@@ -92,8 +92,11 @@ package enum RubyNumberReadings {
         let following = String(text[end..<min(end + 3, text.count)])
 
         if rule.kana == "ふん" {
-            // 三分の一 is a fraction.
-            if following.hasPrefix("の") { return number.spoken.text + "ぶん" }
+            // 三分の一 is a fraction; 5分の休憩 is minutes.
+            if following.hasPrefix("の"), let next = following.dropFirst().first,
+               digitValue(next) != nil || kanjiDigits[next] != nil || kanjiMultipliers[next] != nil {
+                return number.spoken.text + "ぶん"
+            }
             // 十分 in kanji usually means "enough"; read it as minutes only
             // where the context says so: 十分後, 十分間, 三時十分.
             if !number.isDigits, value == 10, number.text == "十",

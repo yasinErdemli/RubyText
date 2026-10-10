@@ -142,6 +142,18 @@ public nonisolated final class RubyMeCabAnalyzer: RubyAnalyzer, Sendable {
                 continue
             }
 
+            // IPAdic reads 分の as one word, ぶんの, as in fractions (三分の
+            // 一), though before most words it's minutes (5分の休憩). Split,
+            // the number rules tell them apart.
+            if base == "分の" {
+                segments.append(RubySegment("分", reading: "ぶん", word: RubySegment.Word(
+                    partOfSpeech: .noun, dictionaryForm: "分", attachesToPrevious: true
+                ), source: .dictionary))
+                segments.append(RubySegment("の", reading: "の", word: RubySegment.Word(
+                    partOfSpeech: .particle, dictionaryForm: "の", attachesToPrevious: true
+                ), source: .dictionary))
+                continue
+            }
             let reading = isJapanese ? token.reading : nil
             segments.append(RubySegment(
                 base,

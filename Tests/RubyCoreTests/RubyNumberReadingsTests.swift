@@ -67,6 +67,10 @@ import Testing
         ("四五人", ["四五人/しごにん"]),
         ("三四本", ["三四本/さんよんほん"]),
         ("五六回", ["五六回/ごろっかい"]),
+        // 分の: a fraction before a number, minutes before anything else.
+        ("三分の一", ["三分/さんぶん", "の/の", "一/いち"]),
+        ("5分の休憩", ["5分/ごふん", "の/の", "休憩/きゅうけい"]),
+        ("一分の隙もない", ["一分の隙/いちぶのすき", "も/も", "ない/ない"]),
     ])
     func readsSpans(_ text: String, _ expected: [String]) {
         #expect(segments(text) == expected)
@@ -83,7 +87,7 @@ import Testing
     /// phrase rules mark as theirs (一昨日).
     @Test(arguments: [
         "万歳", "八百屋", "五月雨", "二日酔い", "三日月", "一昨日", "七夕", "千葉", "万一",
-        "昨日は十分休んだ。", "三分の一", "第一", "一緒に", "iPhone15", "12:30", "2026/10/08", "090-1234-5678",
+        "昨日は十分休んだ。", "第一", "一緒に", "iPhone15", "12:30", "2026/10/08", "090-1234-5678",
     ])
     func leavesWordsAlone(_ text: String) {
         func readings(_ segments: [RubySegment]) -> [String] {

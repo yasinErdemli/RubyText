@@ -116,6 +116,11 @@ package enum RubyPhraseReadings {
         ("一晩", "ひとばん"),
         ("国中", "くにじゅう"),
         ("百人一首", "ひゃくにんいっしゅ"),
+        // 分 as a tenth, in sayings: not minutes or a fraction.
+        ("一分の隙", "いちぶのすき"),
+        ("五分の魂", "ごぶのたましい"),
+        ("五分五分", "ごぶごぶ"),
+        ("九分九厘", "くぶくりん"),
         // Four-character idioms, which analyzers that split them into
         // short words read kanji by kanji.
         ("十人十色", "じゅうにんといろ"),
