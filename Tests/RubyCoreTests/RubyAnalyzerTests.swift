@@ -30,6 +30,15 @@ private struct FixedAnalyzer: RubyAnalyzer {
         #expect(analyzer.segments(in: "猫").compactMap(\.reading).isEmpty)
     }
 
+    /// IPAdic reads words it doesn't know as written, without a
+    /// pronunciation, and guesses they're names: the long vowel comes from
+    /// spelling, and the word isn't capitalized.
+    @Test func unknownWordsAreReadAsWritten() {
+        let converter = RubyConverter(analyzer: RubyMeCabAnalyzer.ipadic)
+        #expect(converter.convert("ｶﾞｯｺｳ", to: .romaji) == "gakkō")
+        #expect(converter.convert("ガッコウ", to: .romaji) == "gakkō")
+    }
+
     @Test func contentUsesTheGivenAnalyzer() {
         let content = RubyContent.content(for: "生物", analyzer: FixedAnalyzer(reading: "なまもの"))
         #expect(content.words.flatMap(\.furigana).map(\.text) == ["なまもの"])

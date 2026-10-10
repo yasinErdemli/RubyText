@@ -190,20 +190,24 @@ public nonisolated final class RubyMeCabAnalyzer: RubyAnalyzer, Sendable {
 
         return annotations.enumerated().map { index, annotation in
             let id = ids?[index]
-            // IPAdic writes * for words without a dictionary form.
-            let dictionaryForm = annotation.dictionaryForm == "*" ? annotation.base : annotation.dictionaryForm
+            // IPAdic writes * for the dictionary form of words it doesn't
+            // know, whose reading is their surface, as they're spoken or
+            // not, and whose part of speech is a guess from their script:
+            // ｶﾞｯｺｳ isn't the name of an organization.
+            let isKnown = annotation.dictionaryForm != "*"
+            let dictionaryForm = isKnown ? annotation.dictionaryForm : annotation.base
             // Unknown words come back with their surface as the reading,
             // which only counts if it has no kanji.
             let isReading = { (feature: String) in !feature.isEmpty && !feature.contains(where: \.isKanji) }
             return Token(
                 annotation: annotation,
                 reading: isReading(annotation.reading) ? annotation.reading : nil,
-                pronunciation: pronunciations.map { $0[index] }.flatMap { isReading($0) ? $0 : nil },
+                pronunciation: isKnown ? pronunciations.map { $0[index] }.flatMap { isReading($0) ? $0 : nil } : nil,
                 word: RubySegment.Word(
                     partOfSpeech: id.map(Self.partOfSpeech),
                     dictionaryForm: dictionaryForm,
                     attachesToPrevious: id.map(Self.attaches) ?? (annotation.partOfSpeech == .particle),
-                    isProperNoun: id.map(Self.properNounIDs.contains) ?? false
+                    isProperNoun: isKnown && id.map(Self.properNounIDs.contains) ?? false
                 )
             )
         }
