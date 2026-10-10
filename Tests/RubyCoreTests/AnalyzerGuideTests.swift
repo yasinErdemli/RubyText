@@ -4,7 +4,7 @@ import Testing
 
 /// The analyzer in the "Using Any Analyzer" article, kept here so the
 /// article's code compiles and works.
-struct AppleTokenizerAnalyzer: RubyAnalyzer {
+nonisolated struct AppleTokenizerAnalyzer: RubyAnalyzer {
     func segments(in text: String) -> [RubySegment] {
         let string = text as NSString
         let tokenizer = CFStringTokenizerCreate(
@@ -50,6 +50,8 @@ struct AnalyzerGuideTests {
         let content = RubyContent.content(for: "今日は東京へ行きたい。", analyzer: AppleTokenizerAnalyzer())
         #expect(content.words.flatMap(\.furigana).map(\.text) == ["きょう", "とうきょう", "い"])
         #expect(content.words.allSatisfy { $0.source == .dictionary })
+        // Kana words have romaji too, though the analyzer gave them no reading.
+        #expect(content.words.allSatisfy { $0.romaji?.isEmpty == false })
     }
 
     /// Readings alone are enough for furigana: no grammar, no source, and
@@ -59,5 +61,6 @@ struct AnalyzerGuideTests {
         #expect(content.words.count == 2)
         #expect(content.words.first?.furigana.map(\.text) == ["とうきょう"])
         #expect(content.words.first?.source == .dictionary)
+        #expect(content.words.map(\.romaji) == ["tōkyō", "e"])
     }
 }

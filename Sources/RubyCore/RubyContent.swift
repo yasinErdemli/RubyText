@@ -444,9 +444,10 @@ package final class RubyContent {
     }
 
     /// `segment` from an analyzer, the way the rest of RubyText expects
-    /// it: readings in hiragana, and a word whenever there's something to
-    /// read, even if the analyzer knows nothing of its grammar. Only
-    /// segments with nothing to say, such as punctuation, stay plain.
+    /// it: readings in hiragana, kana read as written, and a word whenever
+    /// there's something to read, even if the analyzer knows nothing of
+    /// its grammar. Only segments with nothing to say, such as
+    /// punctuation, stay plain.
     /// Readings an analyzer finds are the dictionary's, even if it left
     /// `source` at `.manual`, the default for readings you write.
     private static func normalized(_ segment: RubySegment) -> RubySegment {
@@ -455,6 +456,10 @@ package final class RubyContent {
             segment.source = .dictionary
         }
         segment.reading = segment.reading.flatMap { $0.isEmpty ? nil : RubyKana.hiragana($0) }
+        // Kana is read as it's written, so romaji need no reading for it.
+        if segment.reading == nil, !segment.base.isEmpty, segment.base.allSatisfy({ $0.isKana || $0 == "ー" }) {
+            segment.reading = RubyKana.hiragana(segment.base)
+        }
         segment.pronunciation = segment.pronunciation.flatMap { $0.isEmpty ? nil : RubyKana.hiragana($0) }
         if segment.word == nil, segment.reading != nil || segment.base.contains(where: { $0.isLetter || $0.isNumber }) {
             segment.word = RubySegment.Word()

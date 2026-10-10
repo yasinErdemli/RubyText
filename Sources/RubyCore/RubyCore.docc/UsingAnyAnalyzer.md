@@ -27,7 +27,7 @@ can do with it:
 
 | Property | What it gives |
 | --- | --- |
-| `reading` | Furigana and romaji. The reading of the whole segment, in hiragana or katakana, with its okurigana: いき for 行き. |
+| `reading` | Furigana and romaji. The reading of the whole segment, in hiragana or katakana, with its okurigana: いき for 行き. Kana needs none: it's read as written. |
 | `pronunciation` | Long vowels in romaji: とーきょー for 東京 gives Tōkyō, おう for 追う gives ou. |
 | `word.partOfSpeech` | Word colors by part of speech, and は read as wa. |
 | `word.attachesToPrevious` | Reading phrases (文節): spacing, line breaks and read-aloud emphasis keep particles and endings with their word. |
@@ -47,13 +47,15 @@ class that loads a dictionary usually compares by identity. They're also
 ### An analyzer with Apple's tokenizer
 
 Apple's tokenizer comes with the system, so it needs no dictionary. It gives
-each word's reading as romaji, which this analyzer turns back into hiragana:
+each word's reading as romaji, which this analyzer turns back into hiragana.
+It's `nonisolated` because text is analyzed off the main actor, which apps
+whose code is isolated to the main actor by default must say:
 
 ```swift
 import Foundation
 import RubyCore
 
-struct AppleTokenizerAnalyzer: RubyAnalyzer {
+nonisolated struct AppleTokenizerAnalyzer: RubyAnalyzer {
     func segments(in text: String) -> [RubySegment] {
         let string = text as NSString
         let tokenizer = CFStringTokenizerCreate(
