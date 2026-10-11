@@ -1,3 +1,5 @@
+// Reads text with MeCab and IPAdic, so only with the MeCab trait.
+#if MeCab
 @testable import RubyCore
 import Testing
 
@@ -37,3 +39,4 @@ import Testing
         #expect(romaji == expected, "\(romaji)")
     }
 }
+#endif

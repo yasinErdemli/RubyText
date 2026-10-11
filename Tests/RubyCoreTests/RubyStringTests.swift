@@ -1,3 +1,5 @@
+// Reads text with MeCab and IPAdic, so only with the MeCab trait.
+#if MeCab
 import Foundation
 @_spi(Experiments) import RubyCore
 import RubyMeCab
@@ -105,3 +107,4 @@ import Testing
         #expect(RubyString(markup: "{今日|きょう}") == "{今日|きょう}")
     }
 }
+#endif

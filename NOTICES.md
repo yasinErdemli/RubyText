@@ -23,8 +23,8 @@ Jonathan Waller's JLPT Resources (tanos.co.uk)."
 ### Mecab-Swift
 
 [Mecab-Swift](https://github.com/shinjukunian/Mecab-Swift), the Swift wrapper
-RubyCore analyzes text with, is under the MIT License, Copyright (c) 2019
-telethon k.k.
+RubyMeCab analyzes text with, is under the MIT License, Copyright (c) 2019
+telethon k.k. It's only fetched with RubyText's `MeCab` trait, on by default.
 
 ### MeCab
 

@@ -1,3 +1,5 @@
+// Reads text with MeCab and IPAdic, so only with the MeCab trait.
+#if MeCab
 import RubyCore
 import RubyTransliteration
 import Testing
@@ -100,3 +102,4 @@ import Testing
         #expect(original.transcribed(to: .hiragana) !== original.transcribed(to: .katakana))
     }
 }
+#endif

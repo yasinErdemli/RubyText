@@ -10,6 +10,10 @@ link nothing they don't need. It reads with MeCab, whose part-of-speech
 information also groups words into reading phrases and colors them for
 learners.
 
+RubyMeCab needs RubyText's `MeCab` package trait, which is on by default.
+An app that depends on RubyText with `traits: []` never downloads
+Mecab-Swift, and RubyMeCab is then an empty module.
+
 RubyText bundles no dictionary. The simplest to use is the IPAdic that
 Mecab-Swift's `IPADic` product provides:
 

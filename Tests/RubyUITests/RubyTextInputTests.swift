@@ -1,3 +1,5 @@
+// Reads text with MeCab and IPAdic, so only with the MeCab trait.
+#if MeCab
 import RubyCore
 import RubyMeCab
 @testable import RubyUI
@@ -39,3 +41,4 @@ import Testing
         #expect(reader.spokenReadings == .corrections)
     }
 }
+#endif

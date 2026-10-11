@@ -1,3 +1,5 @@
+// The IPAdic analyzer the tests read with, which needs the MeCab trait.
+#if MeCab
 import IPADic
 import RubyCore
 import RubyMeCab
@@ -14,3 +16,4 @@ extension RubyContent {
         content(for: markup, analyzer: RubyMeCabAnalyzer.ipadic)
     }
 }
+#endif

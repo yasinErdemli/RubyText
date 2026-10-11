@@ -1,3 +1,5 @@
+// Reads text with MeCab and IPAdic, so only with the MeCab trait.
+#if MeCab
 import CoreGraphics
 import RubyCore
 import RubyTransliteration
@@ -65,3 +67,4 @@ import Testing
         #expect(RubyWordColors.alternating.color(for: .verb) == nil)
     }
 }
+#endif

@@ -29,7 +29,18 @@ let package = Package(
         /// SwiftUI views that draw furigana and romaji.
         .library(name: "RubyUI", targets: ["RubyUI"]),
     ],
+    traits: [
+        // On by default, so nothing changes for apps that use RubyMeCab. An
+        // app that doesn't can depend on RubyText with `traits: []`, and
+        // SwiftPM never downloads Mecab-Swift and its dictionaries.
+        .trait(
+            name: "MeCab",
+            description: "RubyMeCab, the MeCab analyzer, with Mecab-Swift and its IPAdic dictionary."
+        ),
+        .default(enabledTraits: ["MeCab"]),
+    ],
     dependencies: [
+        // Only fetched when the MeCab trait is on.
         .package(url: "https://github.com/shinjukunian/Mecab-Swift", from: "0.8.0"),
     ],
     targets: [
@@ -49,7 +60,7 @@ let package = Package(
             dependencies: [
                 "RubyCore",
                 "RubyTransliteration",
-                .product(name: "Mecab-Swift", package: "Mecab-Swift"),
+                .product(name: "Mecab-Swift", package: "Mecab-Swift", condition: .when(traits: ["MeCab"])),
             ],
             swiftSettings: swiftSettings
         ),
@@ -79,7 +90,7 @@ let package = Package(
                 "RubyTransliteration",
                 "RubyUI",
                 // Apps bundle their own dictionary; tests read with this one.
-                .product(name: "IPADic", package: "Mecab-Swift"),
+                .product(name: "IPADic", package: "Mecab-Swift", condition: .when(traits: ["MeCab"])),
             ],
             swiftSettings: swiftSettings + [.defaultIsolation(MainActor.self)]
         ),
@@ -90,7 +101,7 @@ let package = Package(
                 "RubyMeCab",
                 "RubyTransliteration",
                 // Apps bundle their own dictionary; tests read with this one.
-                .product(name: "IPADic", package: "Mecab-Swift"),
+                .product(name: "IPADic", package: "Mecab-Swift", condition: .when(traits: ["MeCab"])),
             ],
             // A few JMdict entries for the dictionary tests.
             resources: [.copy("Fixtures")],

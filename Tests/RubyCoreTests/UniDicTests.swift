@@ -1,3 +1,5 @@
+// Reads text with MeCab and IPAdic, so only with the MeCab trait.
+#if MeCab
 import Foundation
 import RubyCore
 import RubyMeCab
@@ -56,3 +58,4 @@ struct UniDicTests {
         }
     }
 }
+#endif

@@ -1,3 +1,5 @@
+// Reads text with MeCab and IPAdic, so only with the MeCab trait.
+#if MeCab
 import RubyCore
 import Testing
 
@@ -70,3 +72,4 @@ import Testing
         #expect(info(5).source == .dictionary)
     }
 }
+#endif

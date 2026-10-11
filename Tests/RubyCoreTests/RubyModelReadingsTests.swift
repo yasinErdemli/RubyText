@@ -1,3 +1,5 @@
+// Reads text with MeCab and IPAdic, so only with the MeCab trait.
+#if MeCab
 import Foundation
 @_spi(Experiments) @testable import RubyCore
 import RubyMeCab
@@ -176,3 +178,4 @@ private final class TogetherChooser: RubyReadingChooser {
         #expect(RubyModelReadings.questions(in: segments, excluding: [5..<7]).isEmpty)
     }
 }
+#endif

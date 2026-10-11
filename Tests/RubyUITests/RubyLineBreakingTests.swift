@@ -1,3 +1,5 @@
+// Reads text with MeCab and IPAdic, so only with the MeCab trait.
+#if MeCab
 import CoreText
 import RubyCore
 import RubyTransliteration
@@ -243,3 +245,4 @@ import Testing
         return CTLineGetTypographicBounds(CTLineCreateWithAttributedString(attributed), nil, nil, nil)
     }
 }
+#endif

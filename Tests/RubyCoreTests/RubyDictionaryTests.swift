@@ -1,3 +1,5 @@
+// Reads text with MeCab and IPAdic, so only with the MeCab trait.
+#if MeCab
 import Foundation
 @testable import RubyCore
 import Testing
@@ -23,3 +25,4 @@ struct RubyDictionaryTests {
         #expect(firstEntry(for: "{人気|ひとけ}のない道")?.readings.contains("ひとけ") == true)
     }
 }
+#endif

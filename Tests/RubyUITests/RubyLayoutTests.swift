@@ -1,3 +1,5 @@
+// Reads text with MeCab and IPAdic, so only with the MeCab trait.
+#if MeCab
 import CoreGraphics
 import RubyCore
 @testable import RubyUI
@@ -163,3 +165,4 @@ import Testing
         #expect(previousRight ?? 0 <= x[characters.count] + 0.001)
     }
 }
+#endif

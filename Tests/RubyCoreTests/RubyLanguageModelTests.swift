@@ -1,3 +1,5 @@
+// Reads text with MeCab and IPAdic, so only with the MeCab trait.
+#if MeCab
 import Foundation
 import FoundationModels
 @_spi(Experiments) @testable import RubyCore
@@ -153,3 +155,4 @@ struct RubyLanguageModelTests {
         #expect(RubyModelOptions(model: PrivateCloudComputeLanguageModel()) != .standard)
     }
 }
+#endif

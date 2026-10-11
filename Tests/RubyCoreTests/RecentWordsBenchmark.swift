@@ -1,3 +1,5 @@
+// Reads text with MeCab and IPAdic, so only with the MeCab trait.
+#if MeCab
 import Foundation
 import RubyCore
 import RubyMeCab
@@ -55,3 +57,4 @@ func misreadRecentWords(with analyzer: some RubyAnalyzer) -> [(word: String, rea
         }
     }
 }
+#endif

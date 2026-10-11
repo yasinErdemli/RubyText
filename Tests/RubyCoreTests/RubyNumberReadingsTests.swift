@@ -1,3 +1,5 @@
+// Reads text with MeCab and IPAdic, so only with the MeCab trait.
+#if MeCab
 import RubyCore
 import RubyMeCab
 import Testing
@@ -97,3 +99,4 @@ import Testing
         #expect(readings(RubyContent.segments(in: text, analyzer: RubyMeCabAnalyzer.ipadic)) == readings(analyzed))
     }
 }
+#endif

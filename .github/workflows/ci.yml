@@ -30,3 +30,6 @@ jobs:
           xcodebuild build
           -scheme RubyText-Package
           -destination "generic/platform=visionOS"
+      # Apps that depend on RubyText with `traits: []` build it this way.
+      - name: Test without MeCab
+        run: swift test --disable-default-traits

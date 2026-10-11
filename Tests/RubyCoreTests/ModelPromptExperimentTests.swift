@@ -1,3 +1,5 @@
+// Reads text with MeCab and IPAdic, so only with the MeCab trait.
+#if MeCab
 import Foundation
 import FoundationModels
 @_spi(Experiments) @testable import RubyCore
@@ -142,3 +144,4 @@ struct ModelPromptExperimentTests {
         print("PROMPTS\n" + lines.joined(separator: "\n"))
     }
 }
+#endif

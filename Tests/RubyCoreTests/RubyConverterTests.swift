@@ -1,3 +1,5 @@
+// Reads text with MeCab and IPAdic, so only with the MeCab trait.
+#if MeCab
 import RubyCore
 import RubyMeCab
 import RubyTransliteration
@@ -98,3 +100,4 @@ import Testing
         #expect(converter.convert("{今日|きょう}、はい", to: .romaji) == "kyō, hai")
     }
 }
+#endif

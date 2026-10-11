@@ -61,8 +61,21 @@ It has four products; take the ones you need:
 | --- | --- | --- |
 | `RubyUI` | `RubyText` and the views around it | `RubyCore` |
 | `RubyCore` | Readings as data: markup, rules, conversion, dictionary lookups, with the analyzer you choose | `RubyTransliteration` |
-| `RubyMeCab` | An analyzer: MeCab with a dictionary in IPAdic's or UniDic's format | `RubyCore`, [Mecab-Swift](https://github.com/shinjukunian/Mecab-Swift) |
+| `RubyMeCab` | An analyzer: MeCab with a dictionary in IPAdic's or UniDic's format | `RubyCore`, [Mecab-Swift](https://github.com/shinjukunian/Mecab-Swift), the `MeCab` trait |
 | `RubyTransliteration` | Kana to romaji, hiragana and katakana | Only the standard library |
+
+**MeCab is a package trait, on by default.** Mecab-Swift comes with its
+dictionaries, about 400 MB in every build folder, and Swift Package Manager
+downloads it whenever RubyText lists it, even for apps that never use
+RubyMeCab. An app that doesn't use it can leave it out, from 1.1.0:
+
+```swift
+.package(url: "https://github.com/yasinErdemli/RubyText", from: "1.1.0", traits: [])
+```
+
+Then `RubyUI`, `RubyCore` and `RubyTransliteration` work as usual, with
+another analyzer or with readings your app gives in markup or segments, and
+`RubyMeCab` is an empty module.
 
 ### Analyzers and dictionaries
 

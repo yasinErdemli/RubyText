@@ -1,3 +1,6 @@
+// Everything here needs Mecab-Swift, which RubyText only fetches with the
+// MeCab trait, on by default. Without it, RubyMeCab is an empty module.
+#if MeCab
 import Foundation
 import Dictionary
 import Mecab_Swift
@@ -14,6 +17,9 @@ import Synchronization
 /// Mecab-Swift's `IPADic` product provides, or bundle or download a
 /// compiled IPAdic or UniDic folder, and pass its location to
 /// `init(dictionary:)`, which tells the two apart by their `dicrc`.
+///
+/// Needs RubyText's `MeCab` trait, which is on unless an app depends on
+/// RubyText with `traits: []`.
 ///
 /// IPAdic is small, about 50 MB, but hasn't changed since 2007. UniDic is
 /// maintained by the National Institute for Japanese Language and
@@ -434,3 +440,4 @@ private nonisolated struct IPADicFormat: DictionaryProviding {
         }
     }
 }
+#endif

@@ -1,3 +1,5 @@
+// Reads text with MeCab and IPAdic, so only with the MeCab trait.
+#if MeCab
 import RubyCore
 import Testing
 
@@ -32,3 +34,4 @@ import Testing
         #expect(reading(of: word, in: sentence) == expected)
     }
 }
+#endif

@@ -1,3 +1,5 @@
+// Reads text with MeCab and IPAdic, so only with the MeCab trait.
+#if MeCab
 import Foundation
 import Synchronization
 @_spi(Experiments) import RubyCore
@@ -112,3 +114,4 @@ private final class ThreadRecordingAnalyzer: RubyAnalyzer {
 private struct FirstChooser: RubyReadingChooser {
     func choose(_ question: RubyReadingQuestion) async throws -> Int? { 0 }
 }
+#endif

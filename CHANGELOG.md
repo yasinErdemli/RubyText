@@ -5,6 +5,11 @@ are listed here, newest first.
 
 ## Unreleased
 
+- MeCab is a package trait, on by default, so nothing changes for apps that
+  use RubyMeCab. An app that doesn't can depend on RubyText with
+  `traits: []`, and Swift Package Manager no longer downloads Mecab-Swift and
+  its dictionaries, about 400 MB in every build folder. Without the trait,
+  `RubyMeCab` is an empty module.
 - A skill for AI coding agents, in `skills/rubytext`, with references for
   the whole API, analyzers and language models. Claude Code installs it from
   this repository as a plugin marketplace, and other agents with
