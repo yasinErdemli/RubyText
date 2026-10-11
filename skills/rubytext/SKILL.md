@@ -39,6 +39,12 @@ optionally a dictionary for definitions.
 | `RubyCore` | Readings as data, without SwiftUI: `RubyConverter`, `RubyString`, `RubyDictionary`, the `RubyAnalyzer` protocol. |
 | `RubyTransliteration` | Kana to romaji, and hiragana to katakana, with no dictionary. |
 
+`RubyMeCab` needs the `MeCab` package trait, which is on by default. If the
+app won't use it (it only shows readings it already has, or uses another
+analyzer), depend on RubyText 1.1.0 or later with `traits: []`, and Swift
+Package Manager won't download Mecab-Swift and its dictionaries, about
+400 MB per build folder.
+
 ### 2. An analyzer, created once, set at the root
 
 The quickest dictionary is IPAdic from the `IPADic` product of Mecab-Swift,
