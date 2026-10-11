@@ -3,7 +3,7 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
-## Unreleased
+## 1.1.0 — 2026-10-11
 
 - MeCab is a package trait, on by default, so nothing changes for apps that
   use RubyMeCab. An app that doesn't can depend on RubyText with

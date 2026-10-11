@@ -52,7 +52,7 @@ Add RubyText with Swift Package Manager, in Xcode with File › Add Package
 Dependencies, or in `Package.swift`:
 
 ```swift
-.package(url: "https://github.com/yasinErdemli/RubyText", from: "1.0.0")
+.package(url: "https://github.com/yasinErdemli/RubyText", from: "1.1.0")
 ```
 
 It has four products; take the ones you need:
