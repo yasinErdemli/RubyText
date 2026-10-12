@@ -28,13 +28,39 @@ package struct RubyWord: Hashable, Sendable {
     package var dictionaryForm: String? = nil
     /// Where the word's reading came from.
     package var source: RubyReadingSource = .dictionary
+    /// The app's identifier for the word, from its segments.
+    package var wordID: String? = nil
 }
 
 extension RubyWord {
     /// The word's romaji in `system`.
     package func romaji(in system: RubyRomanization) -> String? {
         guard system != .hepburn, romaji != nil, !romajiSources.isEmpty else { return romaji }
-        return romajiSources.map { $0.romaji(in: system) }.joined()
+        return Self.romaji(of: romajiSources, in: system)
+    }
+
+    /// `sources` written as one word, so a ん before a vowel keeps its
+    /// apostrophe (禁|煙 is kin'en).
+    private static func romaji(of sources: [RubyRomajiSource], in system: RubyRomanization) -> String {
+        system.transliterate(RubyPhrase(sources.map(\.word), following: sources.last?.next))
+    }
+
+    /// This word with `next`, the rest of the same word, after it: their
+    /// readings and romaji together, and this one's grammar.
+    func joining(_ next: RubyWord) -> RubyWord {
+        let sources = romajiSources + next.romajiSources
+        return RubyWord(
+            range: range.lowerBound..<next.range.upperBound,
+            furigana: furigana + next.furigana,
+            romaji: sources.isEmpty ? nil : Self.romaji(of: sources, in: .hepburn),
+            romajiSources: sources,
+            attachesToPrevious: attachesToPrevious,
+            partOfSpeech: partOfSpeech,
+            dictionaryForm: dictionaryForm,
+            // As word details report it: the first of manual, rule and model.
+            source: RubyReadingSource.allCases.first { $0 == source || $0 == next.source } ?? source,
+            wordID: wordID
+        )
     }
 }
 

@@ -327,10 +327,12 @@ public struct RubyText: View {
     /// Always one value per reading, even when all show, so animating
     /// between filters interpolates each reading from its old visibility.
     private func readingVisibility(in content: RubyContent) -> RubyAnimatableVector {
-        RubyAnimatableVector(values: content.words.flatMap(\.furigana).map { reading in
-            let base = RubyReadingUnits.substring(of: content.string, utf16Range: reading.range)
-            if digitReadingsHidden && Self.isDigitNumber(base) { return 0 }
-            return furiganaFilter.showsReading(over: base) ? 1 : 0
+        RubyAnimatableVector(values: content.words.flatMap { word in
+            word.furigana.map { reading in
+                let base = RubyReadingUnits.substring(of: content.string, utf16Range: reading.range)
+                if digitReadingsHidden && Self.isDigitNumber(base) { return 0 }
+                return furiganaFilter.showsReading(over: base, wordID: word.wordID) ? 1 : 0
+            }
         })
     }
 

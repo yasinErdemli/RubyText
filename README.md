@@ -279,6 +279,23 @@ RubyText(segments: [
 ])
 ```
 
+Segments that share a `wordID` are one word, so a word given in pieces, a
+reading over each kanji, is still tapped, colored and read by VoiceOver as
+one. Furigana and colors can choose words by ID, and `attachesToPrevious`
+says where phrases start:
+
+```swift
+RubyText(segments: [
+    RubySegment("食", reading: "た", word: .init(attachesToPrevious: false), wordID: "food"),
+    RubySegment("べ", wordID: "food"),
+    RubySegment("物", reading: "もの", wordID: "food"),
+    RubySegment("を", word: .init(attachesToPrevious: true), wordID: "o"),
+])
+.rubyFurigana(.except(learnedKanji).showing(wordIDs: wordsBeingLearned))
+.rubyWordColors(.wordIDs(newWords))
+.onRubyWordTap { word in open(word.wordID) }
+```
+
 To have a language model read words like 辛い (からい or つらい) from
 context, add `.rubyModelReadings()`. Apple's on-device model answers by
 default; pass any FoundationModels `LanguageModel` to use another:
@@ -318,6 +335,14 @@ Button("Read Aloud") { reader.speak(text) }
 
 The reader reads with the analyzer and spoken readings of the views it's
 attached to, so it emphasizes the words they show.
+
+`reader.play(narration: url, for: text)` plays a recording instead, finding
+when each phrase is spoken with on-device speech recognition. If you have
+the timings already, give them with segments:
+
+```swift
+try await reader.play(narration: url, for: segments, phraseStarts: [0, 0.8, 1.5], end: 2.5)
+```
 
 ### VoiceOver
 

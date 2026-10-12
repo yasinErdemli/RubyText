@@ -128,6 +128,11 @@ RubyText(.welcome)                // a LocalizedStringResource: read, so transla
 RubyText(segments: segments)      // [RubySegment]: no analysis, only the readings you give
 ```
 
+Segments that share a `wordID` are one word, so a word given in pieces
+(食|べ|物, a reading over each kanji) is tapped, colored and read as one; its
+ID comes back in `RubyWordInfo.wordID`, and `.wordIDs(_:)` colors and
+`.showing(wordIDs:)` furigana choose words by it.
+
 So if braces show on screen, the text was a `String` value: pass it with
 `RubyText(markup:)`. And text from people using the app should be passed as a
 plain `String`, never as `markup:`.
@@ -159,7 +164,7 @@ and changes animate.
 | --- | --- | --- |
 | `rubyAnalyzer(_:)` | `RubyMeCabAnalyzer` or any `RubyAnalyzer` | none: markup only |
 | `rubyStyle(_:)` | `.furigana`, `.romaji` (above), `[.furigana, .romaji]`, `[]` | `.furigana` |
-| `rubyFurigana(_:)` | `.all`, `.above(.n4)`, `.above(.n4, except: known)`, `.except(known)` | `.all` |
+| `rubyFurigana(_:)` | `.all`, `.above(.n4)`, `.above(.n4, except: known)`, `.except(known)`, and `.showing(wordIDs:)` on any of them | `.all` |
 | `rubyFuriganaScript(_:)` | `.hiragana`, `.katakana`, `.romaji` | `.hiragana` |
 | `rubyFuriganaPosition(_:)` | `.above`, `.inline`: 東京（とうきょう） | `.above` |
 | `rubyTranscription(_:)` | whole text as `.hiragana`, `.hiragana(loanwords: .hiragana)`, `.katakana`, `.romaji`; `nil` as written | `nil` |
@@ -167,7 +172,7 @@ and changes animate.
 | `rubySpacing(_:)` | `.none`, `.words`, `.phrases`, `.words(width:)`, `.phrases(width:)` | `.none` |
 | `rubyLineBreaking(_:)` | `.phrases`, `.anywhere` | `.phrases` |
 | `rubyDigitReadingsHidden(_:)` | hide readings over 2026年, 3日 | `false` |
-| `rubyWordColors(_:in:)` | `.partOfSpeech`, `.alternating`, `.words([…])`, `.jlpt`, `.jlpt(above: .n4)`, `.readingSources`; `in: .text` or `.background` | none |
+| `rubyWordColors(_:in:)` | `.partOfSpeech`, `.alternating`, `.words([…])`, `.wordIDs([…])`, `.jlpt`, `.jlpt(above: .n4)`, `.readingSources`; `in: .text` or `.background` | none |
 | `rubyWordDetails(_:)` | popover with reading, dictionary form, part of speech, JLPT level, definitions | off |
 | `onRubyWordTap(perform:)` | your own action with a `RubyWordInfo` | none |
 | `rubyDictionary(_:)` | `RubyDictionary` for definitions | none |
@@ -222,7 +227,9 @@ struct PassageView: View {
 The reader takes the analyzer of the views it's attached to, so its
 emphasis lines up with the words they show. A recording works too:
 `try await reader.play(narration: url, for: passage)` aligns it with
-on-device speech recognition.
+on-device speech recognition, and
+`reader.play(narration: url, for: segments, phraseStarts: starts)` plays it
+with phrase timings you already have.
 
 A vocabulary list that saves the tapped word:
 

@@ -24,16 +24,26 @@ package final class RubyContent: Sendable {
     package let spaces: [Int]
     /// How rewritten text writes its words, if it was rewritten.
     let rewriteForm: RubyRewriteForm?
+    /// Whether the words' phrases are the app's, from segments it gave:
+    /// then a word that doesn't attach to the one before it starts a
+    /// phrase, even a kanji word after an all-kanji one, which in an
+    /// analyzer's words more likely continues a compound it split.
+    package let phrasesAreGiven: Bool
 
     /// Words as a dictionary lists them, for word details: a verb or
     /// adjective with its conjugated endings (生まれ|た), a noun with its
     /// suffixes (田中|さん), or a noun with する as one verb (勉強|し|た).
-    /// Particles and other auxiliaries stand alone.
+    /// Particles and other auxiliaries stand alone, as does a word with an
+    /// ID of its own: the app said where it starts.
     package let dictionaryWords: [Range<Int>]
 
     private static func dictionaryWords(in words: [RubyWord]) -> [Range<Int>] {
         var groups: [(range: Range<Int>, head: RubyPartOfSpeech?)] = []
         for word in words {
+            guard word.wordID == nil else {
+                groups.append((word.range, word.partOfSpeech))
+                continue
+            }
             // する after a noun makes a verb, though MeCab tags it independent.
             if let last = groups.last, last.range.upperBound == word.range.lowerBound,
                last.head == .noun, word.dictionaryForm == "する" {
@@ -458,17 +468,24 @@ package final class RubyContent: Sendable {
     }
 
     private convenience init(segments: [RubySegment]) {
-        self.init(string: segments.map(\.base).joined(), words: Self.words(from: segments))
+        self.init(string: segments.map(\.base).joined(), words: Self.words(from: segments), phrasesAreGiven: true)
     }
 
-    private init(string: String, words: [RubyWord]) {
+    private init(string: String, words: [RubyWord], phrasesAreGiven: Bool = false) {
         self.string = string
         self.words = words
         original = nil
         offsetMap = nil
         spaces = []
         rewriteForm = nil
+        self.phrasesAreGiven = phrasesAreGiven
         dictionaryWords = Self.dictionaryWords(in: words)
+    }
+
+    /// The reading phrases (文節) of the text, as read-aloud emphasis and
+    /// phrase spacing find them.
+    package var readingUnits: [RubyReadingUnit] {
+        RubyReadingUnits.units(in: string, words: words, phrasesAreGiven: phrasesAreGiven)
     }
 
     /// `original` rewritten as `string` in `form`, its words moved
@@ -487,10 +504,12 @@ package final class RubyContent: Sendable {
                 attachesToPrevious: word.attachesToPrevious,
                 partOfSpeech: word.partOfSpeech,
                 dictionaryForm: word.dictionaryForm,
-                source: word.source
+                source: word.source,
+                wordID: word.wordID
             )
         }
         self.original = original
+        phrasesAreGiven = original.phrasesAreGiven
         offsetMap = offsets
         self.spaces = spaces
         rewriteForm = form
@@ -555,20 +574,21 @@ package final class RubyContent: Sendable {
 
     /// Converts segments into ranged words, computing furigana and romaji
     /// from each segment's reading. A segment only from the dictionary
-    /// layer with no grammar, such as punctuation, doesn't become a word;
-    /// every other segment does, even without a reading.
+    /// layer with no grammar or ID, such as punctuation, doesn't become a
+    /// word; every other segment does, even without a reading. Consecutive
+    /// segments with the same word ID become one word.
     package static func words(from segments: [RubySegment]) -> [RubyWord] {
         var words: [RubyWord] = []
         var offset = 0
         for (index, segment) in segments.enumerated() {
             defer { offset += segment.base.utf16.count }
-            guard segment.source != .dictionary || segment.word != nil else { continue }
+            guard segment.source != .dictionary || segment.word != nil || segment.wordID != nil else { continue }
             let range = offset..<(offset + segment.base.utf16.count)
             let furigana = segment.reading.map {
                 RubyReadings.furigana(base: segment.base, reading: $0, offset: offset, force: segment.source != .dictionary)
             } ?? []
             // The next word's reading resolves a final っ (入っ|た → itta).
-            let next = index + 1 < segments.count ? segments[index + 1].reading : nil
+            let next = index + 1 < segments.count ? romajiReading(of: segments[index + 1]) : nil
             let role: RubyPhrase.Word.Role = if segment.word?.isProperNoun == true {
                 .properNoun
             } else if segment.word?.partOfSpeech == .particle {
@@ -576,7 +596,7 @@ package final class RubyContent: Sendable {
             } else {
                 .other
             }
-            let source = segment.reading.map {
+            let source = romajiReading(of: segment).map {
                 RubyRomajiSource(
                     surface: segment.base,
                     reading: $0,
@@ -586,7 +606,7 @@ package final class RubyContent: Sendable {
                     breaks: segment.romajiBreaks
                 )
             }
-            words.append(RubyWord(
+            let word = RubyWord(
                 range: range,
                 furigana: furigana,
                 romaji: source?.romaji(in: .hepburn),
@@ -594,10 +614,24 @@ package final class RubyContent: Sendable {
                 attachesToPrevious: segment.word?.attachesToPrevious,
                 partOfSpeech: segment.word?.partOfSpeech,
                 dictionaryForm: segment.word?.dictionaryForm,
-                source: segment.source
-            ))
+                source: segment.source,
+                wordID: segment.wordID
+            )
+            if let wordID = segment.wordID, let last = words.last, last.wordID == wordID, last.range.upperBound == range.lowerBound {
+                words[words.count - 1] = last.joining(word)
+            } else {
+                words.append(word)
+            }
         }
         return words
+    }
+
+    /// The reading romaji write for `segment`: its own, or for kana with
+    /// none, the kana as written, as analyzers' segments read them.
+    private static func romajiReading(of segment: RubySegment) -> String? {
+        if let reading = segment.reading { return reading }
+        guard !segment.base.isEmpty, segment.base.allSatisfy({ $0.isKana || $0 == "ー" }) else { return nil }
+        return RubyKana.hiragana(segment.base)
     }
 }
 

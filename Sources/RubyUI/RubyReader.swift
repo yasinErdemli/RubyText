@@ -19,13 +19,15 @@ import Synchronization
 /// words, because voices pronounce particles together with the word before
 /// them.
 ///
-/// Two sources are supported:
+/// Three sources are supported:
 /// - `speak(_:)` synthesizes speech. Japanese voices only time whole phrases
 ///   and report them in bursts, so the reader renders the speech itself,
 ///   plays it through `AVAudioEngine`, and divides each timed stretch among
 ///   its phrases by their length in moras.
 /// - `play(narration:for:)` plays a recording and finds when each phrase is
 ///   spoken with on-device speech recognition.
+/// - `play(narration:for:phraseStarts:end:)` plays a recording of segments
+///   with the times its phrases start, which you already have.
 @Observable
 public final class RubyReader {
     /// Finds the words and phrases to emphasize, if anything does: the
@@ -228,7 +230,7 @@ public final class RubyReader {
         // Something else started or stopped meanwhile.
         guard token == session else { return }
         isPreparing = false
-        let units = RubyReadingUnits.units(in: content.string, words: content.words)
+        let units = content.readingUnits
         let key = url.absoluteString + "\n" + content.string
 
         let anchors: [RubyTimelineAnchor]
@@ -243,6 +245,51 @@ public final class RubyReader {
             }
             alignments[key] = anchors
         }
+        try await play(url, reading: content, anchors: anchors, session: token)
+    }
+
+    /// Plays a recording of `segments` read aloud, emphasizing each
+    /// reading phrase from the time you give for it, with no speech
+    /// recognition: for recordings whose timings you have, such as from
+    /// the tool that made them.
+    ///
+    ///     try await reader.play(
+    ///         narration: url,
+    ///         for: sentence.segments,
+    ///         phraseStarts: [0, 0.8, 1.5],
+    ///         end: 2.5
+    ///     )
+    ///
+    /// The phrases are the ones `RubyText(segments:)` spaces apart with
+    /// `rubySpacing(.phrases)`: one starts at each segment that doesn't
+    /// attach to the one before it, and after text that isn't a word, such
+    /// as punctuation, which isn't timed. Segments of one word, which share
+    /// a `wordID`, are in one phrase. Phrases after the last start share
+    /// its time, divided by their length.
+    ///
+    /// - Parameters:
+    ///   - url: The recording.
+    ///   - segments: The text it reads, as `RubyText(segments:)` shows it.
+    ///   - phraseStarts: Seconds into the recording at which each phrase
+    ///     starts, in order.
+    ///   - end: When the last phrase ends, if the recording goes on after
+    ///     it.
+    public func play(
+        narration url: URL,
+        for segments: [RubySegment],
+        phraseStarts: [TimeInterval],
+        end: TimeInterval? = nil
+    ) async throws {
+        stop()
+        let content = RubyContent.content(for: segments)
+        let anchors = RubyReadingUnits.anchors(phraseStarts: phraseStarts, end: end, units: content.readingUnits)
+        try await play(url, reading: content, anchors: anchors, session: session)
+    }
+
+    /// Plays the recording at `url` of `content`, emphasizing its phrases
+    /// from `anchors`, unless something else started or stopped since
+    /// `token`.
+    private func play(_ url: URL, reading content: RubyContent, anchors: [RubyTimelineAnchor], session token: Int) async throws {
         // Creating the player touches the audio session, so do it off the
         // main thread, then activate the session asynchronously.
         let narration = try await Task.detached(priority: .userInitiated) {
@@ -331,7 +378,7 @@ public final class RubyReader {
     private func begin(_ content: RubyContent) {
         session += 1
         text = content.string
-        units = RubyReadingUnits.units(in: content.string, words: content.words)
+        units = content.readingUnits
         isSpeaking = true
     }
 

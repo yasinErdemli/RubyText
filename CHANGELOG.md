@@ -3,6 +3,25 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
+## Unreleased
+
+- `RubySegment.wordID`: consecutive segments with the same ID are one word,
+  so a word given in pieces, with a reading over each kanji (食|べ|物), is
+  tapped, colored, spaced and read by VoiceOver as one. The ID comes back in
+  `RubyWordInfo.wordID`.
+- `RubyWordColors.wordIDs(_:)` colors words by ID, and not others written
+  the same. `RubyFuriganaFilter.showing(wordIDs:)` shows every reading of
+  chosen words, whatever their kanji, so a word still being learned keeps
+  its furigana while the same kanji elsewhere stay bare.
+- `RubyReader.play(narration:for:phraseStarts:end:)` plays a recording of
+  segments with the time each phrase starts, with no speech recognition.
+- In segments you give, `attachesToPrevious: false` always starts a phrase,
+  so 今日｜何を is spaced and read as two phrases. A kanji word after an
+  all-kanji one used to continue it, as it still does in analyzers'
+  segments, where it's usually a compound split apart (経済|政策).
+- Kana segments you give without a reading are read as written, so they
+  get romaji.
+
 ## 1.1.0 — 2026-10-11
 
 - MeCab is a package trait, on by default, so nothing changes for apps that

@@ -39,7 +39,7 @@ without its readings, unless the readings are part of the text
 | --- | --- |
 | `rubyAnalyzer(_ analyzer: some RubyAnalyzer)` | Set once, near the root. |
 | `rubyStyle(_ style: RubyStyle = .furigana)` | `RubyStyle` is an `OptionSet`: `.furigana`, `.romaji`. Either alone sits above the text; together, furigana above and romaji below. `[]` is plain text. |
-| `rubyFurigana(_ filter: RubyFuriganaFilter)` | `.all`; `.above(_ level: RubyJLPTLevel, except knownKanji: Set<Character> = [])` hides readings of kanji at or below the level; `.except(_ knownKanji: some Sequence<Character>)`. A reading spanning several kanji shows if any is unknown. |
+| `rubyFurigana(_ filter: RubyFuriganaFilter)` | `.all`; `.above(_ level: RubyJLPTLevel, except knownKanji: Set<Character> = [])` hides readings of kanji at or below the level; `.except(_ knownKanji: some Sequence<Character>)`. A reading spanning several kanji shows if any is unknown. Add `.showing(wordIDs: some Sequence<String>)` to show every reading of chosen words, by their segments' `wordID`, whatever their kanji. |
 | `rubyFuriganaScript(_ script: RubyScript)` | `.hiragana` (default; katakana you write in markup is kept), `.katakana`, `.romaji`. |
 | `rubyFuriganaPosition(_ position: RubyFuriganaPosition)` | `.above`, `.inline`: 東京（とうきょう）へ行（い）きたい。 Inline readings are part of the text, so they copy with it; romaji, if shown, move above. |
 | `rubyTranscription(_ transcription: RubyScript?)` | Writes the whole text out: `.hiragana` (loanwords stay katakana), `.hiragana(loanwords: .hiragana)`, `.katakana`, `.romaji`. `nil`, the default, writes it as it is. Copy gives the transcribed text. |
@@ -63,6 +63,7 @@ without its readings, unless the readings are part of the text
 | `.partOfSpeech`, `.partOfSpeech([RubyPartOfSpeech: Color])` | By grammar: nouns blue, verbs red, adjectives green, particles orange… Roles without a color stay plain. |
 | `.alternating`, `.alternating([Color])` | Alternates from word to word, to show word boundaries. |
 | `.words([String: Color])`, `.words(_ words: some Sequence<String>, color: Color = .orange)` | Chosen words, matched as written, by dictionary form in any conjugation (生まれる matches 生まれた), or as a run of words (見当がつく). |
+| `.wordIDs([String: Color])`, `.wordIDs(_ ids: some Sequence<String>, color: Color = .orange)` | Words by their segments' `wordID`: exactly those words, not others written the same. |
 | `.jlpt`, `.jlpt(above: RubyJLPTLevel? = nil, vocabulary: [String: RubyJLPTLevel] = [:])`, `.jlpt([RubyJLPTLevel: Color], vocabulary:)` | By JLPT level, green N5 to red N1. A word's level is its hardest kanji's; `vocabulary` overrides it from your own lists. |
 | `.readingSources`, `.readingSources([RubyReadingSource: Color])` | Where each reading came from: yours purple, rules orange, the model green. For checking readings. |
 
@@ -78,6 +79,7 @@ func speak(_ string: RubyString)               // literals: markup read
 func speak(_ text: some StringProtocol)        // String values: as written
 func play(narration url: URL, for string: RubyString) async throws
 func play(narration url: URL, for text: some StringProtocol) async throws
+func play(narration url: URL, for segments: [RubySegment], phraseStarts: [TimeInterval], end: TimeInterval? = nil) async throws
 func pause()
 func resume()
 func stop()
@@ -93,7 +95,11 @@ private(set) var text: String?
 It emphasizes reading phrases (吾輩は), since voices say particles with their
 word. A recording is aligned with on-device speech recognition the first
 time; `swift run align-narration recording.m4a`, run in the RubyText
-repository, precomputes `recording.segments.json` to ship next to it.
+repository, precomputes `recording.segments.json` to ship next to it. With
+timings you already have, play segments with `phraseStarts`, one per phrase
+in order: the phrases `rubySpacing(.phrases)` spaces apart, where a segment
+doesn't attach to the one before it, also split at punctuation, which isn't
+timed. No speech recognition runs.
 
 ### RubyWordDetailView
 
@@ -133,7 +139,8 @@ RubySegment(
     reading: String? = nil,          // hiragana or katakana, for the whole segment with okurigana
     pronunciation: String? = nil,    // とーきょー: long vowels in romaji
     word: RubySegment.Word? = nil,
-    source: RubyReadingSource = .manual
+    source: RubyReadingSource = .manual,
+    wordID: String? = nil            // your ID for its word: consecutive segments with one ID are one word
 )
 
 RubySegment.Word(
@@ -144,7 +151,14 @@ RubySegment.Word(
 )
 ```
 
-Joining every `base` must give the text back. `RubyReadingSource`:
+Joining every `base` must give the text back. A word in pieces, such as
+食|べ|物 with a reading over each kanji, is one word for taps, VoiceOver,
+colors and phrases when its segments share a `wordID`; it takes its grammar
+from its first segment. Words next to each other need different IDs. In
+`RubyText(segments:)`, `attachesToPrevious: false` always starts a phrase,
+even a kanji word after an all-kanji one (今日｜何を), which in an analyzer's
+segments continues a compound; `nil` lets RubyText decide. Kana segments
+without a reading are read as written. `RubyReadingSource`:
 `.manual`, `.rule`, `.model`, `.dictionary`, in priority order.
 `RubyPartOfSpeech`: `.noun`, `.verb`, `.adjective`, `.adverb`, `.particle`,
 `.auxiliary`, `.adnominal`, `.conjunction`, `.prefix`, `.interjection`,
@@ -183,9 +197,9 @@ spaces between words and makes punctuation Latin.
 
 What a tap handler receives: `text` (生まれた), `reading` (うまれた),
 `romaji`, `dictionaryForm` (生まれる, if different), `partOfSpeech`,
-`jlptLevel`, `kanji: [Kanji]` (each `character` and `level`), `source`, and
-`range`, its UTF-16 range in the text without markup. `Identifiable` by
-range.
+`jlptLevel`, `kanji: [Kanji]` (each `character` and `level`), `source`,
+`wordID` (its segments' ID, if you gave one), and `range`, its UTF-16 range
+in the text without markup. `Identifiable` by range.
 
 ### RubyDictionary
 

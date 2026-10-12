@@ -17,6 +17,7 @@ public struct RubyWordColors: Hashable, Sendable {
         case partOfSpeech([RubyPartOfSpeech: Color])
         case alternating([Color])
         case words([String: Color])
+        case wordIDs([String: Color])
         case jlpt([RubyJLPTLevel: Color], vocabulary: [String: RubyJLPTLevel])
         case readingSources([RubyReadingSource: Color])
     }
@@ -66,6 +67,22 @@ public struct RubyWordColors: Hashable, Sendable {
     /// Colors chosen words with one color.
     public static func words(_ words: some Sequence<String>, color: Color = .orange) -> RubyWordColors {
         RubyWordColors(rule: .words(Dictionary(words.map { ($0, color) }, uniquingKeysWith: { first, _ in first })))
+    }
+
+    /// Colors the words with chosen IDs, which you give their segments as
+    /// `wordID`: each word exactly, wherever it is, and no other word
+    /// written the same.
+    ///
+    ///     RubyText(segments: sentence.segments)
+    ///         .rubyWordColors(.wordIDs(["food": .orange, "eat": .blue]))
+    public static func wordIDs(_ colors: [String: Color]) -> RubyWordColors {
+        RubyWordColors(rule: .wordIDs(colors))
+    }
+
+    /// Colors the words with chosen IDs with one color, such as a lesson's
+    /// new words.
+    public static func wordIDs(_ ids: some Sequence<String>, color: Color = .orange) -> RubyWordColors {
+        RubyWordColors(rule: .wordIDs(Dictionary(ids.map { ($0, color) }, uniquingKeysWith: { first, _ in first })))
     }
 
     /// Colors each word by its JLPT level, from green for N5 to red for N1.
@@ -150,6 +167,8 @@ public struct RubyWordColors: Hashable, Sendable {
             return words.indices.map { colors[$0 % colors.count] }
         case .words(let colors):
             return Self.vocabularyColors(colors, for: words, in: text)
+        case .wordIDs(let colors):
+            return words.map { $0.wordID.flatMap { colors[$0] } }
         case .jlpt(let colors, let vocabulary):
             let levels = words.map { word in
                 RubyJLPTLevel.level(

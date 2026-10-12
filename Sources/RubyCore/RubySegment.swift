@@ -24,6 +24,21 @@ public struct RubySegment: Hashable, Sendable {
     public var pronunciation: String?
     public var word: Word?
     public var source: RubyReadingSource
+    /// Your identifier for the word the segment is part of, such as an ID
+    /// in your own data. Consecutive segments with the same ID are one
+    /// word, so a word given in pieces, each with its own reading, is
+    /// tapped, read by VoiceOver, colored and spaced as one:
+    ///
+    ///     RubySegment("食", reading: "た", wordID: "food"),
+    ///     RubySegment("べ", wordID: "food"),
+    ///     RubySegment("物", reading: "もの", wordID: "food"),
+    ///
+    /// The word takes its grammar, `word`, from its first segment. Its ID
+    /// comes back in `RubyWordInfo`, and `RubyWordColors.wordIDs(_:)` and
+    /// `RubyFuriganaFilter.showing(wordIDs:)` choose words by it. Words
+    /// apart from each other can share an ID, but words next to each other
+    /// need different ones.
+    public var wordID: String?
     /// Offsets in `reading` where romaji put a space, so long numbers read
     /// in parts: nisen nijūroku.
     package var romajiBreaks: [Int] = []
@@ -36,7 +51,14 @@ public struct RubySegment: Hashable, Sendable {
         /// The uninflected form, such as 生まれる for 生まれ.
         public var dictionaryForm: String?
         /// Whether this segment grammatically attaches to the one before
-        /// it, like a particle or verb ending.
+        /// it, like a particle or verb ending, in the same reading phrase
+        /// (文節). `nil` lets RubyText decide from a list of common
+        /// particles and endings.
+        ///
+        /// In segments you give `RubyText(segments:)`, `false` always
+        /// starts a new phrase. Analyzers often split compound words
+        /// (経済|政策), so in their segments a kanji word after an all-kanji
+        /// phrase continues it.
         public var attachesToPrevious: Bool?
         /// Whether this is the name of a person or place, which romaji
         /// capitalize: Tōkyō, Tanaka.
@@ -60,12 +82,14 @@ public struct RubySegment: Hashable, Sendable {
         reading: String? = nil,
         pronunciation: String? = nil,
         word: Word? = nil,
-        source: RubyReadingSource = .manual
+        source: RubyReadingSource = .manual,
+        wordID: String? = nil
     ) {
         self.base = base
         self.reading = reading
         self.pronunciation = pronunciation
         self.word = word
         self.source = source
+        self.wordID = wordID
     }
 }

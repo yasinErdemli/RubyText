@@ -65,11 +65,22 @@ extension RubyPlacement {
 ///
 /// A reading spanning several kanji, like せいさく over 政策, shows if any
 /// of them is unknown. Changing the filter fades readings in and out.
+///
+/// To decide by word rather than by kanji, give your segments IDs and show
+/// chosen words' readings whatever their kanji:
+///
+///     RubyText(segments: sentence.segments)
+///         .rubyFurigana(.except(learnedKanji).showing(wordIDs: wordsStillLearning))
+///
+/// There, a word still being learned shows all its readings, while the
+/// same kanji elsewhere in the text stay bare.
 public struct RubyFuriganaFilter: Hashable, Sendable {
     /// The hardest JLPT level the learner knows, if any.
     private var knownLevel: RubyJLPTLevel?
     /// Kanji the learner knows regardless of level.
     private var knownKanji: Set<Character> = []
+    /// Words whose readings show whatever their kanji, by ID.
+    private var shownWordIDs: Set<String> = []
 
     /// Furigana on every kanji.
     public static let all = RubyFuriganaFilter()
@@ -87,9 +98,20 @@ public struct RubyFuriganaFilter: Hashable, Sendable {
         RubyFuriganaFilter(knownKanji: Set(knownKanji))
     }
 
-    /// Whether to show the reading of `base`, the text it sits over.
-    /// Readings over kana, which only manual markup creates, always show.
-    func showsReading(over base: String) -> Bool {
+    /// This filter, also showing every reading of the words with `ids`,
+    /// which you give their segments as `wordID`, such as words the
+    /// learner is still learning or has tapped.
+    public func showing(wordIDs ids: some Sequence<String>) -> RubyFuriganaFilter {
+        var filter = self
+        filter.shownWordIDs.formUnion(ids)
+        return filter
+    }
+
+    /// Whether to show the reading of `base`, the text it sits over, in
+    /// the word with `wordID`. Readings over kana, which only manual
+    /// markup creates, always show.
+    func showsReading(over base: String, wordID: String? = nil) -> Bool {
+        if let wordID, shownWordIDs.contains(wordID) { return true }
         let kanji = base.filter(RubyJLPTKanji.isGraded)
         guard !kanji.isEmpty else { return true }
         return kanji.contains { !isKnown($0) }
@@ -150,7 +172,7 @@ public struct RubySpacing: Hashable, Sendable {
         case nil:
             return []
         case .phrases:
-            ranges = RubyReadingUnits.units(in: content.string, words: content.words).map(\.range)
+            ranges = content.readingUnits.map(\.range)
         case .words:
             // Endings and suffixes join their word; particles stand alone.
             var words: [Range<Int>] = []

@@ -46,7 +46,11 @@ package nonisolated enum RubyReadingUnits {
     /// Groups words into reading units, attaching particles and endings to
     /// the word directly before them. Uses the tokenizer's grammar when it
     /// provides it, and a list of common particles and endings otherwise.
-    package static func units(in text: String, words: [RubyWord]) -> [RubyReadingUnit] {
+    ///
+    /// - Parameter phrasesAreGiven: Whether a word that doesn't attach to
+    ///   the one before it always starts a unit, as in segments an app
+    ///   gives, rather than continuing a compound an analyzer split.
+    package static func units(in text: String, words: [RubyWord], phrasesAreGiven: Bool = false) -> [RubyReadingUnit] {
         var groups: [(range: Range<Int>, romaji: String, weight: Double)] = []
         for word in words {
             let token = substring(of: text, utf16Range: word.range)
@@ -55,7 +59,9 @@ package nonisolated enum RubyReadingUnits {
             // Kanji right after an all-kanji unit continues a compound noun
             // the tokenizer split, like 日本|語.
             // Likewise for letters and digits split apart, like iPhone|15.
+            // A phrase the app starts (今日|何を) is one, though.
             let continuesCompound = !previous.isEmpty
+                && !(phrasesAreGiven && word.attachesToPrevious == false)
                 && (previous.allSatisfy(\.isKanji) && token.first.map(\.isKanji) == true
                     || previous.allSatisfy(isAlphanumeric) && token.first.map(isAlphanumeric) == true)
             let weight = spokenWeight(of: token, romaji: word.romaji)
@@ -87,6 +93,17 @@ package nonisolated enum RubyReadingUnits {
     /// ASCII or full-width letters and digits, which have no readings.
     private static func isAlphanumeric(_ character: Character) -> Bool {
         (character.isLetter || character.isNumber) && !character.isJapanese
+    }
+
+    /// Anchors for units whose starts are given, one for each unit in
+    /// order, with when the last ends, if known. Units past the last start
+    /// share its anchor.
+    package static func anchors(phraseStarts: [Double], end: Double?, units: [RubyReadingUnit]) -> [RubyTimelineAnchor] {
+        var anchors = zip(units.indices, phraseStarts).map { RubyTimelineAnchor(unit: $0, start: $1, end: nil) }
+        if let end, let last = anchors.popLast() {
+            anchors.append(RubyTimelineAnchor(unit: last.unit, start: last.start, end: end))
+        }
+        return anchors
     }
 
     /// The unit being spoken at `time`, how far through it is, and how long

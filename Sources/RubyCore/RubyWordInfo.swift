@@ -21,6 +21,9 @@ public struct RubyWordInfo: Identifiable, Hashable, Sendable {
     /// several places, such as a number read by a rule with a counter from
     /// the dictionary, the first of manual, rule, and model.
     public let source: RubyReadingSource
+    /// The ID you gave the word's segments, if any: see
+    /// `RubySegment.wordID`.
+    public let wordID: String?
 
     public struct Kanji: Hashable, Sendable {
         public let character: Character
@@ -58,7 +61,8 @@ public struct RubyWordInfo: Identifiable, Hashable, Sendable {
             partOfSpeech: isSuruVerb ? .verb : head?.partOfSpeech,
             jlptLevel: RubyJLPTLevel.level(of: text, dictionaryForm: nil, vocabulary: [:]),
             kanji: text.filter(RubyJLPTKanji.isGraded).map { Kanji(character: $0, level: RubyJLPTKanji.level(of: $0)) },
-            source: RubyReadingSource.allCases.first { source in tokens.contains { $0.source == source } } ?? .dictionary
+            source: RubyReadingSource.allCases.first { source in tokens.contains { $0.source == source } } ?? .dictionary,
+            wordID: head?.wordID
         )
     }
 }
