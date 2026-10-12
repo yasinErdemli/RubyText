@@ -3,7 +3,7 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
-## Unreleased
+## 1.3.0 — 2026-10-12
 
 - `rubyWordWeights(_:)` sets chosen words in their own weight, such as a
   grammar point's form in bold, by ID with `RubyWordWeights.wordIDs(_:)` or
