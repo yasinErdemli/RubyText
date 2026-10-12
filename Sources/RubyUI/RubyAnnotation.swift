@@ -23,6 +23,9 @@ struct RubyAnnotation {
     let baseCount: Int
     /// The color of the word it annotates, from `rubyWordColors(_:in:)`.
     var color: Color? = nil
+    /// The annotation font in the weight of the word it annotates, from
+    /// `rubyWordWeights(_:)`.
+    var font: Font? = nil
     /// How visible it is under the furigana filter, from 0 to 1.
     var opacity: CGFloat = 1
     /// Horizontal scale it's drawn at; below 1 for long readings over
@@ -35,6 +38,13 @@ struct RubyColoredRange {
     /// UTF-16 offsets within the paragraph.
     let range: Range<Int>
     let color: Color
+}
+
+/// A word set in its own weight.
+struct RubyWeightedRange: Hashable {
+    /// UTF-16 offsets in the text.
+    let range: Range<Int>
+    let weight: Font.Weight
 }
 
 /// Space added to a range of base text to make room for annotations and
@@ -81,12 +91,22 @@ struct RubyMetrics {
     let textFont: Font
     private let base: Font.Resolved
     private let annotation: Font.Resolved
+    /// The font and context these were derived from, for other weights.
+    private let font: Font
+    private let context: Font.Context
 
     init(font: Font, in context: Font.Context) {
+        self.font = font
+        self.context = context
         annotationFont = font.scaled(by: Self.annotationScale)
         base = font.resolve(in: context)
         annotation = annotationFont.resolve(in: context)
         textFont = Font(Self.phraseBreaking(base.ctFont))
+    }
+
+    /// The same metrics for text in `weight`, or these for `nil`.
+    func weighted(_ weight: Font.Weight?) -> RubyMetrics {
+        weight.map { RubyMetrics(font: font.weight($0), in: context) } ?? self
     }
 
     private static let phraseBreakingFonts = NSCache<CTFont, CTFont>()
@@ -143,13 +163,12 @@ struct RubyMetrics {
     func baseWidth(of string: String) -> CGFloat { Self.width(of: string, font: base.ctFont) }
     func annotationWidth(of string: String) -> CGFloat { Self.width(of: string, font: annotation.ctFont) }
 
-    /// Typographic width of `string` set in `font`.
-    /// Annotation text as drawn: in the annotation font, tagged as
-    /// Japanese like the base text.
-    func annotationText(_ string: String) -> Text {
+    /// Annotation text as drawn: in the annotation font, or `font` for a
+    /// word in its own weight, tagged as Japanese like the base text.
+    func annotationText(_ string: String, font: Font? = nil) -> Text {
         var text = AttributedString(string)
         text.languageIdentifier = RubyMetrics.language
-        return Text(text).font(annotationFont)
+        return Text(text).font(font ?? annotationFont)
     }
 
     /// The language text is set in. Tagging it Japanese selects Japanese

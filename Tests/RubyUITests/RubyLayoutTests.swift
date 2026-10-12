@@ -20,8 +20,8 @@ import Testing
     private func spaced(_ markup: String, furigana: CGFloat = 1, romaji: CGFloat = 0) -> Spaced {
         let measurements = RubyMeasurements(
             content: RubyContent.content(for: markup),
-            baseWidth: { CGFloat($0.count) },
-            annotationWidth: { CGFloat($0.count) / 2 }
+            baseWidth: { text, _ in CGFloat(text.count) },
+            annotationWidth: { text, _ in CGFloat(text.count) / 2 }
         )
         let spacing = RubyLayout.spacing(
             measurements: measurements,

@@ -48,6 +48,7 @@ without its readings, unless the readings are part of the text
 | `rubyLineBreaking(_ lineBreaking: RubyLineBreaking)` | `.phrases` (default: words stay with their particles), `.anywhere` (between characters, with kinsoku rules, never leaving a lone kana on the last line). |
 | `rubyDigitReadingsHidden(_ hidden: Bool = true)` | Hides readings over numbers in digits (2026年, 3日); kanji numbers keep theirs. |
 | `rubyWordColors(_ colors: RubyWordColors?, in placement: RubyWordColorPlacement = .text)` | Call once for `.text` and once for `.background` to combine; `nil` removes. A colored word's annotations take its color. |
+| `rubyWordWeights(_ weights: RubyWordWeights?)` | Sets chosen words in their own weight, such as bold for a grammar point's form; combines with `rubyWordColors`. `.words([String: Font.Weight])`, `.words(_ words: some Sequence<String>, weight: Font.Weight = .bold)`, matched as `RubyWordColors.words` matches; `.wordIDs([String: Font.Weight])`, `.wordIDs(_ ids: some Sequence<String>, weight: Font.Weight = .bold)`, by segments' `wordID`. A word's annotations take its weight; `nil` removes. |
 | `rubyWordDetails(_ isEnabled: Bool = true)` | Tap a word for a popover: reading, dictionary form, part of speech, JLPT level, kanji, definitions if a dictionary is set, and buttons to hear it and look it up. VoiceOver reaches it as an accessibility action. |
 | `onRubyWordTap(perform action: @escaping (RubyWordInfo) -> Void)` | Your own action instead. |
 | `rubyDictionary(_ dictionary: RubyDictionary?)` | Definitions for word details. |

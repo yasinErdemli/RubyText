@@ -44,6 +44,48 @@ import Testing
         }
     }
 
+    /// Words set bold are measured, set and annotated in the bold font,
+    /// which still breaks lines between phrases.
+    @Test func boldWordsBreakBetweenPhrases() throws {
+        let metrics = RubyMetrics(font: .title3, in: try Self.fontContext())
+        let content = RubyContent.content(for: Self.sentence)
+        // 東京へ行きたい
+        let weights = [RubyWeightedRange(range: 3..<10, weight: .bold)]
+        let measurements = RubyMeasurements.measurements(
+            for: content, metrics: metrics, furiganaScript: .hiragana, romanization: .hepburn, weights: weights
+        )
+        let layout = RubyLayout(
+            measurements: measurements, furigana: 1, romaji: 0,
+            readingVisibility: .zero, romajiVisibility: .zero, wordGaps: .zero,
+            fontSize: metrics.fontSize, romajiSpacing: metrics.romajiSpacing,
+            lineBreaking: .phrases, insertedSpaceWidth: 0, textColors: [], backgrounds: [],
+            weightedMetrics: [.bold: metrics.weighted(.bold)]
+        )
+        let bold = layout.text.runs.filter { $0.font != nil }.map { String(layout.text[$0.range].characters) }.joined()
+        #expect(bold == "東京へ行きたい")
+        // 今日, 東京, 行, 飲, 日本語, 勉強
+        #expect(layout.paragraphs[0].furigana.map { $0.font != nil } == [false, true, true, false, false, false])
+
+        let size = metrics.fontSize
+        for width in stride(from: size * 6, through: size * 18, by: size) {
+            let lines = Self.lines(of: Text(layout.text).font(metrics.textFont), width: width)
+            #expect(lines.count > 1)
+            for line in lines.dropFirst() {
+                #expect(!["へ", "を", "す", "い。", "ら"].contains { line.hasPrefix($0) }, "\(width): \(lines)")
+            }
+        }
+
+        // Letters are wider bold, and measured so.
+        let latin = RubyContent.content(for: "Wordを見た")
+        let regular = RubyMeasurements(content: latin, baseWidth: { text, _ in metrics.baseWidth(of: text) }, annotationWidth: { _, _ in 0 })
+        let heavy = RubyMeasurements.measurements(
+            for: latin, metrics: metrics, furiganaScript: .hiragana, romanization: .hepburn,
+            weights: [RubyWeightedRange(range: 0..<4, weight: .heavy)]
+        )
+        #expect(heavy.widths[0..<4].reduce(0, +) > regular.widths[0..<4].reduce(0, +))
+        #expect(heavy.widths[4...] == regular.widths[4...])
+    }
+
     /// Without kanji, the system finds phrases poorly. Kana spaced
     /// between phrases breaks at phrase ends far more often than the same
     /// kana without spaces, and never before a small kana or ー.

@@ -166,7 +166,7 @@ public struct RubyWordColors: Hashable, Sendable {
             guard !colors.isEmpty else { return words.map { _ in nil } }
             return words.indices.map { colors[$0 % colors.count] }
         case .words(let colors):
-            return Self.vocabularyColors(colors, for: words, in: text)
+            return RubyChosenWords.values(colors, for: words, in: text)
         case .wordIDs(let colors):
             return words.map { $0.wordID.flatMap { colors[$0] } }
         case .jlpt(let colors, let vocabulary):
@@ -199,13 +199,21 @@ public struct RubyWordColors: Hashable, Sendable {
         }
         return colors
     }
+}
 
-    private static func vocabularyColors(_ colors: [String: Color], for words: [RubyWord], in text: String) -> [Color?] {
+/// Finds chosen words in text, for colorings and weights that pick words
+/// out by how they're written.
+enum RubyChosenWords {
+    /// The value of each of `words`, which come from `text`: the value of
+    /// the key each matches, if any. A key matches a word as written (名前),
+    /// a word in any conjugation by its dictionary form (生まれる matches
+    /// 生まれた), or a run of whole words (見当がつく).
+    static func values<Value>(_ values: [String: Value], for words: [RubyWord], in text: String) -> [Value?] {
         let surfaces = words.map { RubyReadingUnits.substring(of: text, utf16Range: $0.range) }
-        var result = [Color?](repeating: nil, count: words.count)
+        var result = [Value?](repeating: nil, count: words.count)
         var index = 0
         while index < words.count {
-            guard let (color, count) = match(colors, at: index, words: words, surfaces: surfaces) else {
+            guard let (value, count) = match(values, at: index, words: words, surfaces: surfaces) else {
                 index += 1
                 continue
             }
@@ -220,27 +228,27 @@ public struct RubyWordColors: Hashable, Sendable {
                     end += 1
                 }
             }
-            for covered in index..<end { result[covered] = color }
+            for covered in index..<end { result[covered] = value }
             index = end
         }
         return result
     }
 
-    /// The color and number of words matched starting at `index`. The
+    /// The value and number of words matched starting at `index`. The
     /// longest match wins, so 見当がつく takes precedence over 見当.
-    private static func match(
-        _ colors: [String: Color],
+    private static func match<Value>(
+        _ values: [String: Value],
         at index: Int,
         words: [RubyWord],
         surfaces: [String]
-    ) -> (Color, Int)? {
-        var best: (color: Color, count: Int)?
-        if let color = colors[surfaces[index]] ?? words[index].dictionaryForm.flatMap({ colors[$0] }) {
-            best = (color, 1)
+    ) -> (Value, Int)? {
+        var best: (value: Value, count: Int)?
+        if let value = values[surfaces[index]] ?? words[index].dictionaryForm.flatMap({ values[$0] }) {
+            best = (value, 1)
         }
         // Keys spanning several adjacent words, as written or ending in a
         // dictionary form (見当がつく matches 見当がつか).
-        for (key, color) in colors {
+        for (key, value) in values {
             var written = surfaces[index]
             var end = index + 1
             while end < words.count, written.count < key.count,
@@ -249,7 +257,7 @@ public struct RubyWordColors: Hashable, Sendable {
                 written += surfaces[end]
                 end += 1
                 if written == key || lemma == key, end - index > best?.count ?? 0 {
-                    best = (color, end - index)
+                    best = (value, end - index)
                 }
             }
         }

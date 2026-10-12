@@ -173,6 +173,7 @@ and changes animate.
 | `rubyLineBreaking(_:)` | `.phrases`, `.anywhere` | `.phrases` |
 | `rubyDigitReadingsHidden(_:)` | hide readings over 2026年, 3日 | `false` |
 | `rubyWordColors(_:in:)` | `.partOfSpeech`, `.alternating`, `.words([…])`, `.wordIDs([…])`, `.jlpt`, `.jlpt(above: .n4)`, `.readingSources`; `in: .text` or `.background` | none |
+| `rubyWordWeights(_:)` | `.words([…])`, `.wordIDs([…])`: bold by default, or any `Font.Weight` | none |
 | `rubyWordDetails(_:)` | popover with reading, dictionary form, part of speech, JLPT level, definitions | off |
 | `onRubyWordTap(perform:)` | your own action with a `RubyWordInfo` | none |
 | `rubyDictionary(_:)` | `RubyDictionary` for definitions | none |

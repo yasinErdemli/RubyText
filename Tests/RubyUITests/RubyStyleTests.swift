@@ -42,8 +42,8 @@ import Testing
             RubyMeasurements(
                 content: RubyContent.content(for: markup),
                 furiganaScript: script,
-                baseWidth: { CGFloat($0.count) },
-                annotationWidth: { CGFloat($0.count) / 2 }
+                baseWidth: { text, _ in CGFloat(text.count) },
+                annotationWidth: { text, _ in CGFloat(text.count) / 2 }
             ).furigana.map(\.text)
         }
         #expect(furigana("東京で{本気|まじ}に{歩|ある}く", in: .katakana) == ["トウキョウ", "マジ", "アル"])

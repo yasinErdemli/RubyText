@@ -165,7 +165,7 @@ struct RubyRenderer: TextRenderer {
                 var annotationContext = layer
                 annotationContext.opacity *= fragment.annotation.opacity
                 let tinted = emphasize(fragment, in: &annotationContext, lines: emphasizedLines)
-                drawFurigana(text, over: fragment.rect, at: center, scale: fragment.annotation.scale, tinted: tinted, color: fragment.annotation.color, in: &annotationContext)
+                drawFurigana(text, of: fragment.annotation, over: fragment.rect, at: center, tinted: tinted, in: &annotationContext)
             }
         }
         guard romajiAbove > 0 || romajiBelow > 0 else { return }
@@ -190,7 +190,7 @@ struct RubyRenderer: TextRenderer {
                 } else {
                     AnyShapeStyle(.tertiary)
                 }
-                let resolved = annotationContext.resolve(metrics.annotationText(text).foregroundStyle(style))
+                let resolved = annotationContext.resolve(metrics.annotationText(text, font: fragment.annotation.font).foregroundStyle(style))
                 annotationContext.translateBy(
                     x: center,
                     y: isAbove ? fragment.rect.minY - metrics.gap : fragment.rect.maxY + metrics.gap
@@ -360,7 +360,7 @@ struct RubyRenderer: TextRenderer {
         in context: GraphicsContext
     ) -> [CGFloat] {
         let widths = pieces.map { text, fragment in
-            context.resolve(metrics.annotationText(text))
+            context.resolve(metrics.annotationText(text, font: fragment.annotation.font))
                 .measure(in: CGSize(width: CGFloat.infinity, height: .infinity)).width * fragment.annotation.scale
         }
         var centers = pieces.map(\.fragment.rect.midX)
@@ -404,11 +404,10 @@ struct RubyRenderer: TextRenderer {
     /// around its word, never between its kana.
     private func drawFurigana(
         _ text: String,
+        of annotation: RubyAnnotation,
         over rect: CGRect,
         at center: CGFloat,
-        scale: CGFloat,
         tinted: Bool,
-        color: Color?,
         in context: inout GraphicsContext
     ) {
         // Furigana use the secondary foreground style, so
@@ -417,15 +416,15 @@ struct RubyRenderer: TextRenderer {
         // the text: over a material, resolved text ignores its shading.
         let style: AnyShapeStyle = if tinted {
             AnyShapeStyle(.tint)
-        } else if let color {
+        } else if let color = annotation.color {
             AnyShapeStyle(color)
         } else {
             AnyShapeStyle(.secondary)
         }
-        let resolved = context.resolve(metrics.annotationText(text).foregroundStyle(style))
+        let resolved = context.resolve(metrics.annotationText(text, font: annotation.font).foregroundStyle(style))
         var drawing = context
         drawing.translateBy(x: center, y: rect.minY - metrics.gap)
-        drawing.scaleBy(x: scale, y: 1)
+        drawing.scaleBy(x: annotation.scale, y: 1)
         drawing.draw(resolved, at: .zero, anchor: .bottom)
     }
 

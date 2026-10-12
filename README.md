@@ -281,8 +281,8 @@ RubyText(segments: [
 
 Segments that share a `wordID` are one word, so a word given in pieces, a
 reading over each kanji, is still tapped, colored and read by VoiceOver as
-one. Furigana and colors can choose words by ID, and `attachesToPrevious`
-says where phrases start:
+one. Furigana, colors and weights can choose words by ID, and
+`attachesToPrevious` says where phrases start:
 
 ```swift
 RubyText(segments: [
@@ -293,6 +293,7 @@ RubyText(segments: [
 ])
 .rubyFurigana(.except(learnedKanji).showing(wordIDs: wordsBeingLearned))
 .rubyWordColors(.wordIDs(newWords))
+.rubyWordWeights(.wordIDs(grammarForm)) // bold, with its furigana and romaji
 .onRubyWordTap { word in open(word.wordID) }
 ```
 

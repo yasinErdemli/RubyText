@@ -56,11 +56,13 @@ ContentView()
 - ``SwiftUICore/View/rubyLineBreaking(_:)``
 - ``RubyLineBreaking``
 
-### Coloring words
+### Coloring and weighting words
 
 - ``SwiftUICore/View/rubyWordColors(_:in:)``
 - ``RubyWordColors``
 - ``RubyWordColorPlacement``
+- ``SwiftUICore/View/rubyWordWeights(_:)``
+- ``RubyWordWeights``
 
 ### Word details
 

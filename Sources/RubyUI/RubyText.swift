@@ -92,6 +92,7 @@ public struct RubyText: View {
     @Environment(\.rubyDigitReadingsHidden) private var digitReadingsHidden
     @Environment(\.rubySpacing) private var spacing
     @Environment(\.rubyWordColoring) private var wordColoring
+    @Environment(\.rubyWordWeights) private var wordWeights
     @Environment(\.rubyDictionary) private var dictionary
     @Environment(\.rubyModelReadings) private var modelUpdates
     @Environment(\.rubyModelOptions) private var modelOptions
@@ -183,6 +184,7 @@ public struct RubyText: View {
             // on every frame.
             textColors: RubyTextContent.coloredRanges(wordColoring.text, in: content),
             backgroundColors: RubyTextContent.coloredRanges(wordColoring.background, in: content),
+            textWeights: RubyTextContent.weightedRanges(wordWeights, in: content),
             speech: speech,
             accessibilityWords: showsWordDetails || wordTapAction != nil
                 ? RubyTextContent.accessibilityWords(in: content, speech: speech)
@@ -489,6 +491,7 @@ private struct RubyTextContent: View {
     /// lookups on every frame of a style animation.
     @AnimatableIgnored let textColors: [RubyColoredRange]
     @AnimatableIgnored let backgroundColors: [RubyColoredRange]
+    @AnimatableIgnored let textWeights: [RubyWeightedRange]
     /// What VoiceOver says in place of parts of the text.
     @AnimatableIgnored let speech: [RubySpokenText]
     /// The words VoiceOver users can choose, if words can be tapped.
@@ -527,7 +530,7 @@ private struct RubyTextContent: View {
 
     var body: some View {
         if above == 0 && below == 0 && reader == nil && textColors.isEmpty && backgroundColors.isEmpty
-            && wordGaps.isZero && content.spaces.isEmpty && !isTappable {
+            && textWeights.isEmpty && wordGaps.isZero && content.spaces.isEmpty && !isTappable {
             Text(Self.plainText(content, lineBreaking: lineBreaking).speaking(speech))
                 .font(RubyMetrics(font: font ?? .body, in: fontResolutionContext).textFont)
                 .contentTransition(.numericText())
@@ -538,7 +541,8 @@ private struct RubyTextContent: View {
                     for: content,
                     metrics: metrics,
                     furiganaScript: furiganaScript.resolved(romanization),
-                    romanization: romanization
+                    romanization: romanization,
+                    weights: textWeights
                 ),
                 furigana: furigana,
                 romaji: romaji,
@@ -550,7 +554,8 @@ private struct RubyTextContent: View {
                 lineBreaking: lineBreaking,
                 insertedSpaceWidth: spacing.width,
                 textColors: textColors,
-                backgrounds: backgrounds()
+                backgrounds: backgrounds(),
+                weightedMetrics: Dictionary(uniqueKeysWithValues: Set(textWeights.map(\.weight)).map { ($0, metrics.weighted($0)) })
             )
 
             if let reader {
@@ -719,15 +724,31 @@ private struct RubyTextContent: View {
     /// merged so a compound like 日本|語 gets one background.
     fileprivate static func coloredRanges(_ colors: RubyWordColors?, in content: RubyContent) -> [RubyColoredRange] {
         guard let colors else { return [] }
-        var ranges: [RubyColoredRange] = []
         // Words are colored as written, then wherever rewriting moved them.
         let source = content.original ?? content
-        for (word, color) in zip(content.words, colors.colors(for: source.words, in: source.string)) {
-            guard let color else { continue }
-            if let last = ranges.last, last.color == color, last.range.upperBound == word.range.lowerBound {
-                ranges[ranges.count - 1] = RubyColoredRange(range: last.range.lowerBound..<word.range.upperBound, color: color)
+        return merged(colors.colors(for: source.words, in: source.string), in: content)
+            .map { RubyColoredRange(range: $0.range, color: $0.value) }
+    }
+
+    /// The ranges `weights` sets in their own weight, with neighboring
+    /// words of the same weight merged.
+    fileprivate static func weightedRanges(_ weights: RubyWordWeights?, in content: RubyContent) -> [RubyWeightedRange] {
+        guard let weights else { return [] }
+        let source = content.original ?? content
+        return merged(weights.weights(for: source.words, in: source.string), in: content)
+            .map { RubyWeightedRange(range: $0.range, weight: $0.value) }
+    }
+
+    /// The range of each word of `content` with a value, one value per
+    /// word, merging neighboring words with the same value.
+    private static func merged<Value: Equatable>(_ values: [Value?], in content: RubyContent) -> [(range: Range<Int>, value: Value)] {
+        var ranges: [(range: Range<Int>, value: Value)] = []
+        for (word, value) in zip(content.words, values) {
+            guard let value else { continue }
+            if let last = ranges.last, last.value == value, last.range.upperBound == word.range.lowerBound {
+                ranges[ranges.count - 1].range = last.range.lowerBound..<word.range.upperBound
             } else {
-                ranges.append(RubyColoredRange(range: word.range, color: color))
+                ranges.append((word.range, value))
             }
         }
         return ranges
@@ -952,6 +973,8 @@ final class RubyMeasurements {
     /// The end of each paragraph, kept on one line when lines may break
     /// anywhere; see `RubyLineBreaking.endings(in:)`.
     let endings: [Range<Int>]
+    /// The weight of each character set in its own weight.
+    let weights: [Font.Weight?]
 
     /// What measurements depend on. Content objects are cached too, so the
     /// same text read by another analyzer is a different object.
@@ -961,6 +984,7 @@ final class RubyMeasurements {
         let romanization: RubyRomanization
         let content: ObjectIdentifier
         let string: String
+        let weights: [RubyWeightedRange]
     }
 
     private static let cache = NSCache<RubyCacheKey<Key>, RubyMeasurements>()
@@ -969,35 +993,48 @@ final class RubyMeasurements {
         for content: RubyContent,
         metrics: RubyMetrics,
         furiganaScript: RubyScript,
-        romanization: RubyRomanization
+        romanization: RubyRomanization,
+        weights: [RubyWeightedRange] = []
     ) -> RubyMeasurements {
         let key = RubyCacheKey(Key(
             metrics: metrics.cacheKey,
             furiganaScript: furiganaScript,
             romanization: romanization,
             content: ObjectIdentifier(content),
-            string: content.string
+            string: content.string,
+            weights: weights
         ))
         if let cached = cache.object(forKey: key) { return cached }
+        var weighted: [Font.Weight: RubyMetrics] = [:]
+        func fontMetrics(_ weight: Font.Weight?) -> RubyMetrics {
+            guard let weight else { return metrics }
+            if let cached = weighted[weight] { return cached }
+            let result = metrics.weighted(weight)
+            weighted[weight] = result
+            return result
+        }
         let measurements = RubyMeasurements(
             content: content,
             furiganaScript: furiganaScript,
             romanization: romanization,
-            baseWidth: metrics.baseWidth(of:),
-            annotationWidth: metrics.annotationWidth(of:)
+            weights: weights,
+            baseWidth: { fontMetrics($1).baseWidth(of: $0) },
+            annotationWidth: { fontMetrics($1).annotationWidth(of: $0) }
         )
         cache.setObject(measurements, forKey: key)
         return measurements
     }
 
-    /// Measures `content` with the given text widths, which tests can
-    /// supply without fonts.
+    /// Measures `content` with the given text widths in each weight, which
+    /// tests can supply without fonts. Text outside `weights` is measured
+    /// with no weight, in the font's own.
     init(
         content: RubyContent,
         furiganaScript: RubyScript = .hiragana,
         romanization: RubyRomanization = .hepburn,
-        baseWidth: (String) -> CGFloat,
-        annotationWidth: (String) -> CGFloat
+        weights: [RubyWeightedRange] = [],
+        baseWidth: (String, Font.Weight?) -> CGFloat,
+        annotationWidth: (String, Font.Weight?) -> CGFloat
     ) {
         let characters = Array(content.string)
         var starts: [Int] = []
@@ -1012,7 +1049,11 @@ final class RubyMeasurements {
             Self.index(of: range.lowerBound, in: starts)..<Self.index(of: range.upperBound, in: starts)
         }
 
-        let widths = characters.map { baseWidth(String($0)) }
+        var characterWeights = [Font.Weight?](repeating: nil, count: characters.count)
+        for item in weights {
+            for index in characterRange(item.range) { characterWeights[index] = item.weight }
+        }
+        let widths = characters.indices.map { baseWidth(String(characters[$0]), characterWeights[$0]) }
         let readings = content.words.flatMap { word in
             word.furigana.map { reading in
                 (reading: (range: reading.range, text: RubyContent.text(of: reading, in: furiganaScript)), word: word.range)
@@ -1028,7 +1069,7 @@ final class RubyMeasurements {
         // over them (にせんにじゅうろくねん over 2026年に) instead of pushing
         // them apart. When another reading sits beyond that space, the two
         // share it, with a small gap between them.
-        let readingGap = annotationWidth("あ") / 4
+        let readingGap = annotationWidth("あ", nil) / 4
         // Also returns where the space it may overhang ends: the index of
         // the first character past it.
         func overhang(from start: Int, step: Int) -> (width: CGFloat, end: Int) {
@@ -1059,7 +1100,7 @@ final class RubyMeasurements {
             let (trailing, trailingEnd) = overhang(from: indices.upperBound, step: 1)
             let wordIndices = characterRange(word)
             let padded = max(wordIndices.lowerBound, leadingEnd + 1)..<min(wordIndices.upperBound, trailingEnd)
-            let natural = annotationWidth(reading.text)
+            let natural = annotationWidth(reading.text, characterWeights[indices.lowerBound])
             let scale = scale(natural, over: indices, available: baseWidth + leading + trailing)
             furigana.append(Furigana(
                 source: source,
@@ -1079,7 +1120,7 @@ final class RubyMeasurements {
         for (source, word) in content.romajiWords(in: romanization).enumerated() {
             let indices = characterRange(word.range)
             guard !indices.isEmpty else { continue }
-            let natural = annotationWidth(word.text)
+            let natural = annotationWidth(word.text, characterWeights[indices.lowerBound])
             let scale = scale(natural, over: indices, available: indices.reduce(0) { $0 + widths[$1] })
             romaji.append(Romaji(
                 source: source,
@@ -1104,6 +1145,7 @@ final class RubyMeasurements {
         insertedSpaces = content.spaces.map { Self.index(of: $0, in: starts) }
         self.paragraphStarts = paragraphStarts
         endings = RubyLineBreaking.endings(in: content)
+        self.weights = characterWeights
     }
 
     /// Index of the character starting at a UTF-16 offset (binary search).
@@ -1136,10 +1178,14 @@ struct RubyLayout {
         lineBreaking: RubyLineBreaking,
         insertedSpaceWidth: CGFloat,
         textColors: [RubyColoredRange],
-        backgrounds: [RubyColoredRange]
+        backgrounds: [RubyColoredRange],
+        weightedMetrics: [Font.Weight: RubyMetrics] = [:]
     ) {
         let characters = measurements.characters
         let starts = measurements.starts
+        // Words in their own weight are set in their own font, as their
+        // characters were measured, and so are their annotations.
+        let weights = measurements.weights
 
         // Word colors per character. They're applied as the standard
         // foreground color attribute, which copies safely.
@@ -1168,18 +1214,20 @@ struct RubyLayout {
         let tracking = spacing.tracking
         let shifts = spacing.shifts
 
-        // Build one flat attributed string with a run per tracking value and color.
+        // Build one flat attributed string with a run per tracking value,
+        // color and weight.
         var text = AttributedString()
         var tracked: [RubyTrackedRange] = []
         var lower = 0
         while lower < characters.count {
             var upper = lower + 1
             while upper < characters.count, tracking[upper] == tracking[lower], shifts[upper] == shifts[lower],
-                  colors[upper] == colors[lower] {
+                  colors[upper] == colors[lower], weights[upper] == weights[lower] {
                 upper += 1
             }
             var piece = AttributedString(String(characters[lower..<upper]))
             piece.foregroundColor = colors[lower]
+            piece.font = weights[lower].flatMap { weightedMetrics[$0]?.textFont }
             if tracking[lower] > 0 || shifts[lower] > 0 {
                 piece.tracking = tracking[lower]
                 tracked.append(RubyTrackedRange(range: starts[lower]..<starts[upper], tracking: tracking[lower], shift: shifts[lower]))
@@ -1209,6 +1257,7 @@ struct RubyLayout {
                 paragraphs[placed.paragraph].furigana.append(RubyAnnotation(
                     id: id, text: reading.text, range: placed.range, baseCount: reading.characters.count,
                     color: colors[reading.characters.lowerBound],
+                    font: weights[reading.characters.lowerBound].flatMap { weightedMetrics[$0]?.annotationFont },
                     opacity: visibility,
                     scale: reading.scale
                 ))
@@ -1222,6 +1271,7 @@ struct RubyLayout {
                 paragraphs[placed.paragraph].romaji.append(RubyAnnotation(
                     id: id, text: word.text, range: placed.range, baseCount: word.characters.count,
                     color: colors[word.characters.lowerBound],
+                    font: weights[word.characters.lowerBound].flatMap { weightedMetrics[$0]?.annotationFont },
                     opacity: visibility,
                     scale: word.scale
                 ))

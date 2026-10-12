@@ -3,6 +3,14 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
+## Unreleased
+
+- `rubyWordWeights(_:)` sets chosen words in their own weight, such as a
+  grammar point's form in bold, by ID with `RubyWordWeights.wordIDs(_:)` or
+  as written with `.words(_:)`, bold unless you give another weight. Their
+  furigana and romaji take the weight too. It combines with
+  `rubyWordColors(_:in:)` to make words bold as well as colored.
+
 ## 1.2.0 — 2026-10-12
 
 - `RubySegment.wordID`: consecutive segments with the same ID are one word,

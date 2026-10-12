@@ -60,6 +60,15 @@ import Testing
         #expect(RubyWordColors.words(["猫"], color: .red).colors(for: cats.words, in: cats.string) == [.red, nil, .red])
     }
 
+    /// Only the words with the IDs get a weight, bold unless another is
+    /// given.
+    @Test func wordIDsWeighTheirWords() {
+        let words = Self.content.words
+        #expect(RubyWordWeights.wordIDs(["food"]).weights(for: words, in: Self.content.string) == [.bold, nil, nil])
+        #expect(RubyWordWeights.wordIDs(["eat": .heavy]).weights(for: words, in: Self.content.string) == [nil, nil, .heavy])
+        #expect(RubyWordWeights.words(["食べ物"], weight: .semibold).weights(for: words, in: Self.content.string) == [.semibold, nil, nil])
+    }
+
     /// Phrases are spaced where the app starts them: 今日 何を.
     @Test func phrasesAreSpacedWhereGiven() {
         let content = RubyContent.content(for: [
