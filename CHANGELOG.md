@@ -3,7 +3,7 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
-## Unreleased
+## 1.2.0 — 2026-10-12
 
 - `RubySegment.wordID`: consecutive segments with the same ID are one word,
   so a word given in pieces, with a reading over each kanji (食|べ|物), is
