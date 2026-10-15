@@ -193,25 +193,33 @@ public struct RubySpacing: Hashable, Sendable {
 }
 
 /// Where `RubyText` may break lines.
+///
+/// Either way, no line starts with a character Japanese keeps off the
+/// start of a line (行頭禁則), such as 。, 」, ー or ゃ, unless the line is
+/// too narrow for anything else.
 public enum RubyLineBreaking: Hashable, Sendable {
     /// Between phrases, so words stay with their particles and endings
     /// (東京へ, 日本語を) and never split across lines, like
     /// `word-break: auto-phrase` on the web. A phrase longer than a line
-    /// still breaks within it.
+    /// still breaks within it. Where that would start a line with 。 or
+    /// another character that may not start one, as it can in large
+    /// text, that paragraph breaks between characters instead.
     case phrases
     /// Between almost any two characters, following the rules against
     /// starting a line with 。 or ゃ. Each paragraph's last word stays
-    /// together, so its last line never holds a single kana (す。).
+    /// together, so its last line never holds a single kana (す。),
+    /// unless keeping it together would start a line with 。.
     case anywhere
 
     /// The language the text is set in, which also selects its line
-    /// breaking: Japanese breaks between characters, following the rules
-    /// against starting a line with 。 or ゃ, and the line-word option
-    /// (`lw=phrase`) breaks between phrases instead.
+    /// breaking: Japanese with strict line breaking (`lb=strict`) breaks
+    /// between characters, never before 。, ゃ or ー (the normal rules
+    /// allow ゃ and ー), and the line-word option (`lw=phrase`) breaks
+    /// between phrases instead.
     var languageIdentifier: String {
         switch self {
         case .phrases: "ja-u-lw-phrase"
-        case .anywhere: "ja"
+        case .anywhere: "ja-u-lb-strict"
         }
     }
 
@@ -219,16 +227,99 @@ public enum RubyLineBreaking: Hashable, Sendable {
     /// Breaking anywhere, `endings` break only between phrases, so they
     /// stay together on a line.
     ///
-    /// - Parameter endings: UTF-16 ranges from `endings(in:)`, found only
-    ///   when breaking anywhere.
-    func setLanguage(of text: inout AttributedString, endings: @autoclosure () -> [Range<Int>]) {
-        text.languageIdentifier = languageIdentifier
-        guard self == .anywhere else { return }
-        for ending in endings() {
-            let lower = text.utf16.index(text.startIndex, offsetBy: ending.lowerBound)
-            let upper = text.utf16.index(lower, offsetBy: ending.count)
-            text[lower..<upper].languageIdentifier = Self.phrases.languageIdentifier
+    /// - Parameters:
+    ///   - endings: UTF-16 ranges from `endings(in:)`, found only when
+    ///     breaking anywhere.
+    ///   - characterBreaking: Paragraphs, by index, that break between
+    ///     characters, because breaking as this asks started one of their
+    ///     lines with a character that may not start one; see
+    ///     `badlyBrokenParagraphs(in:lineStarts:)`.
+    func setLanguage(
+        of text: inout AttributedString,
+        endings: @autoclosure () -> [Range<Int>],
+        characterBreaking: Set<Int> = []
+    ) {
+        func set(_ language: String, in range: Range<Int>) {
+            let lower = text.utf16.index(text.startIndex, offsetBy: range.lowerBound)
+            let upper = text.utf16.index(lower, offsetBy: range.count)
+            text[lower..<upper].languageIdentifier = language
         }
+        text.languageIdentifier = languageIdentifier
+        if self == .anywhere {
+            for ending in endings() { set(Self.phrases.languageIdentifier, in: ending) }
+        }
+        guard !characterBreaking.isEmpty else { return }
+        // The whole paragraph, with its line break: the language at a
+        // paragraph's end decides how it breaks.
+        for (index, paragraph) in Self.paragraphRanges(in: String(text.characters)).enumerated()
+        where characterBreaking.contains(index) {
+            set(Self.anywhere.languageIdentifier, in: paragraph)
+        }
+    }
+
+    /// Whether `character` may start a line. Japanese keeps closing
+    /// brackets and quotes, 。、！？・ and other punctuation, iteration
+    /// marks, ー and small kana off the start of a line (行頭禁則, from
+    /// JIS X 4051), as strict line breaking does.
+    static func canStartLine(_ character: Character) -> Bool {
+        if lineStartProhibited.contains(character) { return false }
+        switch character.unicodeScalars.first?.properties.generalCategory {
+        case .closePunctuation?, .finalPunctuation?: return false
+        default: return true
+        }
+    }
+
+    /// Characters that may not start a line, besides closing brackets and
+    /// quotes, which are found by their Unicode category.
+    private static let lineStartProhibited = Set(
+        // Hyphens, dividing punctuation, middle dots, full stops, commas,
+        // ellipses, and units that follow a number.
+        "‐–〜゠！？‼⁇⁈⁉!?・：；:;･。．.｡、，,､…‥％%℃"
+            // Iteration marks and the prolonged sound mark.
+            + "ゝゞヽヾ々〻ーｰ"
+            // Small kana.
+            + "ぁぃぅぇぉっゃゅょゎゕゖァィゥェォッャュョヮヵヶㇰㇱㇲㇳㇴㇵㇶㇷㇸㇹㇺㇻㇼㇽㇾㇿｧｨｩｪｫｬｭｮｯ"
+    )
+
+    /// The paragraphs of `string`, by index, where a line starts with a
+    /// character that may not start one, other than after a line break.
+    ///
+    /// Breaking between phrases leaves 。 at the start of a line when the
+    /// phrase before it is wider than the line: the system then breaks
+    /// after the last character that fits, whatever comes next.
+    ///
+    /// - Parameter lineStarts: Where each line starts, as laid out: its
+    ///   paragraph, and its UTF-16 offset in that paragraph.
+    static func badlyBrokenParagraphs(in string: String, lineStarts: [(paragraph: Int, offset: Int)]) -> Set<Int> {
+        let paragraphs = paragraphRanges(in: string)
+        let characters = Array(string)
+        var starts = [0]
+        for character in characters { starts.append(starts[starts.count - 1] + character.utf16.count) }
+        var result: Set<Int> = []
+        for (paragraph, offset) in lineStarts where offset > 0 && paragraphs.indices.contains(paragraph) {
+            let index = RubyMeasurements.index(of: paragraphs[paragraph].lowerBound + offset, in: starts)
+            guard characters.indices.contains(index), !characters[index - 1].isNewline else { continue }
+            if !canStartLine(characters[index]) { result.insert(paragraph) }
+        }
+        return result
+    }
+
+    /// The UTF-16 range of each paragraph of `string`, with the line break
+    /// that ends it. A line separator (U+2028) breaks a line within its
+    /// paragraph, as in text layout.
+    static func paragraphRanges(in string: String) -> [Range<Int>] {
+        var ranges: [Range<Int>] = []
+        var lower = 0
+        var offset = 0
+        for character in string {
+            offset += character.utf16.count
+            if character.isNewline && character != "\u{2028}" {
+                ranges.append(lower..<offset)
+                lower = offset
+            }
+        }
+        ranges.append(lower..<offset)
+        return ranges
     }
 
     /// The end of each paragraph to keep on one line: its last word, with

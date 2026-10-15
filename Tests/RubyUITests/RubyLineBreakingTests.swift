@@ -41,6 +41,70 @@ import Testing
             for line in lines.dropFirst() {
                 #expect(!["へ", "を", "す", "い。", "ら"].contains { line.hasPrefix($0) }, "\(width): \(lines)")
             }
+            // So it never needs to break between characters instead.
+            #expect(RubyLineBreaking.badlyBrokenParagraphs(in: Self.sentence, lineStarts: Self.lineStarts([lines])).isEmpty)
+        }
+    }
+
+    /// In large text, a phrase can be wider than a line. Breaking between
+    /// phrases then leaves 。 or 、 at the start of the next line, and its
+    /// paragraph, laid out again between characters, never does.
+    @Test(arguments: [RubyLineBreaking.phrases, .anywhere])
+    func linesNeverStartWithAFullStop(_ lineBreaking: RubyLineBreaking) throws {
+        // The size of body text at the largest accessibility size.
+        let metrics = RubyMetrics(font: .system(size: 63), in: try Self.fontContext())
+        let texts = [
+            "アリョーナです。よろしくお願いします。",
+            "森さん、よろしくお願いします。\n今日何をしますか。",
+        ]
+        var paragraphsBroken = 0
+        for string in texts {
+            let content = RubyContent.content(for: string)
+            let measurements = RubyMeasurements.measurements(for: content, metrics: metrics, furiganaScript: .hiragana, romanization: .hepburn)
+            func lines(width: CGFloat, characterBreaking: Set<Int>) -> [[String]] {
+                let layout = RubyLayout(
+                    measurements: measurements, furigana: 1, romaji: 0,
+                    readingVisibility: .zero, romajiVisibility: .zero, wordGaps: .zero,
+                    fontSize: metrics.fontSize, romajiSpacing: metrics.romajiSpacing,
+                    lineBreaking: lineBreaking, characterBreaking: characterBreaking,
+                    insertedSpaceWidth: 0, textColors: [], backgrounds: []
+                )
+                return Self.paragraphLines(of: Text(layout.text).font(metrics.textFont), width: width, string: content.string)
+            }
+            // From three characters a line: with two, アリョーナ can't
+            // break without starting a line with ョ or ー.
+            for width in stride(from: metrics.fontSize * 3, through: metrics.fontSize * 12, by: metrics.fontSize / 4) {
+                let phrased = lines(width: width, characterBreaking: [])
+                let broken = RubyLineBreaking.badlyBrokenParagraphs(in: content.string, lineStarts: Self.lineStarts(phrased))
+                paragraphsBroken += broken.count
+                let result = broken.isEmpty ? phrased : lines(width: width, characterBreaking: broken)
+                #expect(
+                    RubyLineBreaking.badlyBrokenParagraphs(in: content.string, lineStarts: Self.lineStarts(result)).isEmpty,
+                    "\(lineBreaking) \(width): \(phrased) became \(result)"
+                )
+                // Paragraphs that broke well keep their lines.
+                for paragraph in phrased.indices where !broken.contains(paragraph) {
+                    #expect(result[paragraph] == phrased[paragraph])
+                }
+            }
+        }
+        #expect(paragraphsBroken > 0)
+    }
+
+    /// Breaking between characters keeps off a line's start every
+    /// character that `RubyText` looks for there, so laying a paragraph
+    /// out again always helps.
+    @Test func characterBreakingKeepsCharactersOffLineStarts() throws {
+        let metrics = RubyMetrics(font: .title3, in: try Self.fontContext())
+        let candidates = "。、，．」』）】〕〉》”’！？・：；ーぁぃぅぇぉっゃゅょゎゕゖァィゥェォッャュョヮヵヶㇰㇷㇿゝゞヽヾ々〻…‥〜‐–゠‼⁇％℃.,!?:;)]}%｡､｣ｰｧｯ･"
+        // Five kana a line, so the line would break before the character.
+        let width = metrics.baseWidth(of: "あいうえお") + 1
+        for character in candidates {
+            #expect(!RubyLineBreaking.canStartLine(character))
+            var text = AttributedString("あいうえお\(character)かきく")
+            RubyLineBreaking.phrases.setLanguage(of: &text, endings: [], characterBreaking: [0])
+            let lines = Self.lines(of: Text(text).font(metrics.textFont), width: width, string: String(text.characters))
+            #expect(lines.count > 1 && lines[1].first != character, "\(lines)")
         }
     }
 
@@ -260,6 +324,16 @@ import Testing
                 paragraphs[paragraph].append(String(utf16CodeUnits: Array(utf16[range]), count: range.count))
             }
             RubyLineBreakingTests.recordedParagraphs = paragraphs
+        }
+    }
+
+    /// Where each line of `paragraphs` starts, as
+    /// `RubyLineBreaking.badlyBrokenParagraphs(in:lineStarts:)` takes them.
+    private static func lineStarts(_ paragraphs: [[String]]) -> [(paragraph: Int, offset: Int)] {
+        paragraphs.enumerated().flatMap { paragraph, lines in
+            lines.indices.map { line in
+                (paragraph, lines[..<line].reduce(0) { $0 + $1.utf16.count })
+            }
         }
     }
 

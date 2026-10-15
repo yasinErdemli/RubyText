@@ -3,6 +3,19 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
+## Unreleased
+
+- No line starts with 。, 、, 」, ー, a small kana or another character
+  Japanese keeps off the start of a line. Breaking between phrases, a
+  phrase wider than the line, as in large accessibility text sizes, was
+  broken after the last character that fit, which could leave 。 alone on
+  the next line (お願いします / 。). `RubyText` now checks its lines once
+  they're laid out and breaks such a paragraph between characters
+  instead, until the text, its font or its width changes. Text whose
+  phrases fit keeps breaking between them.
+- `.rubyLineBreaking(.anywhere)` breaks with the strict rules, which also
+  keep ゃ, ッ and ー off the start of a line, as its documentation said.
+
 ## 1.3.0 — 2026-10-12
 
 - `rubyWordWeights(_:)` sets chosen words in their own weight, such as a

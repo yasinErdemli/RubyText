@@ -3,6 +3,7 @@ import FoundationModels
 @_spi(Experiments) import RubyCore
 import RubyTransliteration
 import SwiftUI
+import Synchronization
 
 /// Japanese text that can show furigana or romaji above its words, or
 /// furigana above and romaji below.
@@ -109,6 +110,9 @@ public struct RubyText: View {
     /// The tapped word whose details are showing, and where it is.
     @State private var selectedWord: RubyWordInfo?
     @State private var selectedRect = CGRect.zero
+    /// Paragraphs that break between characters, as breaking between
+    /// phrases started one of their lines with 。 or the like.
+    @State private var lineBreakFallback: RubyLineBreakFallback?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Creates ruby text from a string literal, with readings you give in
@@ -192,7 +196,8 @@ public struct RubyText: View {
             // Word details describe the word as written.
             selectedRange: selectedWord.map { content.range(fromOriginal: $0.range) },
             selectedWord: $selectedWord,
-            selectedRect: $selectedRect
+            selectedRect: $selectedRect,
+            lineBreakFallback: $lineBreakFallback
         )
         .popover(item: $selectedWord, attachmentAnchor: .rect(.rect(selectedRect))) { word in
             RubyWordDetailView(word: word, dictionary: dictionary)
@@ -517,6 +522,10 @@ private struct RubyTextContent: View {
     /// by `RubyText`.
     @AnimatableIgnored let selectedWord: Binding<RubyWordInfo?>
     @AnimatableIgnored let selectedRect: Binding<CGRect>
+    /// Paragraphs that break between characters, as breaking between
+    /// phrases started one of their lines with 。 or the like, owned by
+    /// `RubyText`.
+    @AnimatableIgnored let lineBreakFallback: Binding<RubyLineBreakFallback?>
 
     private var isTappable: Bool { showsWordDetails || wordTapAction != nil }
 
@@ -529,13 +538,24 @@ private struct RubyTextContent: View {
     private var below: CGFloat { romajiBelow }
 
     var body: some View {
+        let metrics = RubyMetrics(font: font ?? .body, in: fontResolutionContext)
+        let lineBreakKey = RubyLineBreakFallback.Key(string: content.string, font: metrics.cacheKey, lineBreaking: lineBreaking)
+        let characterBreaking = lineBreakFallback.wrappedValue.flatMap { $0.key == lineBreakKey ? $0.paragraphs : nil } ?? []
+        let lineStartCheck = RubyLineStartCheck(
+            // Only text with a character that may not start a line can
+            // start one with it.
+            isEnabled: !content.string.allSatisfy(RubyLineBreaking.canStartLine),
+            key: lineBreakKey,
+            fallback: lineBreakFallback
+        )
+
         if above == 0 && below == 0 && reader == nil && textColors.isEmpty && backgroundColors.isEmpty
             && textWeights.isEmpty && wordGaps.isZero && content.spaces.isEmpty && !isTappable {
-            Text(Self.plainText(content, lineBreaking: lineBreaking).speaking(speech))
-                .font(RubyMetrics(font: font ?? .body, in: fontResolutionContext).textFont)
+            Text(Self.plainText(content, lineBreaking: lineBreaking, characterBreaking: characterBreaking).speaking(speech))
+                .font(metrics.textFont)
                 .contentTransition(.numericText())
+                .modifier(lineStartCheck)
         } else {
-            let metrics = RubyMetrics(font: font ?? .body, in: fontResolutionContext)
             let layout = RubyLayout(
                 measurements: .measurements(
                     for: content,
@@ -552,6 +572,7 @@ private struct RubyTextContent: View {
                 fontSize: metrics.fontSize,
                 romajiSpacing: metrics.romajiSpacing,
                 lineBreaking: lineBreaking,
+                characterBreaking: characterBreaking,
                 insertedSpaceWidth: spacing.width,
                 textColors: textColors,
                 backgrounds: backgrounds(),
@@ -562,17 +583,22 @@ private struct RubyTextContent: View {
                 // Only tick while this text is the one being read.
                 let isReadingThis = reader.text == content.sourceString && reader.isSpeaking
                 TimelineView(.animation(paused: !isReadingThis || reader.isPaused)) { _ in
-                    annotatedText(layout, metrics: metrics, emphasis: isReadingThis
+                    annotatedText(layout, metrics: metrics, lineStartCheck: lineStartCheck, emphasis: isReadingThis
                         ? emphasisState(reader: reader, layout: layout)
                         : nil)
                 }
             } else {
-                annotatedText(layout, metrics: metrics, emphasis: nil)
+                annotatedText(layout, metrics: metrics, lineStartCheck: lineStartCheck, emphasis: nil)
             }
         }
     }
 
-    private func annotatedText(_ layout: RubyLayout, metrics: RubyMetrics, emphasis: RubyEmphasisState?) -> some View {
+    private func annotatedText(
+        _ layout: RubyLayout,
+        metrics: RubyMetrics,
+        lineStartCheck: RubyLineStartCheck,
+        emphasis: RubyEmphasisState?
+    ) -> some View {
         let above = metrics.reservedHeight * above
         let below = metrics.reservedHeight * below
 
@@ -597,6 +623,7 @@ private struct RubyTextContent: View {
             // turn vibrant, and text the renderer draws in them, such as
             // annotations, doesn't show. The text keeps the regular styles.
             .environment(\.backgroundMaterial, nil)
+            .modifier(lineStartCheck)
             .modifier(RubyWordTapping(
                 isEnabled: isTappable,
                 words: accessibilityWords,
@@ -714,9 +741,9 @@ private struct RubyTextContent: View {
 
     /// Text without annotations, tagged as Japanese so lines break the
     /// same way as annotated text.
-    private static func plainText(_ content: RubyContent, lineBreaking: RubyLineBreaking) -> AttributedString {
+    private static func plainText(_ content: RubyContent, lineBreaking: RubyLineBreaking, characterBreaking: Set<Int>) -> AttributedString {
         var text = AttributedString(content.string)
-        lineBreaking.setLanguage(of: &text, endings: RubyLineBreaking.endings(in: content))
+        lineBreaking.setLanguage(of: &text, endings: RubyLineBreaking.endings(in: content), characterBreaking: characterBreaking)
         return text
     }
 
@@ -840,6 +867,121 @@ private struct RubyWordTapping: ViewModifier {
         } else {
             tappable
         }
+    }
+}
+
+/// Paragraphs of a `RubyText` that break between characters, because
+/// breaking as the text asks started one of their lines with a character
+/// that may not start one, and the text and width they were found for.
+private struct RubyLineBreakFallback: Equatable {
+    /// What the text's lines depend on, besides its width.
+    struct Key: Equatable {
+        let string: String
+        let font: String
+        let lineBreaking: RubyLineBreaking
+    }
+
+    let key: Key
+    /// The width proposed to the text, `nil` for as wide as it likes.
+    let width: CGFloat?
+    /// The paragraphs, by index.
+    let paragraphs: Set<Int>
+}
+
+/// Keeps 。 and other characters that may not start a line off the start
+/// of a `RubyText`'s lines.
+///
+/// Breaking between phrases, the system breaks a phrase wider than the
+/// line after the last character that fits, even before 。, and nothing
+/// in the text can stop it. So once the text is laid out, each paragraph
+/// with a line that starts badly is laid out again, breaking between
+/// characters, for as long as the text, its font and its width stay the
+/// same. Text at ordinary sizes, whose phrases fit on a line, is left as
+/// it is.
+private struct RubyLineStartCheck: ViewModifier {
+    /// Whether the text has a character that may not start a line.
+    let isEnabled: Bool
+    let key: RubyLineBreakFallback.Key
+    @Binding var fallback: RubyLineBreakFallback?
+
+    @State private var proposedWidth = RubyProposedWidth()
+
+    func body(content: Content) -> some View {
+        RubyProposedWidthReader(width: proposedWidth) {
+            content
+        }
+        .backgroundPreferenceValue(Text.LayoutKey.self) { layouts in
+            if isEnabled {
+                Color.clear.onChange(of: layouts.first?.layout, initial: true) { _, layout in
+                    if let layout { check(layout) }
+                }
+            }
+        }
+    }
+
+    /// Finds the paragraphs in `layout` that need to break between
+    /// characters, adding to those already found for the same text and
+    /// width.
+    private func check(_ layout: Text.Layout) {
+        let width = proposedWidth.value
+        var paragraphs: Set<Int> = []
+        if let fallback, fallback.key == key {
+            // In another width, the paragraphs may fit between phrases
+            // again: they're laid out between phrases and checked again.
+            guard fallback.width == width else {
+                self.fallback = nil
+                return
+            }
+            paragraphs = fallback.paragraphs
+        }
+        let lineStarts = layout.rubyParagraphLines.compactMap { _, line, paragraph, start in
+            line.flatMap(\.characterIndices).min().map { (paragraph: paragraph, offset: start.distance(to: $0)) }
+        }
+        let broken = RubyLineBreaking.badlyBrokenParagraphs(in: key.string, lineStarts: lineStarts)
+        // Paragraphs already breaking between characters can't do better.
+        guard !broken.isSubset(of: paragraphs) else { return }
+        fallback = RubyLineBreakFallback(key: key, width: width, paragraphs: paragraphs.union(broken))
+    }
+}
+
+/// Lays out its view as proposed, and notes the width proposed. Text is as
+/// wide as its longest line, so its size alone doesn't show whether it
+/// was given another width.
+private struct RubyProposedWidthReader: Layout {
+    let width: RubyProposedWidth
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        subviews.first?.sizeThatFits(proposal) ?? .zero
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        width.value = proposal.width
+        subviews.first?.place(at: bounds.origin, proposal: proposal)
+    }
+
+    // The text's own guides, such as its baselines, pass through.
+    func explicitAlignment(
+        of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()
+    ) -> CGFloat? {
+        subviews.first?.dimensions(in: proposal)[explicit: guide].map { bounds.minY + $0 }
+    }
+
+    func explicitAlignment(
+        of guide: HorizontalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()
+    ) -> CGFloat? {
+        subviews.first?.dimensions(in: proposal)[explicit: guide].map { bounds.minX + $0 }
+    }
+}
+
+/// The width last proposed to a `RubyText`'s text. A reference, so noting
+/// it during layout doesn't update the view, and locked, since layout
+/// isn't isolated to the main actor.
+private nonisolated final class RubyProposedWidth: Sendable {
+    private let storage = Mutex<CGFloat?>(nil)
+
+    var value: CGFloat? {
+        get { storage.withLock { $0 } }
+        set { storage.withLock { $0 = newValue } }
     }
 }
 
@@ -1132,18 +1274,13 @@ final class RubyMeasurements {
             ))
         }
 
-        var paragraphStarts = [0]
-        for (index, character) in characters.enumerated() where character.isNewline && character != "\u{2028}" {
-            paragraphStarts.append(starts[index + 1])
-        }
-
         self.characters = characters
         self.widths = widths
         self.starts = starts
         self.furigana = furigana
         self.romaji = romaji
         insertedSpaces = content.spaces.map { Self.index(of: $0, in: starts) }
-        self.paragraphStarts = paragraphStarts
+        paragraphStarts = RubyLineBreaking.paragraphRanges(in: content.string).map(\.lowerBound)
         endings = RubyLineBreaking.endings(in: content)
         self.weights = characterWeights
     }
@@ -1176,6 +1313,7 @@ struct RubyLayout {
         fontSize: CGFloat,
         romajiSpacing: CGFloat,
         lineBreaking: RubyLineBreaking,
+        characterBreaking: Set<Int> = [],
         insertedSpaceWidth: CGFloat,
         textColors: [RubyColoredRange],
         backgrounds: [RubyColoredRange],
@@ -1237,7 +1375,7 @@ struct RubyLayout {
         }
         // The language decides where lines may break, such as only between
         // phrases. It's a standard attribute, so copying still works.
-        lineBreaking.setLanguage(of: &text, endings: measurements.endings)
+        lineBreaking.setLanguage(of: &text, endings: measurements.endings, characterBreaking: characterBreaking)
         self.text = text
 
         // Layout character indices restart at each paragraph, so ranges are
@@ -1451,6 +1589,21 @@ struct RubyLayout {
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
     }
+}
+
+#Preview("Largest text size") {
+    // Each sentence has a phrase wider than the line, which would leave 。
+    // alone at the start of the next, so it breaks between characters.
+    VStack(alignment: .leading, spacing: 28) {
+        RubyText("アリョーナです。よろしく{お願|ねが}いします。")
+        RubyText("{森|もり}さん、よろしく{お願|ねが}いします。")
+        // Phrases that fit still break between phrases.
+        RubyText("{今日|きょう}は{東京|とうきょう}へ{行|い}きたい。")
+    }
+    .font(.title)
+    // The width of text on a 375-point iPhone.
+    .frame(width: 343, alignment: .leading)
+    .dynamicTypeSize(.accessibility5)
 }
 
 #Preview("Colors") {
