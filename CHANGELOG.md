@@ -3,7 +3,7 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
-## Unreleased
+## 1.3.1 — 2026-10-16
 
 - No line starts with 。, 、, 」, ー, a small kana or another character
   Japanese keeps off the start of a line. Breaking between phrases, a
