@@ -3,7 +3,7 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
-## Unreleased
+## 1.4.0 — 2026-10-17
 
 - `RubyStyle.kanaRomaji` draws romaji under each kana, a beat at a time,
   for learners who can't read every kana yet: わたしは over wa ta shi wa,
