@@ -157,6 +157,43 @@ public struct RubyTableStyle: RubyTransliterationStyle, CustomStringConvertible 
         return capitalizing(writer.text, phrase: phrase, starts: starts)
     }
 
+    /// Each mora on its own, as `transliterate(_:)` would write it: a
+    /// syllable as the table spells it, っ as the consonant it doubles, ん
+    /// as `nasal`, whatever follows. A long vowel is written as the style
+    /// spells it, if it does (u, or - for ー), and otherwise as the vowel
+    /// it holds, since there's no vowel before it to mark: とう is to, o in
+    /// Hepburn and to, u in wāpuro. Words in `words`, and names, are
+    /// written beat by beat all the same.
+    public func transliterateMorae(_ phrase: RubyPhrase) -> [String] {
+        let morae = phrase.morae
+        return morae.indices.map { index in
+            let mora = morae[index]
+            let previous = index > 0 ? morae[index - 1] : nil
+            switch mora.kind {
+            case .syllable:
+                return spelling(of: mora, after: previous)
+            case .geminate:
+                let next = index + 1 < morae.count ? morae[index + 1] : phrase.following
+                guard let next, next.kind == .syllable, next.consonant?.isEmpty == false else { return "" }
+                return geminate(before: spelling(of: next, after: nil))
+            case .nasal:
+                return nasal
+            case .long:
+                let vowel = RubyMora(kind: .syllable, text: mora.text, word: mora.word)
+                switch longVowels {
+                case .spelled:
+                    return mora.text == "ー" ? "-" : spelling(of: vowel, after: previous)
+                case .marked:
+                    if mora.text == "い" { return spelling(of: vowel, after: previous) }
+                    guard let kana = mora.vowel.flatMap({ RubyMora.vowelKana[$0] }) else { return "" }
+                    return spelling(of: RubyMora(kind: .syllable, text: kana, word: mora.word), after: nil)
+                }
+            case .space, .other:
+                return ""
+            }
+        }
+    }
+
     /// The written form of a syllable, which `previous` comes before.
     private func spelling(of mora: RubyMora, after previous: RubyMora?) -> String {
         let key = particles == .pronounced ? mora.spoken : mora.text

@@ -69,6 +69,8 @@ package final class RubyContent: Sendable {
     package var romajiWords: [RubyRomajiWord] { romajiWords(in: .hepburn) }
 
     private let romajiWordsBySystem = Mutex<[RubyRomanization: [RubyRomajiWord]]>([:])
+    /// `kanaRomaji(in:)` for each system it was asked for.
+    let kanaRomajiBySystem = Mutex<[RubyRomanization: [RubyKanaRomaji]]>([:])
 
     /// Words as romaji in `system` write them, each one annotation.
     /// Verb and adjective endings join their word (読ん|だ → yonda,

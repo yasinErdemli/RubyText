@@ -38,8 +38,9 @@ without its readings, unless the readings are part of the text
 | Modifier | Notes |
 | --- | --- |
 | `rubyAnalyzer(_ analyzer: some RubyAnalyzer)` | Set once, near the root. |
-| `rubyStyle(_ style: RubyStyle = .furigana)` | `RubyStyle` is an `OptionSet`: `.furigana`, `.romaji`. Either alone sits above the text; together, furigana above and romaji below. `[]` is plain text. |
+| `rubyStyle(_ style: RubyStyle = .furigana)` | `RubyStyle` is an `OptionSet`: `.furigana`, `.romaji`, `.kanaRomaji`. Furigana or romaji alone sit above the text; together, furigana above and romaji below. `.kanaRomaji` puts romaji under each kana, a beat at a time, always below the text, for learners still learning kana; none with `.romaji`, a transcription or inline furigana. `[]` is plain text. |
 | `rubyFurigana(_ filter: RubyFuriganaFilter)` | `.all`; `.above(_ level: RubyJLPTLevel, except knownKanji: Set<Character> = [])` hides readings of kanji at or below the level; `.except(_ knownKanji: some Sequence<Character>)`. A reading spanning several kanji shows if any is unknown. Add `.showing(wordIDs: some Sequence<String>)` to show every reading of chosen words, by their segments' `wordID`, whatever their kanji. |
+| `rubyKanaRomaji(_ filter: RubyKanaRomajiFilter)` | Which kana get romaji with `.kanaRomaji`: `.all`; `.except(_ knownKana: some Sequence<String>)`, kana as written (か and カ apart; きゃ known if listed or if き and ゃ are). Add `.hiding(wordIDs: some Sequence<String>)` to leave out chosen words, by their segments' `wordID`. Romaji fade per kana as it changes; once none show, their space goes. |
 | `rubyFuriganaScript(_ script: RubyScript)` | `.hiragana` (default; katakana you write in markup is kept), `.katakana`, `.romaji`. |
 | `rubyFuriganaPosition(_ position: RubyFuriganaPosition)` | `.above`, `.inline`: 東京（とうきょう）へ行（い）きたい。 Inline readings are part of the text, so they copy with it; romaji, if shown, move above. |
 | `rubyTranscription(_ transcription: RubyScript?)` | Writes the whole text out: `.hiragana` (loanwords stay katakana), `.hiragana(loanwords: .hiragana)`, `.katakana`, `.romaji`. `nil`, the default, writes it as it is. Copy gives the transcribed text. |
@@ -253,7 +254,12 @@ A `final class`, `Sendable`, compared by identity. See
 ```swift
 func transliterate(_ kana: String, pronunciation: String? = nil) -> String
 func transliterate(_ phrase: RubyPhrase) -> String
+func transliterateMorae(_ phrase: RubyPhrase) -> [String]   // a beat at a time: wa, ta, shi, wa
 ```
+
+`transliterateMorae` writes each mora on its own, as `.kanaRomaji` does: っ
+as the consonant it doubles (t before て), ん as n, and a long vowel as the
+vowel it holds, or as spelled in styles with `.spelled` long vowels (u, -).
 
 ### RubyTableStyle
 
@@ -278,7 +284,8 @@ in shimbun), `geminates`, `syllablesAfterVowel`, `capitals`, `punctuation`.
 builds a style for another alphabet from consonants and vowels.
 `RubyTransliterationValidator.validate(_:)` lists kana and phrases a style
 leaves unwritten. For a system a table can't express, conform to
-`RubyTransliterationStyle` (`func transliterate(_ phrase: RubyPhrase) -> String`).
+`RubyTransliterationStyle` (`func transliterate(_ phrase: RubyPhrase) -> String`,
+and optionally `func transliterateMorae(_ phrase: RubyPhrase) -> [String]`).
 
 ### RubyKana
 

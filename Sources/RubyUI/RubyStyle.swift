@@ -12,6 +12,14 @@ import SwiftUI
 ///
 /// Either one alone sits above the text. Together, furigana are above
 /// and romaji below.
+///
+/// For learners still learning kana, `.kanaRomaji` puts romaji under each
+/// kana instead, a beat at a time, and `rubyKanaRomaji(_:)` leaves out
+/// the kana they can read:
+///
+///     RubyText(segments: sentence.segments)
+///         .rubyStyle([.furigana, .kanaRomaji])
+///         .rubyKanaRomaji(.except(learnedKana))
 public struct RubyStyle: OptionSet, Hashable, Sendable {
     public let rawValue: Int
 
@@ -26,6 +34,15 @@ public struct RubyStyle: OptionSet, Hashable, Sendable {
     /// Romaji for every Japanese word: below the text when furigana are
     /// above it, otherwise above it.
     public static let romaji = RubyStyle(rawValue: 1 << 1)
+    /// Romaji under each kana, a beat at a time, for learners who can't
+    /// read every kana yet: わたしは over wa ta shi wa, きって over ki t
+    /// te. Always below the text, so furigana keep their place above it.
+    ///
+    /// Choose the kana that get them with `rubyKanaRomaji(_:)`. Kanji
+    /// have none, since their readings are furigana, and neither has text
+    /// written out with `rubyTranscription(_:)` or with inline furigana.
+    /// With `.romaji`, which already writes every word, there are none.
+    public static let kanaRomaji = RubyStyle(rawValue: 1 << 2)
 }
 
 /// Where `RubyText` puts furigana.
@@ -45,6 +62,8 @@ struct RubyPlacement: Equatable {
     /// or below it.
     let romajiAbove: Bool
     let romajiBelow: Bool
+    /// Whether romaji are drawn under each kana, below the text.
+    var kanaRomaji = false
 }
 
 extension RubyPlacement {
@@ -54,7 +73,11 @@ extension RubyPlacement {
         let furigana = style.contains(.furigana) && furiganaPosition == .above && transcription == nil
         // Romaji text needs no romaji.
         let romaji = style.contains(.romaji) && transcription?.isRomaji != true
-        self.init(furigana: furigana, romajiAbove: romaji && !furigana, romajiBelow: romaji && furigana)
+        // Kana romaji go under the kana as written: rewritten text has
+        // kana of its own, and romaji for every word already say them.
+        let rewritten = transcription != nil || style.contains(.furigana) && furiganaPosition == .inline
+        let kanaRomaji = style.contains(.kanaRomaji) && !style.contains(.romaji) && !rewritten
+        self.init(furigana: furigana, romajiAbove: romaji && !furigana, romajiBelow: romaji && furigana, kanaRomaji: kanaRomaji)
     }
 }
 
@@ -121,6 +144,54 @@ public struct RubyFuriganaFilter: Hashable, Sendable {
         if knownKanji.contains(kanji) { return true }
         guard let knownLevel, let level = RubyJLPTKanji.level(of: kanji) else { return false }
         return level <= knownLevel
+    }
+}
+
+/// Which kana get romaji under them with `RubyStyle.kanaRomaji`, so
+/// learners only see romaji under the kana they can't read yet.
+///
+///     RubyText(segments: sentence.segments)
+///         .rubyStyle([.furigana, .kanaRomaji])
+///         .rubyKanaRomaji(.except(["わ", "た", "し"]))   // わたしは: wa under は
+///
+/// Kana are matched as written, so a learner learns か and カ apart. A
+/// kana with a small one after it, such as きゃ, is known when it's listed
+/// itself or when each of its kana is. Changing the filter fades romaji in
+/// and out, a kana at a time, as furigana fade a kanji at a time; once no
+/// kana has romaji, the text gives back the space they took.
+public struct RubyKanaRomajiFilter: Hashable, Sendable {
+    /// Kana the learner can read, as written.
+    private var knownKana: Set<String> = []
+    /// Words whose kana have no romaji, by ID.
+    private var hiddenWordIDs: Set<String> = []
+
+    /// Romaji under every kana.
+    public static let all = RubyKanaRomajiFilter()
+
+    /// Romaji under every kana except `knownKana`, such as the kana a
+    /// learner has learned: か, カ, きゃ, っ, ー.
+    public static func except(_ knownKana: some Sequence<String>) -> RubyKanaRomajiFilter {
+        RubyKanaRomajiFilter(knownKana: Set(knownKana))
+    }
+
+    /// This filter, also leaving out the romaji of the words with `ids`,
+    /// which you give their segments as `wordID`, such as a word whose
+    /// reading is what an exercise asks.
+    public func hiding(wordIDs ids: some Sequence<String>) -> RubyKanaRomajiFilter {
+        var filter = self
+        filter.hiddenWordIDs.formUnion(ids)
+        return filter
+    }
+
+    /// Whether `kana`, a beat as written, has its romaji under it in the
+    /// word with `wordID`.
+    func showsRomaji(under kana: String, wordID: String? = nil) -> Bool {
+        if let wordID, hiddenWordIDs.contains(wordID) { return false }
+        return !isKnown(kana)
+    }
+
+    private func isKnown(_ kana: String) -> Bool {
+        knownKana.contains(kana) || kana.count > 1 && kana.allSatisfy { knownKana.contains(String($0)) }
     }
 }
 
@@ -371,6 +442,9 @@ extension EnvironmentValues {
     @Entry var rubyStyle: RubyStyle = .furigana
     /// Which kanji `RubyText` views show furigana for. All by default.
     @Entry var rubyFuriganaFilter = RubyFuriganaFilter.all
+    /// Which kana `RubyText` views put romaji under, with
+    /// `RubyStyle.kanaRomaji`. All by default.
+    @Entry var rubyKanaRomajiFilter = RubyKanaRomajiFilter.all
     /// The script `RubyText` views write furigana in. Hiragana by default.
     @Entry var rubyFuriganaScript = RubyScript.hiragana
     /// Where `RubyText` views put furigana. Above the text by default.
@@ -401,6 +475,13 @@ extension View {
     /// for, such as `.above(.n4)` to hide readings of N5 and N4 kanji.
     public func rubyFurigana(_ filter: RubyFuriganaFilter) -> some View {
         environment(\.rubyFuriganaFilter, filter)
+    }
+
+    /// Sets which kana `RubyText` views in this hierarchy put romaji under
+    /// with `RubyStyle.kanaRomaji`, such as `.except(learnedKana)` to leave
+    /// out the kana a learner can read.
+    public func rubyKanaRomaji(_ filter: RubyKanaRomajiFilter) -> some View {
+        environment(\.rubyKanaRomajiFilter, filter)
     }
 
     /// Sets the script `RubyText` views in this hierarchy write furigana

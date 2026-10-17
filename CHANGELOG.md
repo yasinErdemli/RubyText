@@ -3,6 +3,24 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
+## Unreleased
+
+- `RubyStyle.kanaRomaji` draws romaji under each kana, a beat at a time,
+  for learners who can't read every kana yet: わたしは over wa ta shi wa,
+  きって over ki t te. They sit below the text, so furigana keep their place
+  above it. `rubyKanaRomaji(_:)` chooses the kana with a
+  `RubyKanaRomajiFilter`: `.except(learnedKana)` leaves out the kana a
+  learner can read, matched as written, and `.hiding(wordIDs:)` leaves out
+  chosen words, such as one whose reading is being asked. Romaji fade a
+  kana at a time as the filter changes, as furigana fade a kanji at a time,
+  and the text gives back their space once no kana has them.
+- `RubyRomanization.transliterateMorae(_:)` writes each beat of a phrase on
+  its own, as romaji under kana do: a long vowel is the vowel it holds, or
+  as spelled in styles that spell long vowels (to, u in wāpuro), っ the
+  consonant it doubles, and ん n. Styles of your own can implement
+  `RubyTransliterationStyle.transliterateMorae(_:)`; by default each beat
+  is written as a phrase of its own.
+
 ## 1.3.1 — 2026-10-16
 
 - No line starts with 。, 、, 」, ー, a small kana or another character

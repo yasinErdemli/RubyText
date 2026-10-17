@@ -73,6 +73,33 @@ public struct RubyPhrase: Hashable, Sendable {
 public protocol RubyTransliterationStyle: Hashable, Sendable {
     /// `phrase` written in this style.
     func transliterate(_ phrase: RubyPhrase) -> String
+
+    /// Each of `phrase`'s morae written in this style on its own, one beat
+    /// at a time, for romaji under each kana: か ka, ん n, the っ before て
+    /// t. One string per mora, empty where a beat has nothing of its own to
+    /// write, such as a final っ, a space or punctuation.
+    ///
+    /// By default, each mora is written as a phrase of its own, and a long
+    /// vowel that comes out empty, as a mark on the vowel before it would,
+    /// as the vowel it holds.
+    func transliterateMorae(_ phrase: RubyPhrase) -> [String]
+}
+
+extension RubyTransliterationStyle {
+    public func transliterateMorae(_ phrase: RubyPhrase) -> [String] {
+        let morae = phrase.morae
+        return morae.indices.map { index in
+            let mora = morae[index]
+            guard mora.kind != .space, mora.kind != .other else { return "" }
+            // The beat after it, so っ knows the consonant it doubles.
+            let next = index + 1 < morae.count ? morae[index + 1].text : phrase.following?.text
+            let written = transliterate(RubyPhrase([RubyPhrase.Word(mora.text, pronunciation: mora.spoken)], following: next))
+            guard written.isEmpty, mora.kind == .long, let kana = mora.vowel.flatMap({ RubyMora.vowelKana[$0] }) else {
+                return written
+            }
+            return transliterate(RubyPhrase(kana: kana))
+        }
+    }
 }
 
 /// A system for writing Japanese readings in another script: romaji in
@@ -108,6 +135,13 @@ public struct RubyRomanization: Hashable, Sendable, CaseIterable, CustomStringCo
     /// are long vowels unless `pronunciation` says otherwise.
     public func transliterate(_ kana: String, pronunciation: String? = nil) -> String {
         style.transliterate(RubyPhrase(kana: kana, pronunciation: pronunciation))
+    }
+
+    /// Each mora of `phrase` written in this system on its own, for romaji
+    /// under each kana: わたしは is wa, ta, shi, wa in Hepburn, and きって
+    /// ki, t, te. See `RubyTransliterationStyle.transliterateMorae(_:)`.
+    public func transliterateMorae(_ phrase: RubyPhrase) -> [String] {
+        style.transliterateMorae(phrase)
     }
 
     /// The style's name, such as hepburn.

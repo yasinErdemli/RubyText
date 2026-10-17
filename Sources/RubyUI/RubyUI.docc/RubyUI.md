@@ -43,6 +43,8 @@ ContentView()
 - ``SwiftUICore/View/rubyRomanization(_:)``
 - ``SwiftUICore/View/rubyFurigana(_:)``
 - ``RubyFuriganaFilter``
+- ``SwiftUICore/View/rubyKanaRomaji(_:)``
+- ``RubyKanaRomajiFilter``
 - ``SwiftUICore/View/rubyDigitReadingsHidden(_:)``
 
 ### Writing text out

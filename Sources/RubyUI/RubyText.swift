@@ -30,6 +30,10 @@ import Synchronization
 ///     RubyText(comment)          // as written, with readings found for it
 ///     RubyText(markup: json)     // {base|reading} markup read
 ///
+/// For learners still learning kana, `.kanaRomaji` puts romaji under each
+/// kana instead, a beat at a time, and `rubyKanaRomaji(_:)` leaves out
+/// the kana they can read, so the romaji fade as they learn them.
+///
 /// Readings can also be written into the text itself: in parentheses
 /// after each kanji with `rubyFuriganaPosition(.inline)`, or as the whole
 /// text in hiragana, katakana, or romaji with `rubyTranscription(_:)`.
@@ -45,9 +49,9 @@ import Synchronization
 /// rewritten in another script rolls into the new text glyph by glyph,
 /// like `numericText()`.
 ///
-/// Furigana use the secondary foreground style and romaji the tertiary one,
-/// so they're quieter than the text by default and can be colored with the
-/// standard modifiers:
+/// Furigana use the secondary foreground style and romaji, under words or
+/// under kana, the tertiary one, so they're quieter than the text by
+/// default and can be colored with the standard modifiers:
 ///
 ///     .foregroundStyle(.primary, .red, .blue)      // red furigana, blue romaji
 ///     .foregroundStyle(.primary, .primary, .primary) // all in the text color
@@ -90,6 +94,7 @@ public struct RubyText: View {
     @Environment(\.rubyTranscription) private var transcription
     @Environment(\.rubyRomanization) private var romanization
     @Environment(\.rubyFuriganaFilter) private var furiganaFilter
+    @Environment(\.rubyKanaRomajiFilter) private var kanaRomajiFilter
     @Environment(\.rubyDigitReadingsHidden) private var digitReadingsHidden
     @Environment(\.rubySpacing) private var spacing
     @Environment(\.rubyWordColoring) private var wordColoring
@@ -175,13 +180,17 @@ public struct RubyText: View {
         let content = rewritten(analyzed)
         let speech = content.speech(spokenReadings)
         let placement = RubyPlacement(style: style, furiganaPosition: furiganaPosition, transcription: transcription)
+        let kanaRomajiVisibility = placement.kanaRomaji ? kanaRomajiVisibility(in: content) : .zero
         RubyTextContent(
             content: content,
             furigana: placement.furigana ? 1 : 0,
             romajiAbove: placement.romajiAbove ? 1 : 0,
             romajiBelow: placement.romajiBelow ? 1 : 0,
+            // Once no kana has romaji, the space below the text goes too.
+            kanaRomaji: kanaRomajiVisibility.isZero ? 0 : 1,
             readingVisibility: readingVisibility(in: content),
             romajiVisibility: romajiVisibility(in: content),
+            kanaRomajiVisibility: kanaRomajiVisibility,
             wordGaps: wordGaps(in: content),
             // Computed here, not inside the animated content view, so
             // style transitions don't re-run vocabulary and JLPT lookups
@@ -211,6 +220,7 @@ public struct RubyText: View {
         .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: transcription)
         .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: romanization)
         .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: furiganaFilter)
+        .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: kanaRomajiFilter)
         .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: digitReadingsHidden)
         .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: spacing)
         .task(id: analysisKey) {
@@ -353,6 +363,14 @@ public struct RubyText: View {
         })
     }
 
+    /// Whether each kana's romaji shows under it, in content order, one
+    /// value per kana, so each fades on its own as the filter changes.
+    private func kanaRomajiVisibility(in content: RubyContent) -> RubyAnimatableVector {
+        RubyAnimatableVector(values: content.kanaRomaji(in: romanization).map { beat in
+            kanaRomajiFilter.showsRomaji(under: beat.kana, wordID: beat.wordID) ? 1 : 0
+        })
+    }
+
     /// Whether `text` is a number written in digits, half or full width,
     /// such as 2026年 or ３日. Kanji numerals are numeric but not decimal.
     static func isDigitNumber(_ text: String) -> Bool {
@@ -489,8 +507,11 @@ private struct RubyTextContent: View {
     /// Switching between furigana and romaji alone crossfades them above.
     var romajiAbove: CGFloat
     var romajiBelow: CGFloat
+    /// Romaji under each kana, below the text.
+    var kanaRomaji: CGFloat
     var readingVisibility: RubyAnimatableVector
     var romajiVisibility: RubyAnimatableVector
+    var kanaRomajiVisibility: RubyAnimatableVector
     var wordGaps: RubyAnimatableVector
     /// Precomputed by `RubyText`, so word coloring doesn't re-run its
     /// lookups on every frame of a style animation.
@@ -535,7 +556,7 @@ private struct RubyTextContent: View {
     /// How much of the reserved height annotations take above and below
     /// each line.
     private var above: CGFloat { min(1, furigana + romajiAbove) }
-    private var below: CGFloat { romajiBelow }
+    private var below: CGFloat { min(1, romajiBelow + kanaRomaji) }
 
     var body: some View {
         let metrics = RubyMetrics(font: font ?? .body, in: fontResolutionContext)
@@ -562,12 +583,15 @@ private struct RubyTextContent: View {
                     metrics: metrics,
                     furiganaScript: furiganaScript.resolved(romanization),
                     romanization: romanization,
-                    weights: textWeights
+                    weights: textWeights,
+                    kanaRomaji: kanaRomaji > 0
                 ),
                 furigana: furigana,
                 romaji: romaji,
                 readingVisibility: readingVisibility,
                 romajiVisibility: romajiVisibility,
+                kanaRomaji: kanaRomaji,
+                kanaRomajiVisibility: kanaRomajiVisibility,
                 wordGaps: wordGaps,
                 fontSize: metrics.fontSize,
                 romajiSpacing: metrics.romajiSpacing,
@@ -616,6 +640,7 @@ private struct RubyTextContent: View {
                 furigana: furigana,
                 romajiAbove: romajiAbove,
                 romajiBelow: romajiBelow,
+                kanaRomaji: kanaRomaji,
                 truncationMode: truncationMode,
                 emphasis: emphasis
             ))
@@ -1083,7 +1108,8 @@ final class RubyMeasurements {
     }
 
     struct Romaji {
-        /// Index among the content's romaji words, for `romajiVisibility`.
+        /// Index among the content's romaji words, or its kana's romaji,
+        /// for `romajiVisibility` or `kanaRomajiVisibility`.
         let source: Int
         let characters: Range<Int>
         let range: Range<Int>
@@ -1107,6 +1133,8 @@ final class RubyMeasurements {
     let starts: [Int]
     let furigana: [Furigana]
     let romaji: [Romaji]
+    /// Romaji under each kana, if they were measured.
+    let kanaRomaji: [Romaji]
     /// Indices of the characters that are spaces put between phrases of
     /// kana text.
     let insertedSpaces: [Int]
@@ -1127,6 +1155,7 @@ final class RubyMeasurements {
         let content: ObjectIdentifier
         let string: String
         let weights: [RubyWeightedRange]
+        let kanaRomaji: Bool
     }
 
     private static let cache = NSCache<RubyCacheKey<Key>, RubyMeasurements>()
@@ -1136,7 +1165,8 @@ final class RubyMeasurements {
         metrics: RubyMetrics,
         furiganaScript: RubyScript,
         romanization: RubyRomanization,
-        weights: [RubyWeightedRange] = []
+        weights: [RubyWeightedRange] = [],
+        kanaRomaji: Bool = false
     ) -> RubyMeasurements {
         let key = RubyCacheKey(Key(
             metrics: metrics.cacheKey,
@@ -1144,7 +1174,8 @@ final class RubyMeasurements {
             romanization: romanization,
             content: ObjectIdentifier(content),
             string: content.string,
-            weights: weights
+            weights: weights,
+            kanaRomaji: kanaRomaji
         ))
         if let cached = cache.object(forKey: key) { return cached }
         var weighted: [Font.Weight: RubyMetrics] = [:]
@@ -1160,6 +1191,7 @@ final class RubyMeasurements {
             furiganaScript: furiganaScript,
             romanization: romanization,
             weights: weights,
+            kanaRomaji: kanaRomaji,
             baseWidth: { fontMetrics($1).baseWidth(of: $0) },
             annotationWidth: { fontMetrics($1).annotationWidth(of: $0) }
         )
@@ -1170,11 +1202,15 @@ final class RubyMeasurements {
     /// Measures `content` with the given text widths in each weight, which
     /// tests can supply without fonts. Text outside `weights` is measured
     /// with no weight, in the font's own.
+    ///
+    /// - Parameter kanaRomaji: Whether to measure romaji under each kana,
+    ///   which most text doesn't show.
     init(
         content: RubyContent,
         furiganaScript: RubyScript = .hiragana,
         romanization: RubyRomanization = .hepburn,
         weights: [RubyWeightedRange] = [],
+        kanaRomaji measuresKanaRomaji: Bool = false,
         baseWidth: (String, Font.Weight?) -> CGFloat,
         annotationWidth: (String, Font.Weight?) -> CGFloat
     ) {
@@ -1258,20 +1294,19 @@ final class RubyMeasurements {
                 endsParagraph: padded.upperBound == characters.count || characters[padded.upperBound].isNewline
             ))
         }
-        var romaji: [Romaji] = []
-        for (source, word) in content.romajiWords(in: romanization).enumerated() {
-            let indices = characterRange(word.range)
-            guard !indices.isEmpty else { continue }
-            let natural = annotationWidth(word.text, characterWeights[indices.lowerBound])
+        /// Romaji under `range`, narrowed like readings over numbers.
+        func measuredRomaji(_ text: String, over range: Range<Int>, source: Int) -> Romaji? {
+            let indices = characterRange(range)
+            guard !indices.isEmpty else { return nil }
+            let natural = annotationWidth(text, characterWeights[indices.lowerBound])
             let scale = scale(natural, over: indices, available: indices.reduce(0) { $0 + widths[$1] })
-            romaji.append(Romaji(
-                source: source,
-                characters: indices,
-                range: word.range,
-                text: word.text,
-                scale: scale,
-                width: natural * scale
-            ))
+            return Romaji(source: source, characters: indices, range: range, text: text, scale: scale, width: natural * scale)
+        }
+        let romaji = content.romajiWords(in: romanization).enumerated().compactMap { source, word in
+            measuredRomaji(word.text, over: word.range, source: source)
+        }
+        let kanaRomaji = !measuresKanaRomaji ? [] : content.kanaRomaji(in: romanization).enumerated().compactMap { source, beat in
+            measuredRomaji(beat.text, over: beat.range, source: source)
         }
 
         self.characters = characters
@@ -1279,6 +1314,7 @@ final class RubyMeasurements {
         self.starts = starts
         self.furigana = furigana
         self.romaji = romaji
+        self.kanaRomaji = kanaRomaji
         insertedSpaces = content.spaces.map { Self.index(of: $0, in: starts) }
         paragraphStarts = RubyLineBreaking.paragraphRanges(in: content.string).map(\.lowerBound)
         endings = RubyLineBreaking.endings(in: content)
@@ -1309,6 +1345,8 @@ struct RubyLayout {
         romaji: CGFloat,
         readingVisibility: RubyAnimatableVector,
         romajiVisibility: RubyAnimatableVector,
+        kanaRomaji: CGFloat = 0,
+        kanaRomajiVisibility: RubyAnimatableVector = .zero,
         wordGaps: RubyAnimatableVector,
         fontSize: CGFloat,
         romajiSpacing: CGFloat,
@@ -1344,6 +1382,8 @@ struct RubyLayout {
             romaji: romaji,
             readingVisibility: readingVisibility,
             romajiVisibility: romajiVisibility,
+            kanaRomaji: kanaRomaji,
+            kanaRomajiVisibility: kanaRomajiVisibility,
             wordGaps: wordGaps,
             fontSize: fontSize,
             romajiSpacing: romajiSpacing,
@@ -1401,18 +1441,29 @@ struct RubyLayout {
                 ))
             }
         }
-        if romaji > 0 {
-            for (id, word) in measurements.romaji.enumerated() {
-                let visibility = romajiVisibility.value(at: word.source, default: 1)
-                guard visibility > 0 else { continue }
+        // Romaji and kana romaji, each where their strength shows them.
+        func annotations(_ romaji: [RubyMeasurements.Romaji], visibility: RubyAnimatableVector) -> [(paragraph: Int, annotation: RubyAnnotation)] {
+            romaji.enumerated().compactMap { id, word in
+                let opacity = visibility.value(at: word.source, default: 1)
+                guard opacity > 0 else { return nil }
                 let placed = Self.place(word.range, paragraphStarts: paragraphStarts)
-                paragraphs[placed.paragraph].romaji.append(RubyAnnotation(
+                return (placed.paragraph, RubyAnnotation(
                     id: id, text: word.text, range: placed.range, baseCount: word.characters.count,
                     color: colors[word.characters.lowerBound],
                     font: weights[word.characters.lowerBound].flatMap { weightedMetrics[$0]?.annotationFont },
-                    opacity: visibility,
+                    opacity: opacity,
                     scale: word.scale
                 ))
+            }
+        }
+        if romaji > 0 {
+            for (paragraph, annotation) in annotations(measurements.romaji, visibility: romajiVisibility) {
+                paragraphs[paragraph].romaji.append(annotation)
+            }
+        }
+        if kanaRomaji > 0 {
+            for (paragraph, annotation) in annotations(measurements.kanaRomaji, visibility: kanaRomajiVisibility) {
+                paragraphs[paragraph].kanaRomaji.append(annotation)
             }
         }
         for item in backgrounds {
@@ -1430,6 +1481,8 @@ struct RubyLayout {
         romaji: CGFloat,
         readingVisibility: RubyAnimatableVector,
         romajiVisibility: RubyAnimatableVector,
+        kanaRomaji: CGFloat = 0,
+        kanaRomajiVisibility: RubyAnimatableVector = .zero,
         wordGaps: RubyAnimatableVector,
         fontSize: CGFloat,
         romajiSpacing: CGFloat,
@@ -1483,8 +1536,6 @@ struct RubyLayout {
             tracking[index] += insertedSpaceWidth * fontSize - widths[index]
         }
 
-        guard romaji > 0, !measurements.romaji.isEmpty else { return (tracking, shifts) }
-
         // Romaji are centered under their words and may extend past them,
         // so only neighbors that would collide are moved apart. Positions
         // are measured within each paragraph as if it were one line.
@@ -1496,45 +1547,51 @@ struct RubyLayout {
         }
         paragraphEnds.append(characters.count)
 
-        var x = [CGFloat](repeating: 0, count: characters.count + 1)
-        for index in characters.indices {
-            x[index + 1] = characters[index].isNewline ? 0 : x[index] + widths[index] + tracking[index]
-        }
-
-        var paragraph = -1
-        var added: CGFloat = 0
-        var previousRight: CGFloat?
-
-        for word in measurements.romaji {
-            let visibility = romaji * romajiVisibility.value(at: word.source, default: 1)
-            guard visibility > 0 else { continue }
-            let first = word.characters.lowerBound
-            let last = word.characters.upperBound - 1
-            if paragraphOf[first] != paragraph {
-                paragraph = paragraphOf[first]
-                added = 0
-                previousRight = nil
+        func separate(_ annotations: [RubyMeasurements.Romaji], strength: CGFloat, visibilities: RubyAnimatableVector, spacing: CGFloat) {
+            guard strength > 0, !annotations.isEmpty else { return }
+            var x = [CGFloat](repeating: 0, count: characters.count + 1)
+            for index in characters.indices {
+                x[index + 1] = characters[index].isNewline ? 0 : x[index] + widths[index] + tracking[index]
             }
 
-            let left = x[first] + shifts[first] + added
-            let right = x[last] + shifts[last] + widths[last] + added
-            var center = (left + right) / 2
-            let half = word.width / 2
-            // Romaji that would run past the paragraph's end end with it,
-            // since space after its last character doesn't widen the text,
-            // and those that would start before it start with it.
-            let end = x[paragraphEnds[paragraph]] + added
-            center = max(min(center, end - half), half)
-            if let previousRight {
-                let overlap = previousRight + romajiSpacing - (center - half)
-                if overlap > 0 {
-                    tracking[first - 1] += overlap * visibility
-                    added += overlap * visibility
-                    center += overlap * visibility
+            var paragraph = -1
+            var added: CGFloat = 0
+            var previousRight: CGFloat?
+
+            for word in annotations {
+                let visibility = strength * visibilities.value(at: word.source, default: 1)
+                guard visibility > 0 else { continue }
+                let first = word.characters.lowerBound
+                let last = word.characters.upperBound - 1
+                if paragraphOf[first] != paragraph {
+                    paragraph = paragraphOf[first]
+                    added = 0
+                    previousRight = nil
                 }
+
+                let left = x[first] + shifts[first] + added
+                let right = x[last] + shifts[last] + widths[last] + added
+                var center = (left + right) / 2
+                let half = word.width / 2
+                // Romaji that would run past the paragraph's end end with it,
+                // since space after its last character doesn't widen the text,
+                // and those that would start before it start with it.
+                let end = x[paragraphEnds[paragraph]] + added
+                center = max(min(center, end - half), half)
+                if let previousRight {
+                    let overlap = previousRight + spacing - (center - half)
+                    if overlap > 0 {
+                        tracking[first - 1] += overlap * visibility
+                        added += overlap * visibility
+                        center += overlap * visibility
+                    }
+                }
+                previousRight = center + half
             }
-            previousRight = center + half
         }
+        separate(measurements.romaji, strength: romaji, visibilities: romajiVisibility, spacing: romajiSpacing)
+        // Kana romaji are beats, closer together than words are.
+        separate(measurements.kanaRomaji, strength: kanaRomaji, visibilities: kanaRomajiVisibility, spacing: romajiSpacing / 2)
         return (tracking, shifts)
     }
 
@@ -1627,6 +1684,35 @@ struct RubyLayout {
     }
     .font(.title3)
     .rubyStyle([.furigana, .romaji])
+    .padding()
+}
+
+#Preview("Romaji under kana") {
+    @Previewable @State var known: Set<String> = []
+    let kana = ["わ", "た", "し", "は", "で", "す", "コ", "ー", "ヒ"]
+
+    VStack(alignment: .leading, spacing: 24) {
+        // Segments say は and を are particles, which markup alone can't.
+        RubyText(segments: [
+            RubySegment("わたし"), RubySegment("は", word: .init(partOfSpeech: .particle)),
+            RubySegment("学生", reading: "がくせい"), RubySegment("です"), RubySegment("。", source: .dictionary),
+            RubySegment("コーヒー"), RubySegment("を", word: .init(partOfSpeech: .particle)),
+            RubySegment("ください"), RubySegment("。", source: .dictionary),
+        ])
+            .font(.title2)
+            .rubyStyle([.furigana, .kanaRomaji])
+            .rubyKanaRomaji(.except(known))
+            .foregroundStyle(.primary, .secondary, .tint)
+
+        ForEach(kana, id: \.self) { kana in
+            Toggle(isOn: Binding(
+                get: { known.contains(kana) },
+                set: { if $0 { known.insert(kana) } else { known.remove(kana) } }
+            )) {
+                Text(verbatim: "\(kana) learned")
+            }
+        }
+    }
     .padding()
 }
 

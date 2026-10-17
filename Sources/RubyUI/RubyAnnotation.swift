@@ -65,6 +65,8 @@ struct RubyParagraph {
     var furigana: [RubyAnnotation] = []
     /// Drawn above the text or below it, depending on the style.
     var romaji: [RubyAnnotation] = []
+    /// Romaji under each kana, drawn below the text.
+    var kanaRomaji: [RubyAnnotation] = []
     var backgrounds: [RubyColoredRange] = []
 }
 

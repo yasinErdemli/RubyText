@@ -208,6 +208,10 @@ public struct RubyMora: Hashable, Sendable {
 
     private static let particles: [Character: Character] = ["は": "わ", "へ": "え"]
 
+    /// The kana of each vowel, to write a long vowel on its own as the
+    /// vowel it holds.
+    static let vowelKana: [Character: String] = ["a": "あ", "i": "い", "u": "う", "e": "え", "o": "お"]
+
     /// Small kana, which join the kana before them.
     private static let smallKana: Set<Character> = ["ぁ", "ぃ", "ぅ", "ぇ", "ぉ", "ゃ", "ゅ", "ょ", "ゎ"]
 

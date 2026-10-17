@@ -187,6 +187,17 @@ RubyText("東京へ行きたい。")
 `.rubyFuriganaPosition(.inline)` writes readings in parentheses:
 東京（とうきょう）.
 
+For learners still learning kana, `.kanaRomaji` puts romaji under each kana,
+a beat at a time, with furigana above, and `rubyKanaRomaji(_:)` leaves out
+the kana they can already read. They fade a kana at a time as the learner
+learns them:
+
+```swift
+RubyText(segments: sentence)
+    .rubyStyle([.furigana, .kanaRomaji])   // wa ta shi wa under わたしは
+    .rubyKanaRomaji(.except(learnedKana))  // none under か once か is learned
+```
+
 SwiftUI's own text modifiers apply as they do to `Text`: `.font`,
 `.multilineTextAlignment`, `.lineLimit` and `.truncationMode`, with readings
 only over the text shown, and `.textSelection`.

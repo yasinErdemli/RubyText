@@ -2,18 +2,19 @@ import RubyCore
 import SwiftUI
 
 /// Draws text normally, then draws furigana above and romaji above or
-/// below the annotated ranges, and emphasizes the word a `RubyReader` is
-/// speaking.
+/// below the annotated ranges, or romaji under each kana, and emphasizes
+/// the word a `RubyReader` is speaking.
 struct RubyRenderer: TextRenderer {
     let metrics: RubyMetrics
     /// Annotation data for each paragraph of the text.
     let paragraphs: [RubyParagraph]
-    /// How strongly furigana, romaji above the text, and romaji below it
-    /// are shown, from 0 to 1. Values in between occur while a style
-    /// change animates.
+    /// How strongly furigana, romaji above the text, romaji below it, and
+    /// romaji under each kana are shown, from 0 to 1. Values in between
+    /// occur while a style change animates.
     let furigana: CGFloat
     let romajiAbove: CGFloat
     let romajiBelow: CGFloat
+    var kanaRomaji: CGFloat = 0
     /// Where text cut short by `lineLimit(_:)` shows its ellipsis.
     let truncationMode: Text.TruncationMode
     var emphasis: RubyEmphasisState?
@@ -21,7 +22,7 @@ struct RubyRenderer: TextRenderer {
     /// How much of the reserved height annotations take above and below
     /// each line.
     private var above: CGFloat { min(1, furigana + romajiAbove) }
-    private var below: CGFloat { romajiBelow }
+    private var below: CGFloat { min(1, romajiBelow + kanaRomaji) }
 
     /// How much the spoken word scales up with `.grow`.
     private static let growScale: CGFloat = 0.12
@@ -51,6 +52,7 @@ struct RubyRenderer: TextRenderer {
         // fragment, but gets one per line if its base text wraps.
         var furiganaFragments: [Fragment] = []
         var romajiFragments: [Fragment] = []
+        var kanaRomajiFragments: [Fragment] = []
         // Bounds of the spoken word on each line it appears on.
         var emphasizedLines: [Int: CGRect] = [:]
         // Annotations may extend past their words, but not past the text.
@@ -125,8 +127,9 @@ struct RubyRenderer: TextRenderer {
                     if let ellipsis, ellipsis.line == lineNumber, ellipsis.glyph == glyphsBefore + index { continue }
                     let reading = Self.item(at: offsets[index], in: data.furigana, range: \.range)
                     let romaji = Self.item(at: offsets[index], in: data.romaji, range: \.range)
+                    let kanaRomaji = Self.item(at: offsets[index], in: data.kanaRomaji, range: \.range)
                     let spoken = isSpoken(index)
-                    guard reading != nil || romaji != nil || spoken else { continue }
+                    guard reading != nil || romaji != nil || kanaRomaji != nil || spoken else { continue }
 
                     let glyph = Self.glyphBox(in: run, at: index, offset: offsets[index], tracked: data.tracked)
                     let rect = CGRect(x: glyph.minX, y: lineBounds.minY, width: glyph.width, height: lineBounds.height)
@@ -136,6 +139,9 @@ struct RubyRenderer: TextRenderer {
                     }
                     if let romaji {
                         Self.add(romaji, rect: rect, offset: offsets[index], paragraph: paragraph, line: lineNumber, to: &romajiFragments)
+                    }
+                    if let kanaRomaji {
+                        Self.add(kanaRomaji, rect: rect, offset: offsets[index], paragraph: paragraph, line: lineNumber, to: &kanaRomajiFragments)
                     }
                 }
             }
@@ -168,36 +174,56 @@ struct RubyRenderer: TextRenderer {
                 drawFurigana(text, of: fragment.annotation, over: fragment.rect, at: center, tinted: tinted, in: &annotationContext)
             }
         }
-        guard romajiAbove > 0 || romajiBelow > 0 else { return }
-        let pieces = Self.pieces(of: romajiFragments, truncated: ellipsis != nil)
-        let centers = placeAnnotations(pieces, adjoining: false, spacing: metrics.romajiSpacing, within: edges, in: context)
-        // Romaji switching sides fade out on one and in on the other.
-        for (strength, isAbove) in [(romajiAbove, true), (romajiBelow, false)] where strength > 0 {
-            var layer = context
-            layer.opacity = strength
-            layer.translateBy(x: 0, y: (isAbove ? 1 : -1) * (1 - strength) * slide)
-            for ((text, fragment), center) in zip(pieces, centers) {
-                var annotationContext = layer
-                annotationContext.opacity *= fragment.annotation.opacity
-                let tinted = emphasize(fragment, in: &annotationContext, lines: emphasizedLines)
-                // Romaji use the tertiary foreground style, so
-                // `.foregroundStyle(_:_:_:)` can give them their own color,
-                // unless the word they belong to is colored.
-                let style: AnyShapeStyle = if tinted {
-                    AnyShapeStyle(.tint)
-                } else if let color = fragment.annotation.color {
-                    AnyShapeStyle(color)
-                } else {
-                    AnyShapeStyle(.tertiary)
-                }
-                let resolved = annotationContext.resolve(metrics.annotationText(text, font: fragment.annotation.font).foregroundStyle(style))
-                annotationContext.translateBy(
-                    x: center,
-                    y: isAbove ? fragment.rect.minY - metrics.gap : fragment.rect.maxY + metrics.gap
-                )
-                annotationContext.scaleBy(x: fragment.annotation.scale, y: 1)
-                annotationContext.draw(resolved, at: .zero, anchor: isAbove ? .bottom : .top)
+        if romajiAbove > 0 || romajiBelow > 0 {
+            let pieces = Self.pieces(of: romajiFragments, truncated: ellipsis != nil)
+            let centers = placeAnnotations(pieces, adjoining: false, spacing: metrics.romajiSpacing, within: edges, in: context)
+            // Romaji switching sides fade out on one and in on the other.
+            for (strength, isAbove) in [(romajiAbove, true), (romajiBelow, false)] where strength > 0 {
+                drawRomaji(pieces, at: centers, strength: strength, above: isAbove, lines: emphasizedLines, in: context)
             }
+        }
+        if kanaRomaji > 0 {
+            let pieces = Self.pieces(of: kanaRomajiFragments, truncated: ellipsis != nil)
+            // Spaced as the layout spaced them, closer than words.
+            let centers = placeAnnotations(pieces, adjoining: false, spacing: metrics.romajiSpacing / 2, within: edges, in: context)
+            drawRomaji(pieces, at: centers, strength: kanaRomaji, above: false, lines: emphasizedLines, in: context)
+        }
+    }
+
+    /// Draws romaji above or below their bases, centered at `centers`,
+    /// sliding out from behind the text as `strength` grows.
+    private func drawRomaji(
+        _ pieces: [(text: String, fragment: Fragment)],
+        at centers: [CGFloat],
+        strength: CGFloat,
+        above isAbove: Bool,
+        lines emphasizedLines: [Int: CGRect],
+        in context: GraphicsContext
+    ) {
+        var layer = context
+        layer.opacity = strength
+        layer.translateBy(x: 0, y: (isAbove ? 1 : -1) * (1 - strength) * metrics.reservedHeight)
+        for ((text, fragment), center) in zip(pieces, centers) {
+            var annotationContext = layer
+            annotationContext.opacity *= fragment.annotation.opacity
+            let tinted = emphasize(fragment, in: &annotationContext, lines: emphasizedLines)
+            // Romaji use the tertiary foreground style, so
+            // `.foregroundStyle(_:_:_:)` can give them their own color,
+            // unless the word they belong to is colored.
+            let style: AnyShapeStyle = if tinted {
+                AnyShapeStyle(.tint)
+            } else if let color = fragment.annotation.color {
+                AnyShapeStyle(color)
+            } else {
+                AnyShapeStyle(.tertiary)
+            }
+            let resolved = annotationContext.resolve(metrics.annotationText(text, font: fragment.annotation.font).foregroundStyle(style))
+            annotationContext.translateBy(
+                x: center,
+                y: isAbove ? fragment.rect.minY - metrics.gap : fragment.rect.maxY + metrics.gap
+            )
+            annotationContext.scaleBy(x: fragment.annotation.scale, y: 1)
+            annotationContext.draw(resolved, at: .zero, anchor: isAbove ? .bottom : .top)
         }
     }
 
