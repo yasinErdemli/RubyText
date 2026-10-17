@@ -184,7 +184,8 @@ and changes animate.
 
 SwiftUI's own text modifiers work as on `Text`: `.font`,
 `.multilineTextAlignment`, `.lineLimit`, `.truncationMode` and
-`.textSelection`. Furigana use the secondary foreground style and romaji the
+`.textSelection`. Unlike `Text`, it's never cut short to fit a height it's
+offered: it takes all its lines' height, and only `.lineLimit` shortens it. Furigana use the secondary foreground style and romaji the
 tertiary one, so `.foregroundStyle(.primary, .red, .blue)` gives red
 furigana and blue romaji. The spoken word uses `.tint`.
 

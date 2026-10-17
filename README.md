@@ -200,7 +200,9 @@ RubyText(segments: sentence)
 
 SwiftUI's own text modifiers apply as they do to `Text`: `.font`,
 `.multilineTextAlignment`, `.lineLimit` and `.truncationMode`, with readings
-only over the text shown, and `.textSelection`.
+only over the text shown, and `.textSelection`. Unlike `Text`, it takes the
+height of all its lines even where it's offered less; `.lineLimit` is what
+cuts it short.
 
 ### Writing the text out
 

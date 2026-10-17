@@ -3,6 +3,17 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
+## Unreleased
+
+- `RubyText` takes the height of all its lines for the width it's offered,
+  even where it's offered less, as in a stack that has run out of room.
+  Offered less, it answered with the lines that fit, as `Text` does, but
+  the text is drawn with room around it for annotations, so one more line
+  was drawn below its frame, over whatever came next, and the last line
+  that fit lost its ellipsis. Chat bubbles in a tall column had their
+  second line drawn over the next bubble. `lineLimit(_:)` cuts text short
+  as before.
+
 ## 1.4.0 — 2026-10-17
 
 - `RubyStyle.kanaRomaji` draws romaji under each kana, a beat at a time,

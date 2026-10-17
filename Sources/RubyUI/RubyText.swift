@@ -44,6 +44,11 @@ import Synchronization
 ///
 ///     RubyText(segments: mySegments)
 ///
+/// Like `Text`, it wraps to the width it's offered. Unlike `Text`, it
+/// takes the height of all its lines even where it's offered less, as in
+/// a stack that has run out of room, rather than showing the lines that
+/// fit; `lineLimit(_:)` cuts it short.
+///
 /// Changing the style animates: annotations fade in or out, and the line
 /// spacing and letter spacing they need ease to their new values. Text
 /// rewritten in another script rolls into the new text glyph by glyph,
@@ -208,6 +213,12 @@ public struct RubyText: View {
             selectedRect: $selectedRect,
             lineBreakFallback: $lineBreakFallback
         )
+        // All its lines, for the width it's offered, even offered less
+        // height. Text offered less shows the lines that fit, but it's drawn
+        // in more room than that, the room annotations have around it, so
+        // one more line was drawn below the text, over whatever is there.
+        // `lineLimit(_:)` is what cuts it short.
+        .fixedSize(horizontal: false, vertical: true)
         .popover(item: $selectedWord, attachmentAnchor: .rect(.rect(selectedRect))) { word in
             RubyWordDetailView(word: word, dictionary: dictionary)
                 .presentationCompactAdaptation(.popover)
