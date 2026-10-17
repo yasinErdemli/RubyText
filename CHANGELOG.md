@@ -3,7 +3,7 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
-## Unreleased
+## 1.4.1 — 2026-10-18
 
 - `RubyText` takes the height of all its lines for the width it's offered,
   even where it's offered less, as in a stack that has run out of room.
