@@ -3,7 +3,7 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
-## Unreleased
+## 1.6.0 — 2026-10-18
 
 - `rubyWordUnderlines(_:)` draws a line under chosen words, dotted by
   default, such as the words a tap explains: `.wordIDs(_:pattern:)` or
