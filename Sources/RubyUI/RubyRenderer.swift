@@ -2,8 +2,8 @@ import RubyCore
 import SwiftUI
 
 /// Draws text normally, then draws furigana above and romaji above or
-/// below the annotated ranges, or romaji under each kana, and emphasizes
-/// the word a `RubyReader` is speaking.
+/// below the annotated ranges, or romaji under each kana, underlines
+/// chosen words, and emphasizes the word a `RubyReader` is speaking.
 struct RubyRenderer: TextRenderer {
     let metrics: RubyMetrics
     /// Annotation data for each paragraph of the text.
@@ -15,6 +15,10 @@ struct RubyRenderer: TextRenderer {
     let romajiAbove: CGFloat
     let romajiBelow: CGFloat
     var kanaRomaji: CGFloat = 0
+    /// The space reserved under each line for underlines, between the text
+    /// and annotations below it; 0 without underlines.
+    var underlineSpace: CGFloat = 0
+    var underlinePattern: RubyUnderlinePattern = .dotted
     /// Where text cut short by `lineLimit(_:)` shows its ellipsis.
     let truncationMode: Text.TruncationMode
     var emphasis: RubyEmphasisState?
@@ -82,6 +86,9 @@ struct RubyRenderer: TextRenderer {
             let lineBounds = line.typographicBounds.rect
             if !data.backgrounds.isEmpty {
                 drawBackgrounds(data.backgrounds, on: line, paragraphStart: start, tracked: data.tracked, lineBounds: lineBounds, in: context)
+            }
+            if !data.underlines.isEmpty {
+                drawUnderlines(data.underlines, on: line, paragraphStart: start, tracked: data.tracked, lineBounds: lineBounds, in: context)
             }
 
             let spokenRange = emphasis.flatMap { $0.paragraph == paragraph ? $0.range : nil }
@@ -220,7 +227,7 @@ struct RubyRenderer: TextRenderer {
             let resolved = annotationContext.resolve(metrics.annotationText(text, font: fragment.annotation.font).foregroundStyle(style))
             annotationContext.translateBy(
                 x: center,
-                y: isAbove ? fragment.rect.minY - metrics.gap : fragment.rect.maxY + metrics.gap
+                y: isAbove ? fragment.rect.minY - metrics.gap : fragment.rect.maxY + underlineSpace + metrics.gap
             )
             annotationContext.scaleBy(x: fragment.annotation.scale, y: 1)
             annotationContext.draw(resolved, at: .zero, anchor: isAbove ? .bottom : .top)
@@ -259,12 +266,77 @@ struct RubyRenderer: TextRenderer {
             var rect = CGRect(x: box.rect.minX, y: lineBounds.minY, width: box.rect.width, height: lineBounds.height)
                 .insetBy(dx: metrics.gap * 0.5, dy: -metrics.gap * 0.5)
             rect.origin.y -= metrics.reservedHeight * above
-            rect.size.height += metrics.reservedHeight * (above + below)
+            rect.size.height += metrics.reservedHeight * (above + below) + underlineSpace
             // Lightened so text in the primary color stays readable.
             context.fill(
                 RoundedRectangle(cornerRadius: metrics.reservedHeight * 0.3).path(in: rect),
                 with: .color(box.color.opacity(0.25))
             )
+        }
+    }
+
+    // MARK: Word Underlines
+
+    /// Draws a line under each underlined word on `line`, in the space
+    /// reserved below it, ending short of the word's edges so neighboring
+    /// words get lines of their own.
+    private func drawUnderlines(
+        _ items: [RubyUnderlinedRange],
+        on line: Text.Layout.Line,
+        paragraphStart start: Text.Layout.CharacterIndex,
+        tracked: [RubyTrackedRange],
+        lineBounds: CGRect,
+        in context: GraphicsContext
+    ) {
+        var boxes: [(range: Range<Int>, color: Color?, rect: CGRect)] = []
+        for run in line {
+            let offsets = run.characterIndices.map { start.distance(to: $0) }
+            guard offsets.count == run.count else { continue }
+            for index in 0..<run.count {
+                guard let item = Self.item(at: offsets[index], in: items, range: \.range) else { continue }
+                let glyph = Self.glyphBox(in: run, at: index, offset: offsets[index], tracked: tracked)
+                if let last = boxes.indices.last, boxes[last].range == item.range {
+                    boxes[last].rect = boxes[last].rect.union(glyph)
+                } else {
+                    boxes.append((item.range, item.color, glyph))
+                }
+            }
+        }
+
+        let thickness = metrics.underlineThickness
+        // Centered in the space reserved for it.
+        let y = lineBounds.maxY + underlineSpace / 2
+        for box in boxes {
+            // A word's line takes its color, faded so the word stands out
+            // more than its line; others take the secondary style, as
+            // furigana do.
+            let shading: GraphicsContext.Shading = if let color = box.color {
+                .color(color.opacity(0.6))
+            } else {
+                .style(.secondary)
+            }
+            let inset = thickness * 1.5
+            let start = box.rect.minX + inset + thickness / 2
+            let end = max(start, box.rect.maxX - inset - thickness / 2)
+            switch underlinePattern {
+            case .dotted:
+                // Spread evenly, a dot at each end, about a dot apart.
+                let count = Int(((end - start) / (thickness * 2)).rounded(.down)) + 1
+                let step = count > 1 ? (end - start) / CGFloat(count - 1) : 0
+                var dots = Path()
+                for dot in 0..<count {
+                    let x = count > 1 ? start + step * CGFloat(dot) : (start + end) / 2
+                    dots.addEllipse(in: CGRect(x: x - thickness / 2, y: y - thickness / 2, width: thickness, height: thickness))
+                }
+                context.fill(dots, with: shading)
+            case .dashed, .solid:
+                var path = Path()
+                path.move(to: CGPoint(x: start, y: y))
+                path.addLine(to: CGPoint(x: end, y: y))
+                let width = thickness * 0.75
+                let dash: [CGFloat] = underlinePattern == .dashed ? [thickness * 2, thickness * 2.5] : []
+                context.stroke(path, with: shading, style: StrokeStyle(lineWidth: width, lineCap: .round, dash: dash))
+            }
         }
     }
 
@@ -285,7 +357,7 @@ struct RubyRenderer: TextRenderer {
             // Cover the word's annotations too.
             var box = rect.insetBy(dx: -metrics.gap * 2, dy: -metrics.gap)
             box.origin.y -= metrics.reservedHeight * above
-            box.size.height += metrics.reservedHeight * (above + below)
+            box.size.height += metrics.reservedHeight * (above + below) + underlineSpace
             // Use the background style if one is set, such as with
             // `.backgroundStyle(.yellow)`; otherwise a soft tint. The default
             // background (`nil`) is the system background, which would be

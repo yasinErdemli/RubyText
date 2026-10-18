@@ -104,6 +104,7 @@ public struct RubyText: View {
     @Environment(\.rubySpacing) private var spacing
     @Environment(\.rubyWordColoring) private var wordColoring
     @Environment(\.rubyWordWeights) private var wordWeights
+    @Environment(\.rubyWordUnderlines) private var wordUnderlines
     @Environment(\.rubyDictionary) private var dictionary
     @Environment(\.rubyModelReadings) private var modelUpdates
     @Environment(\.rubyModelOptions) private var modelOptions
@@ -203,6 +204,8 @@ public struct RubyText: View {
             textColors: RubyTextContent.coloredRanges(wordColoring.text, in: content),
             backgroundColors: RubyTextContent.coloredRanges(wordColoring.background, in: content),
             textWeights: RubyTextContent.weightedRanges(wordWeights, in: content),
+            underlines: wordUnderlines?.ranges(in: content) ?? [],
+            underlinePattern: wordUnderlines?.pattern ?? .dotted,
             speech: speech,
             accessibilityWords: showsWordDetails || wordTapAction != nil
                 ? RubyTextContent.accessibilityWords(in: content, speech: speech)
@@ -566,6 +569,9 @@ private struct RubyTextContent: View {
     @AnimatableIgnored let textColors: [RubyColoredRange]
     @AnimatableIgnored let backgroundColors: [RubyColoredRange]
     @AnimatableIgnored let textWeights: [RubyWeightedRange]
+    /// The words with a line under them, and how it's drawn.
+    @AnimatableIgnored let underlines: [Range<Int>]
+    @AnimatableIgnored let underlinePattern: RubyUnderlinePattern
     /// What VoiceOver says in place of parts of the text.
     @AnimatableIgnored let speech: [RubySpokenText]
     /// The words VoiceOver users can choose, if words can be tapped.
@@ -606,6 +612,16 @@ private struct RubyTextContent: View {
     private var above: CGFloat { min(1, furigana + romajiAbove) }
     private var below: CGFloat { min(1, romajiBelow + kanaRomaji) }
 
+    /// The space below each line: for underlines, then for annotations.
+    private func belowHeight(_ metrics: RubyMetrics) -> CGFloat {
+        underlineSpace(metrics) + metrics.reservedHeight * below
+    }
+
+    /// The space below each line for underlines, if there are any.
+    private func underlineSpace(_ metrics: RubyMetrics) -> CGFloat {
+        underlines.isEmpty ? 0 : metrics.underlineSpace
+    }
+
     var body: some View {
         let metrics = RubyMetrics(font: font ?? .body, in: fontResolutionContext)
         let lineBreakKey = RubyLineBreakFallback.Key(string: content.string, font: metrics.cacheKey, lineBreaking: lineBreaking)
@@ -619,7 +635,7 @@ private struct RubyTextContent: View {
         )
 
         if above == 0 && below == 0 && reader == nil && textColors.isEmpty && backgroundColors.isEmpty
-            && textWeights.isEmpty && wordGaps.isZero && content.spaces.isEmpty && !isTappable {
+            && textWeights.isEmpty && underlines.isEmpty && wordGaps.isZero && content.spaces.isEmpty && !isTappable {
             Text(Self.plainText(content, lineBreaking: lineBreaking, characterBreaking: characterBreaking).speaking(speech))
                 .font(metrics.textFont)
                 .contentTransition(.numericText())
@@ -648,6 +664,7 @@ private struct RubyTextContent: View {
                 insertedSpaceWidth: spacing.width,
                 textColors: textColors,
                 backgrounds: backgrounds(),
+                underlines: underlines,
                 weightedMetrics: Dictionary(uniqueKeysWithValues: Set(textWeights.map(\.weight)).map { ($0, metrics.weighted($0)) })
             )
 
@@ -672,7 +689,7 @@ private struct RubyTextContent: View {
         emphasis: RubyEmphasisState?
     ) -> some View {
         let above = metrics.reservedHeight * above
-        let below = metrics.reservedHeight * below
+        let below = belowHeight(metrics)
 
         return Text(layout.text.speaking(speech))
             .font(metrics.textFont)
@@ -689,6 +706,8 @@ private struct RubyTextContent: View {
                 romajiAbove: romajiAbove,
                 romajiBelow: romajiBelow,
                 kanaRomaji: kanaRomaji,
+                underlineSpace: underlineSpace(metrics),
+                underlinePattern: underlinePattern,
                 truncationMode: truncationMode,
                 emphasis: emphasis
             ))
@@ -767,7 +786,7 @@ private struct RubyTextContent: View {
     private func characterOffset(at point: CGPoint, in geometry: RubyTextGeometry, layout: RubyLayout, metrics: RubyMetrics) -> Int? {
         let point = CGPoint(x: point.x - geometry.origin.x, y: point.y - geometry.origin.y)
         let above = metrics.reservedHeight * above
-        let below = metrics.reservedHeight * below
+        let below = belowHeight(metrics)
         for (_, line, paragraph, start) in geometry.layout.rubyParagraphLines {
             let bounds = line.typographicBounds.rect
             guard point.y >= bounds.minY - above, point.y < bounds.maxY + below else { continue }
@@ -801,7 +820,7 @@ private struct RubyTextContent: View {
             guard !rect.isNull else { continue }
             let bounds = line.typographicBounds.rect
             let above = metrics.reservedHeight * above
-            let below = metrics.reservedHeight * below
+            let below = belowHeight(metrics)
             return CGRect(
                 x: rect.minX + geometry.origin.x,
                 y: bounds.minY - above + geometry.origin.y,
@@ -1403,6 +1422,7 @@ struct RubyLayout {
         insertedSpaceWidth: CGFloat,
         textColors: [RubyColoredRange],
         backgrounds: [RubyColoredRange],
+        underlines: [Range<Int>] = [],
         weightedMetrics: [Font.Weight: RubyMetrics] = [:]
     ) {
         let characters = measurements.characters
@@ -1517,6 +1537,11 @@ struct RubyLayout {
         for item in backgrounds {
             let placed = Self.place(item.range, paragraphStarts: paragraphStarts)
             paragraphs[placed.paragraph].backgrounds.append(RubyColoredRange(range: placed.range, color: item.color))
+        }
+        for range in underlines {
+            let placed = Self.place(range, paragraphStarts: paragraphStarts)
+            let color = colors[RubyMeasurements.index(of: range.lowerBound, in: starts)]
+            paragraphs[placed.paragraph].underlines.append(RubyUnderlinedRange(range: placed.range, color: color))
         }
         self.paragraphs = paragraphs
     }

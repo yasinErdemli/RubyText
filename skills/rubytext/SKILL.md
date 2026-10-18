@@ -175,6 +175,7 @@ and changes animate.
 | `rubyDigitReadingsHidden(_:)` | hide readings over 2026年, 3日 | `false` |
 | `rubyWordColors(_:in:)` | `.partOfSpeech`, `.alternating`, `.words([…])`, `.wordIDs([…])`, `.jlpt`, `.jlpt(above: .n4)`, `.readingSources`; `in: .text` or `.background` | none |
 | `rubyWordWeights(_:)` | `.words([…])`, `.wordIDs([…])`: bold by default, or any `Font.Weight` | none |
+| `rubyWordUnderlines(_:)` | `.words([…])`, `.wordIDs([…])`, each with `pattern: .dotted`, `.dashed` or `.solid`: a line under each word, in its color or the secondary style | none |
 | `rubyWordDetails(_:)` | popover with reading, dictionary form, part of speech, JLPT level, definitions | off |
 | `onRubyWordTap(perform:)` | your own action with a `RubyWordInfo` | none |
 | `rubyDictionary(_:)` | `RubyDictionary` for definitions | none |

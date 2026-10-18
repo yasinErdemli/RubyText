@@ -40,6 +40,14 @@ struct RubyColoredRange {
     let color: Color
 }
 
+/// A word drawn with a line under it.
+struct RubyUnderlinedRange {
+    /// UTF-16 offsets within the paragraph.
+    let range: Range<Int>
+    /// The word's own color, if it's colored.
+    let color: Color?
+}
+
 /// A word set in its own weight.
 struct RubyWeightedRange: Hashable {
     /// UTF-16 offsets in the text.
@@ -68,6 +76,7 @@ struct RubyParagraph {
     /// Romaji under each kana, drawn below the text.
     var kanaRomaji: [RubyAnnotation] = []
     var backgrounds: [RubyColoredRange] = []
+    var underlines: [RubyUnderlinedRange] = []
 }
 
 /// The word a `RubyReader` is speaking, and how far along it is.
@@ -159,6 +168,11 @@ struct RubyMetrics {
     var gap: CGFloat { base.pointSize * 0.06 }
     /// Vertical space reserved above or below every line for annotations.
     var reservedHeight: CGFloat { (annotation.pointSize * 1.2 + gap).rounded(.up) }
+    /// How thick an underline is, and how wide its dots.
+    var underlineThickness: CGFloat { max(1, base.pointSize * 0.08) }
+    /// Vertical space reserved below every line for underlines, between
+    /// the text and annotations below it.
+    var underlineSpace: CGFloat { (gap * 2 + underlineThickness).rounded(.up) }
     /// Minimum horizontal space between neighboring romaji words.
     var romajiSpacing: CGFloat { annotation.pointSize * 0.4 }
 

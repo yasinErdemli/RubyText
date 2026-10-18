@@ -24,10 +24,10 @@ import Testing
     private static let width: CGFloat = 200
 
     /// The text with furigana, with furigana and romaji under its kana,
-    /// with no annotations but tappable words, and plain, which is drawn
-    /// without a renderer.
+    /// with underlined words above romaji, with no annotations but tappable
+    /// words, and plain, which is drawn without a renderer.
     enum Kind: CaseIterable {
-        case furigana, kanaRomaji, tappable, plain
+        case furigana, kanaRomaji, underlined, tappable, plain
 
         var text: some View {
             let text = RubyText(segments: RubyHeightTests.segments)
@@ -35,6 +35,7 @@ import Testing
                 switch self {
                 case .furigana: text
                 case .kanaRomaji: text.rubyStyle([.furigana, .kanaRomaji])
+                case .underlined: text.rubyStyle([.furigana, .kanaRomaji]).rubyWordUnderlines(.wordIDs(["2", "4", "8"]))
                 case .tappable: text.rubyStyle([]).onRubyWordTap { _ in }.rubyWordDetails(false)
                 case .plain: text.rubyStyle([])
                 }

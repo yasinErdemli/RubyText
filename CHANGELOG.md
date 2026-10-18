@@ -3,6 +3,20 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
+## Unreleased
+
+- `rubyWordUnderlines(_:)` draws a line under chosen words, dotted by
+  default, such as the words a tap explains: `.wordIDs(_:pattern:)` or
+  `.words(_:pattern:)`, chosen as `RubyWordColors` chooses them, with
+  `.dotted`, `.dashed` or `.solid` lines. Each word gets a line of its
+  own, ending short of its edges, so neighboring words read as two, and a
+  word given in pieces or a run of words matched together gets one. A
+  line takes its word's color from `rubyWordColors(_:in:)`, faded, or
+  the secondary foreground style. Underlined text keeps a little room
+  below each line for them, between the text and any romaji under it,
+  which move down to make way; backgrounds and the read-aloud highlight
+  cover it too.
+
 ## 1.5.0 — 2026-10-18
 
 - `RubyStyle.kanaRomaji` also draws romaji under kanji and digits with
