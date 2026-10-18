@@ -3,7 +3,7 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
-## Unreleased
+## 1.5.0 — 2026-10-18
 
 - `RubyStyle.kanaRomaji` also draws romaji under kanji and digits with
   furigana, since furigana are kana too, which a learner who can't read
