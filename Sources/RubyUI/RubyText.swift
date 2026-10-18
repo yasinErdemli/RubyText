@@ -185,7 +185,7 @@ public struct RubyText: View {
         let content = rewritten(analyzed)
         let speech = content.speech(spokenReadings)
         let placement = RubyPlacement(style: style, furiganaPosition: furiganaPosition, transcription: transcription)
-        let kanaRomajiVisibility = placement.kanaRomaji ? kanaRomajiVisibility(in: content) : .zero
+        let kanaRomajiVisibility = placement.kanaRomaji ? kanaRomajiVisibility(in: content, showsFurigana: placement.furigana) : .zero
         RubyTextContent(
             content: content,
             furigana: placement.furigana ? 1 : 0,
@@ -374,11 +374,48 @@ public struct RubyText: View {
         })
     }
 
+    /// Whether each kana's romaji shows under it, in content order.
+    private func kanaRomajiVisibility(in content: RubyContent, showsFurigana: Bool) -> RubyAnimatableVector {
+        Self.kanaRomajiVisibility(
+            in: content,
+            romanization: romanization,
+            filter: kanaRomajiFilter,
+            furigana: showsFurigana ? furiganaFilter : nil,
+            furiganaScript: furiganaScript.resolved(romanization),
+            digitReadingsHidden: digitReadingsHidden
+        )
+    }
+
     /// Whether each kana's romaji shows under it, in content order, one
     /// value per kana, so each fades on its own as the filter changes.
-    private func kanaRomajiVisibility(in content: RubyContent) -> RubyAnimatableVector {
+    ///
+    /// A reading's romaji are the romaji of its furigana, so they show
+    /// only while the furigana do, by `furigana`, nil when none are drawn,
+    /// and only while they're written in kana, matched as they're written.
+    static func kanaRomajiVisibility(
+        in content: RubyContent,
+        romanization: RubyRomanization,
+        filter: RubyKanaRomajiFilter,
+        furigana: RubyFuriganaFilter?,
+        furiganaScript script: RubyScript,
+        digitReadingsHidden: Bool
+    ) -> RubyAnimatableVector {
         RubyAnimatableVector(values: content.kanaRomaji(in: romanization).map { beat in
-            kanaRomajiFilter.showsRomaji(under: beat.kana, wordID: beat.wordID) ? 1 : 0
+            guard beat.isReading else {
+                return filter.showsRomaji(under: beat.kana, wordID: beat.wordID) ? 1 : 0
+            }
+            let shown: [String]
+            switch script.form {
+            case .hiragana: shown = script.keepsKatakana ? beat.beats : beat.beats.map(RubyKana.hiragana)
+            case .katakana: shown = beat.beats.map(RubyKana.katakana)
+            case .romaji: return 0
+            }
+            let base = RubyReadingUnits.substring(of: content.string, utf16Range: beat.range)
+            guard let furigana,
+                  !(digitReadingsHidden && isDigitNumber(base)),
+                  furigana.showsReading(over: base, wordID: beat.wordID)
+            else { return 0 }
+            return filter.showsRomaji(underBeats: shown, wordID: beat.wordID) ? 1 : 0
         })
     }
 

@@ -3,6 +3,18 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
+## Unreleased
+
+- `RubyStyle.kanaRomaji` also draws romaji under kanji and digits with
+  furigana, since furigana are kana too, which a learner who can't read
+  them gets nothing from: oo under 大 in 大きい, daigaku under 大学, san
+  under 3. Each reading is one romaji, written as romaji write a word.
+  They show while the reading over them does, so a kanji the furigana
+  filter hides has none until a word shows its furigana again, and while
+  any kana in the reading isn't known to the `RubyKanaRomajiFilter`,
+  matched as the furigana are written: 言 in 言いました has none once い is
+  known. Furigana written in romaji have none under them.
+
 ## 1.4.1 — 2026-10-18
 
 - `RubyText` takes the height of all its lines for the width it's offered,

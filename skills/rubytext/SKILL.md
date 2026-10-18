@@ -163,7 +163,7 @@ and changes animate.
 | Modifier | Values | Default |
 | --- | --- | --- |
 | `rubyAnalyzer(_:)` | `RubyMeCabAnalyzer` or any `RubyAnalyzer` | none: markup only |
-| `rubyStyle(_:)` | `.furigana`, `.romaji` (above), `[.furigana, .romaji]`, `.kanaRomaji` (under each kana, below), `[]` | `.furigana` |
+| `rubyStyle(_:)` | `.furigana`, `.romaji` (above), `[.furigana, .romaji]`, `.kanaRomaji` (under each kana and each kanji's furigana, below), `[]` | `.furigana` |
 | `rubyFurigana(_:)` | `.all`, `.above(.n4)`, `.above(.n4, except: known)`, `.except(known)`, and `.showing(wordIDs:)` on any of them | `.all` |
 | `rubyKanaRomaji(_:)` | `.all`, `.except(learnedKana)`, and `.hiding(wordIDs:)` on either | `.all` |
 | `rubyFuriganaScript(_:)` | `.hiragana`, `.katakana`, `.romaji` | `.hiragana` |

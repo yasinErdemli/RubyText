@@ -38,10 +38,14 @@ public struct RubyStyle: OptionSet, Hashable, Sendable {
     /// read every kana yet: わたしは over wa ta shi wa, きって over ki t
     /// te. Always below the text, so furigana keep their place above it.
     ///
-    /// Choose the kana that get them with `rubyKanaRomaji(_:)`. Kanji
-    /// have none, since their readings are furigana, and neither has text
-    /// written out with `rubyTranscription(_:)` or with inline furigana.
-    /// With `.romaji`, which already writes every word, there are none.
+    /// Furigana are kana too, so a kanji gets the romaji of its reading,
+    /// the whole reading as one, while its furigana show: oo under 大 in
+    /// 大きい, daigaku under 大学. A reading written as romaji has none.
+    ///
+    /// Choose the kana that get them with `rubyKanaRomaji(_:)`. Text
+    /// written out with `rubyTranscription(_:)` or with inline furigana
+    /// has none. With `.romaji`, which already writes every word, there
+    /// are none.
     public static let kanaRomaji = RubyStyle(rawValue: 1 << 2)
 }
 
@@ -156,9 +160,11 @@ public struct RubyFuriganaFilter: Hashable, Sendable {
 ///
 /// Kana are matched as written, so a learner learns か and カ apart. A
 /// kana with a small one after it, such as きゃ, is known when it's listed
-/// itself or when each of its kana is. Changing the filter fades romaji in
-/// and out, a kana at a time, as furigana fade a kanji at a time; once no
-/// kana has romaji, the text gives back the space they took.
+/// itself or when each of its kana is. A kanji's reading is matched as its
+/// furigana are written, and its romaji stay until every kana in it is
+/// known: under 大, oo goes once お is learned. Changing the filter fades
+/// romaji in and out, a kana at a time, as furigana fade a kanji at a
+/// time; once no kana has romaji, the text gives back the space they took.
 public struct RubyKanaRomajiFilter: Hashable, Sendable {
     /// Kana the learner can read, as written.
     private var knownKana: Set<String> = []
@@ -186,8 +192,14 @@ public struct RubyKanaRomajiFilter: Hashable, Sendable {
     /// Whether `kana`, a beat as written, has its romaji under it in the
     /// word with `wordID`.
     func showsRomaji(under kana: String, wordID: String? = nil) -> Bool {
+        showsRomaji(underBeats: [kana], wordID: wordID)
+    }
+
+    /// Whether romaji go under kana of these beats, each as written, such
+    /// as a reading's, in the word with `wordID`: while any isn't known.
+    func showsRomaji(underBeats beats: [String], wordID: String? = nil) -> Bool {
         if let wordID, hiddenWordIDs.contains(wordID) { return false }
-        return !isKnown(kana)
+        return !beats.allSatisfy(isKnown)
     }
 
     private func isKnown(_ kana: String) -> Bool {

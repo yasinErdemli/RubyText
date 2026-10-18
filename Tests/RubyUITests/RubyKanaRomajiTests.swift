@@ -51,11 +51,80 @@ import Testing
         #expect(RubyKanaRomajiFilter.except(["き"]).showsRomaji(under: "きゃ"))
     }
 
+    @Test func aReadingIsKnownOnceEachOfItsBeatsIs() {
+        #expect(RubyKanaRomajiFilter.except(["き"]).showsRomaji(underBeats: ["お", "お"]))
+        #expect(!RubyKanaRomajiFilter.except(["お"]).showsRomaji(underBeats: ["お", "お"]))
+        #expect(RubyKanaRomajiFilter.except(["と", "う"]).showsRomaji(underBeats: ["と", "う", "きょ", "う"]))
+        #expect(!RubyKanaRomajiFilter.except(["と", "う", "き", "ょ"]).showsRomaji(underBeats: ["と", "う", "きょ", "う"]))
+    }
+
     @Test func hiddenWordsHaveNoRomaji() {
         let filter = RubyKanaRomajiFilter.all.hiding(wordIDs: ["wa"])
         #expect(!filter.showsRomaji(under: "は", wordID: "wa"))
         #expect(filter.showsRomaji(under: "は", wordID: "watashi"))
         #expect(filter.showsRomaji(under: "は"))
+    }
+
+    // MARK: Romaji under readings
+
+    /// 大きい, for a learner who knows い but not お.
+    private static let big = RubyContent.content(for: [
+        RubySegment("大", reading: "おお", wordID: "ookii"),
+        RubySegment("きい", wordID: "ookii"),
+    ])
+
+    private func visibility(
+        _ content: RubyContent = big,
+        known: [String] = ["い"],
+        furigana: RubyFuriganaFilter? = .all,
+        script: RubyScript = .hiragana,
+        digitReadingsHidden: Bool = false
+    ) -> [Double] {
+        RubyText.kanaRomajiVisibility(
+            in: content,
+            romanization: .hepburn,
+            filter: .except(known),
+            furigana: furigana,
+            furiganaScript: script,
+            digitReadingsHidden: digitReadingsHidden
+        ).values
+    }
+
+    @Test func aReadingHasRomajiUntilEachOfItsKanaIsKnown() {
+        #expect(visibility() == [1, 1, 0])
+        #expect(visibility(known: ["お", "い"]) == [0, 1, 0])
+        #expect(visibility(known: []) == [1, 1, 1])
+    }
+
+    /// The romaji are the furigana's, so they go when the furigana do.
+    @Test func aReadingsRomajiShowOnlyWithItsFurigana() {
+        #expect(visibility(furigana: .except(["大"])) == [0, 1, 0])
+        // A word shown again, as with a tap, shows them again.
+        #expect(visibility(furigana: RubyFuriganaFilter.except(["大"]).showing(wordIDs: ["ookii"])) == [1, 1, 0])
+        // Without furigana, there are none to give romaji to.
+        #expect(visibility(furigana: nil) == [0, 1, 0])
+        // Furigana already in romaji need none under them.
+        #expect(visibility(script: .romaji) == [0, 1, 0])
+        let three = RubyContent.content(for: [RubySegment("3", reading: "さん", wordID: "sanji"), RubySegment("じ", wordID: "sanji")])
+        #expect(visibility(three, known: []) == [1, 1])
+        #expect(visibility(three, known: [], digitReadingsHidden: true) == [0, 1])
+    }
+
+    @Test func aReadingIsMatchedAsItsFuriganaAreWritten() {
+        #expect(visibility(known: ["オ", "い"], script: .katakana) == [0, 1, 0])
+        #expect(visibility(known: ["お", "い"], script: .katakana) == [1, 1, 0])
+    }
+
+    @Test func aHiddenWordsReadingHasNoRomaji() {
+        let values = RubyText.kanaRomajiVisibility(
+            in: Self.big,
+            romanization: .hepburn,
+            filter: RubyKanaRomajiFilter.all.hiding(wordIDs: ["ookii"]),
+            furigana: .all,
+            furiganaScript: .hiragana,
+            digitReadingsHidden: false
+        ).values
+        #expect(values == [0, 0, 0])
     }
 
     // MARK: Measuring and spacing
@@ -86,7 +155,7 @@ import Testing
     }
 
     @Test func kanaRomajiAreMeasuredOnlyWhenShown() {
-        #expect(measurements(Self.student).kanaRomaji.map(\.text) == ["wa", "ta", "shi", "wa", "de", "su"])
+        #expect(measurements(Self.student).kanaRomaji.map(\.text) == ["wa", "ta", "shi", "wa", "gakusei", "de", "su"])
         #expect(measurements(Self.student, kanaRomaji: false).kanaRomaji.isEmpty)
     }
 
@@ -126,17 +195,17 @@ import Testing
     }
 
     @Test func shownBeatsAreDrawnAsVisibleAsTheFilterSays() {
-        let layout = layout(Self.student, strength: 1, visibility: [0, 0, 1, 0.5, 0, 0])
+        let layout = layout(Self.student, strength: 1, visibility: [0, 0, 1, 0.5, 1, 0, 0])
         let romaji = layout.paragraphs.flatMap(\.kanaRomaji)
-        #expect(romaji.map(\.text) == ["shi", "wa"])
-        #expect(romaji.map(\.opacity) == [1, 0.5])
-        #expect(self.layout(Self.student, strength: 0, visibility: [1, 1, 1, 1, 1, 1]).paragraphs.allSatisfy { $0.kanaRomaji.isEmpty })
+        #expect(romaji.map(\.text) == ["shi", "wa", "gakusei"])
+        #expect(romaji.map(\.opacity) == [1, 0.5, 1])
+        #expect(self.layout(Self.student, strength: 0, visibility: [1, 1, 1, 1, 1, 1, 1]).paragraphs.allSatisfy { $0.kanaRomaji.isEmpty })
     }
 
     /// Romaji are drawn, not written into the text, so VoiceOver,
     /// selection and copy have the text as it's written.
     @Test func theTextStaysAsWritten() {
-        let layout = layout(Self.student, strength: 1, visibility: [1, 1, 1, 1, 1, 1])
+        let layout = layout(Self.student, strength: 1, visibility: [1, 1, 1, 1, 1, 1, 1])
         #expect(String(layout.text.characters) == "わたしは学生です。")
     }
 }

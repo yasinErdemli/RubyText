@@ -189,8 +189,9 @@ RubyText("東京へ行きたい。")
 
 For learners still learning kana, `.kanaRomaji` puts romaji under each kana,
 a beat at a time, with furigana above, and `rubyKanaRomaji(_:)` leaves out
-the kana they can already read. They fade a kana at a time as the learner
-learns them:
+the kana they can already read. Furigana are kana too, so a kanji gets the
+romaji of its reading while its furigana show (oo under 大). They fade a kana
+at a time as the learner learns them:
 
 ```swift
 RubyText(segments: sentence)
