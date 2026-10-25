@@ -10,6 +10,10 @@ are listed here, newest first.
   under the words a tap explains and a solid line under a gap to fill,
   all at one height. `RubyWordUnderlines.pattern` is deprecated, since
   the lines no longer share one.
+- `onRubyWordTap` has a two-argument overload that supplies the word's
+  rendered bounds, including its annotations, in the text's coordinate
+  space. Custom word popovers can anchor to the whole word. The existing
+  one-argument callback continues to work.
 
 ## 1.6.1 — 2026-10-27
 

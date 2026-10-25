@@ -7,10 +7,10 @@ import UIKit
 
 /// An action to perform when someone taps a word in a `RubyText`.
 struct RubyWordTapAction {
-    let handler: (RubyWordInfo) -> Void
+    let handler: (RubyWordInfo, CGRect) -> Void
 
-    func callAsFunction(_ word: RubyWordInfo) {
-        handler(word)
+    func callAsFunction(_ word: RubyWordInfo, bounds: CGRect) {
+        handler(word, bounds)
     }
 }
 
@@ -34,6 +34,14 @@ extension View {
     /// Performs `action` when someone taps a word in a `RubyText`, such as
     /// to show your own word card or save the word to a study list.
     public func onRubyWordTap(perform action: @escaping (RubyWordInfo) -> Void) -> some View {
+        onRubyWordTap { word, _ in action(word) }
+    }
+
+    /// Performs `action` with the tapped word and its rendered bounds in
+    /// this text's coordinate space, including its annotations. Use the
+    /// bounds to anchor a custom popover to the word rather than the tap.
+    /// For a word split across lines, the bounds cover its first line.
+    public func onRubyWordTap(perform action: @escaping (RubyWordInfo, CGRect) -> Void) -> some View {
         environment(\.rubyWordTapAction, RubyWordTapAction(handler: action))
     }
 

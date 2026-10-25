@@ -757,9 +757,10 @@ private struct RubyTextContent: View {
         // whose words match the original's one to one.
         let source = content.original ?? content
         let word = RubyWordInfo.info(for: source.dictionaryWords[index], in: source, romanization: romanization)
-        wordTapAction?(word)
+        let bounds = wordRect(range, in: geometry, layout: layout, metrics: metrics) ?? .zero
+        wordTapAction?(word, bounds: bounds)
         if showsWordDetails {
-            selectedRect.wrappedValue = wordRect(range, in: geometry, layout: layout, metrics: metrics) ?? .zero
+            selectedRect.wrappedValue = bounds
             selectedWord.wrappedValue = word
         }
     }
