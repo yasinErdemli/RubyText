@@ -52,7 +52,7 @@ Add RubyText with Swift Package Manager, in Xcode with File › Add Package
 Dependencies, or in `Package.swift`:
 
 ```swift
-.package(url: "https://github.com/yasinErdemli/RubyText", from: "1.6.0")
+.package(url: "https://github.com/yasinErdemli/RubyText", from: "1.6.1")
 ```
 
 It has four products; take the ones you need:
@@ -70,7 +70,7 @@ downloads it whenever RubyText lists it, even for apps that never use
 RubyMeCab. An app that doesn't use it can leave it out, from 1.1.0:
 
 ```swift
-.package(url: "https://github.com/yasinErdemli/RubyText", from: "1.6.0", traits: [])
+.package(url: "https://github.com/yasinErdemli/RubyText", from: "1.6.1", traits: [])
 ```
 
 Then `RubyUI`, `RubyCore` and `RubyTransliteration` work as usual, with

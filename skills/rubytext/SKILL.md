@@ -29,7 +29,7 @@ optionally a dictionary for definitions.
 ### 1. The package
 
 ```swift
-.package(url: "https://github.com/yasinErdemli/RubyText", from: "1.6.0")
+.package(url: "https://github.com/yasinErdemli/RubyText", from: "1.6.1")
 ```
 
 | Product | Use it for |
@@ -55,7 +55,7 @@ the Mecab-Swift package itself: in Xcode, add
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/yasinErdemli/RubyText", from: "1.6.0"),
+    .package(url: "https://github.com/yasinErdemli/RubyText", from: "1.6.1"),
     .package(url: "https://github.com/shinjukunian/Mecab-Swift", from: "0.8.0"),
 ],
 targets: [

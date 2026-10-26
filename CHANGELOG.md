@@ -3,7 +3,7 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
-## Unreleased
+## 1.6.1 — 2026-10-27
 
 - A word on its own, such as 私 on a flashcard, sits under the middle of
   a reading wider than it and over the middle of its romaji, with space
