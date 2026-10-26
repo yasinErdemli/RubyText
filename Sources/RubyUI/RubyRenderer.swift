@@ -61,7 +61,9 @@ struct RubyRenderer: TextRenderer {
         var emphasizedLines: [Int: CGRect] = [:]
         // Annotations may extend past their words, but not past the text.
         // Where the text starts and ends: the line bounds, and the end of
-        // each line's last glyph, since the bounds may extend past it.
+        // each line's last glyph, since the bounds may extend past it. A
+        // paragraph's last line also keeps the space after its last glyph,
+        // which widens the text, so a reading there can stay centered.
         let lineRects = layout.map(\.typographicBounds.rect)
         let leadingEdge = lineRects.map(\.minX).min() ?? 0
         var trailingEdge = leadingEdge
@@ -70,14 +72,18 @@ struct RubyRenderer: TextRenderer {
         // their share of their readings.
         let ellipsis = layout.isTruncated ? Self.ellipsis(in: layout, mode: truncationMode) : nil
 
-        for (lineNumber, line, paragraph, start) in layout.rubyParagraphLines {
+        let paragraphLines = layout.rubyParagraphLines
+        for (position, (lineNumber, line, paragraph, start)) in paragraphLines.enumerated() {
             guard paragraphs.indices.contains(paragraph) else {
                 for run in line { context.draw(run) }
                 continue
             }
             let data = paragraphs[paragraph]
             if let run = line.last, run.count > 0, let index = run.characterIndices.last {
-                let box = Self.glyphBox(in: run, at: run.count - 1, offset: start.distance(to: index), tracked: data.tracked)
+                let endsParagraph = position == paragraphLines.count - 1 || paragraphLines[position + 1].paragraph != paragraph
+                let box = endsParagraph
+                    ? run[(run.count - 1)..<run.count].typographicBounds.rect
+                    : Self.glyphBox(in: run, at: run.count - 1, offset: start.distance(to: index), tracked: data.tracked)
                 trailingEdge = max(trailingEdge, box.maxX)
             }
             // Annotations take their vertical position from the line, not

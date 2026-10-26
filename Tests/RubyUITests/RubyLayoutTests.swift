@@ -96,6 +96,28 @@ import Testing
         #expect(result.tracking[0] == 2)
     }
 
+    @Test func aWordOnItsOwnIsCenteredUnderItsReading() {
+        // わたし is half a unit wider than 私: a quarter on each side.
+        let result = spaced("{私|わたし}")
+        #expect(result.shifts == [0.25])
+        #expect(result.tracking == [0.5])
+    }
+
+    @Test func aWordOnItsOwnIsCenteredOverItsRomaji() {
+        // さむらい takes half a unit on each side of 侍, and samurai, 1.5
+        // units wider than that, three quarters more on each.
+        let result = spaced("{侍|さむらい}", romaji: 1)
+        #expect(result.measurements.romaji.map(\.text) == ["samurai"])
+        #expect(result.shifts == [1.25])
+        #expect(result.tracking == [2.5])
+    }
+
+    @Test func aWordInALongerParagraphKeepsItsRomajiWithinIt() {
+        // Romaji at the start of a sentence still start with it.
+        let result = spaced("{侍|さむらい}です", romaji: 1)
+        #expect(result.shifts.allSatisfy { $0 == 0 })
+    }
+
     @Test func readingsEndWithTheParagraph() {
         // The reading ends with 侍, flows over の, and takes the rest of its
         // space before の: space after the last character doesn't count.

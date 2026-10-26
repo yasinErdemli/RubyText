@@ -1161,7 +1161,8 @@ final class RubyMeasurements {
         let leadingOverhang: CGFloat
         let trailingOverhang: CGFloat
         /// Whether the base starts a paragraph. The reading then starts
-        /// with it instead of being centered, so the line isn't indented.
+        /// with it instead of being centered, so the line isn't indented,
+        /// unless the base's word is the whole paragraph.
         let startsParagraph: Bool
         /// Characters that move together when the reading needs more
         /// space: its word, as far as the reading may overhang, so space
@@ -1169,8 +1170,9 @@ final class RubyMeasurements {
         /// kana ending (夥|しい).
         let padded: Range<Int>
         /// Whether those characters end their paragraph. The reading then
-        /// ends with them and takes its space before them: space after a
-        /// paragraph's last character doesn't widen the text.
+        /// ends with them and takes its space before them, so the reading
+        /// ends with the text, unless the base's word is the whole
+        /// paragraph.
         let endsParagraph: Bool
     }
 
@@ -1586,9 +1588,11 @@ struct RubyLayout {
         if furigana > 0 {
             for reading in measurements.furigana where reading.extraWidth > 0 {
                 let excess = reading.extraWidth * furigana * readingVisibility.value(at: reading.source, default: 1)
-                if reading.startsParagraph {
+                // A word on its own (私, as on a flashcard) is centered
+                // under its reading, with space on both sides.
+                if reading.startsParagraph, !reading.endsParagraph {
                     pad(reading.padded, before: 0, after: max(0, excess - reading.trailingOverhang))
-                } else if reading.endsParagraph {
+                } else if reading.endsParagraph, !reading.startsParagraph {
                     pad(reading.padded, before: max(0, excess - reading.trailingOverhang - reading.leadingOverhang), after: 0)
                 } else {
                     pad(
@@ -1646,10 +1650,22 @@ struct RubyLayout {
                 let right = x[last] + shifts[last] + widths[last] + added
                 var center = (left + right) / 2
                 let half = word.width / 2
+                var end = x[paragraphEnds[paragraph]] + added
+                // A word on its own (私, as on a flashcard) gets room on both
+                // sides for romaji wider than it, so they stay centered under
+                // it instead of starting with it and running past its end.
+                let paragraphStart = paragraph == 0 ? 0 : paragraphEnds[paragraph - 1] + 1
+                if first == paragraphStart, last + 1 == paragraphEnds[paragraph] {
+                    let before = max(0, half - center) * visibility
+                    let after = max(0, center + half - end) * visibility
+                    for index in word.characters { shifts[index] += before }
+                    tracking[last] += before + after
+                    center += before
+                    end += before + after
+                }
                 // Romaji that would run past the paragraph's end end with it,
                 // since space after its last character doesn't widen the text,
                 // and those that would start before it start with it.
-                let end = x[paragraphEnds[paragraph]] + added
                 center = max(min(center, end - half), half)
                 if let previousRight {
                     let overlap = previousRight + spacing - (center - half)
@@ -1786,6 +1802,22 @@ struct RubyLayout {
             }
         }
     }
+    .padding()
+}
+
+// Words on their own, as on flashcards: each sits under the middle of its
+// furigana and over the middle of its romaji, however wide they are.
+#Preview("Words on their own") {
+    VStack(spacing: 32) {
+        RubyText(segments: [RubySegment("私", reading: "わたし")])
+            .rubyStyle([.furigana, .kanaRomaji])
+        RubyText(segments: [RubySegment("侍", reading: "さむらい")])
+            .rubyStyle([.furigana, .romaji])
+        RubyText(segments: [RubySegment("食", reading: "た"), RubySegment("べる")])
+            .rubyStyle([.furigana, .romaji])
+    }
+    .font(.system(size: 48))
+    .border(.quaternary)
     .padding()
 }
 

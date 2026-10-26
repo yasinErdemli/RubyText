@@ -3,6 +3,14 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
+## Unreleased
+
+- A word on its own, such as 私 on a flashcard, sits under the middle of
+  a reading wider than it and over the middle of its romaji, with space
+  on both sides, instead of both starting with it and running past its
+  end. Readings and romaji at the start or end of a longer paragraph
+  still start or end with it, so the line isn't indented.
+
 ## 1.6.0 — 2026-10-18
 
 - `rubyWordUnderlines(_:)` draws a line under chosen words, dotted by
