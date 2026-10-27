@@ -3,7 +3,7 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
-## Unreleased
+## 1.7.0 — 2026-10-28
 
 - Words can have lines of their own kinds: `.wordIDs(_:)` and
   `.words(_:)` take each word's `RubyUnderlinePattern`, such as dots

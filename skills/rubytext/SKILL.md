@@ -29,7 +29,7 @@ optionally a dictionary for definitions.
 ### 1. The package
 
 ```swift
-.package(url: "https://github.com/yasinErdemli/RubyText", from: "1.6.1")
+.package(url: "https://github.com/yasinErdemli/RubyText", from: "1.7.0")
 ```
 
 | Product | Use it for |
@@ -55,7 +55,7 @@ the Mecab-Swift package itself: in Xcode, add
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/yasinErdemli/RubyText", from: "1.6.1"),
+    .package(url: "https://github.com/yasinErdemli/RubyText", from: "1.7.0"),
     .package(url: "https://github.com/shinjukunian/Mecab-Swift", from: "0.8.0"),
 ],
 targets: [
@@ -175,9 +175,9 @@ and changes animate.
 | `rubyDigitReadingsHidden(_:)` | hide readings over 2026年, 3日 | `false` |
 | `rubyWordColors(_:in:)` | `.partOfSpeech`, `.alternating`, `.words([…])`, `.wordIDs([…])`, `.jlpt`, `.jlpt(above: .n4)`, `.readingSources`; `in: .text` or `.background` | none |
 | `rubyWordWeights(_:)` | `.words([…])`, `.wordIDs([…])`: bold by default, or any `Font.Weight` | none |
-| `rubyWordUnderlines(_:)` | `.words([…])`, `.wordIDs([…])`, each with `pattern: .dotted`, `.dashed` or `.solid`: a line under each word, in its color or the secondary style | none |
+| `rubyWordUnderlines(_:)` | `.words([…])`, `.wordIDs([…])`, each with `pattern: .dotted`, `.dashed` or `.solid`, or a dictionary giving each word its own pattern: a line under each word, in its color or the secondary style | none |
 | `rubyWordDetails(_:)` | popover with reading, dictionary form, part of speech, JLPT level, definitions | off |
-| `onRubyWordTap(perform:)` | your own action with a `RubyWordInfo` | none |
+| `onRubyWordTap(perform:)` | your own action with a `RubyWordInfo`, and optionally the word's bounds to anchor a popover | none |
 | `rubyDictionary(_:)` | `RubyDictionary` for definitions | none |
 | `rubyReader(_:)`, `rubyEmphasis(_:)` | read-aloud highlighting: `.tint`, `.highlight`, `.grow`, `.karaoke` | `[.tint, .grow]` |
 | `rubySpokenReadings(_:)` | what VoiceOver says: `.corrections`, `.all`, `[]` | `.corrections` |

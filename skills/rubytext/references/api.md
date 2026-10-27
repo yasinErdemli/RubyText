@@ -52,6 +52,7 @@ without its readings, unless the readings are part of the text
 | `rubyWordWeights(_ weights: RubyWordWeights?)` | Sets chosen words in their own weight, such as bold for a grammar point's form; combines with `rubyWordColors`. `.words([String: Font.Weight])`, `.words(_ words: some Sequence<String>, weight: Font.Weight = .bold)`, matched as `RubyWordColors.words` matches; `.wordIDs([String: Font.Weight])`, `.wordIDs(_ ids: some Sequence<String>, weight: Font.Weight = .bold)`, by segments' `wordID`. A word's annotations take its weight; `nil` removes. |
 | `rubyWordDetails(_ isEnabled: Bool = true)` | Tap a word for a popover: reading, dictionary form, part of speech, JLPT level, kanji, definitions if a dictionary is set, and buttons to hear it and look it up. VoiceOver reaches it as an accessibility action. |
 | `onRubyWordTap(perform action: @escaping (RubyWordInfo) -> Void)` | Your own action instead. |
+| `onRubyWordTap(perform action: @escaping (RubyWordInfo, CGRect) -> Void)` | The same, with the word's bounds, readings included, in the text's coordinate space, to anchor a popover. |
 | `rubyDictionary(_ dictionary: RubyDictionary?)` | Definitions for word details. |
 | `rubyReader(_ reader: RubyReader?)` | Emphasizes the phrase a reader is speaking. |
 | `rubyEmphasis(_ emphasis: RubyEmphasis)` | `OptionSet`: `.tint`, `.highlight` (uses `backgroundStyle` if set), `.grow`, `.karaoke`. Default `[.tint, .grow]`. |
