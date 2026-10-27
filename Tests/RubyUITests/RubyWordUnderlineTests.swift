@@ -45,15 +45,43 @@ import Testing
     }
 
     @Test func dotsAreTheDefault() {
-        #expect(RubyWordUnderlines.wordIDs(["mori"]).pattern == .dotted)
-        #expect(RubyWordUnderlines.words(["猫"], pattern: .dashed).pattern == .dashed)
+        #expect(RubyWordUnderlines.wordIDs(["mori"]).underlines(in: Self.content).map(\.pattern) == [.dotted])
+        #expect(RubyWordUnderlines.words(["食べ物"], pattern: .dashed).underlines(in: Self.content).map(\.pattern) == [.dashed])
         #expect(RubyWordUnderlines.wordIDs(["mori"]) != .wordIDs(["mori"], pattern: .solid))
+    }
+
+    /// Words can have lines of their own kinds, such as dots under words
+    /// a tap explains and a solid line under a gap to fill.
+    @Test func wordsCanHaveTheirOwnKindOfLine() {
+        let byID = RubyWordUnderlines.wordIDs(["mori": .dotted, "food": .solid, "eat": .dashed])
+        #expect(byID.underlines(in: Self.content).map(\.pattern) == [.dotted, .solid, .dashed])
+        #expect(underlined(byID) == ["もり", "食べ物", "食べた"])
+        let byWord = RubyWordUnderlines.words(["もりさん": .solid, "食べ物": .dotted])
+        #expect(byWord.underlines(in: Self.content).map(\.pattern) == [.solid, .dotted])
+        #expect(byID == .wordIDs(["mori": .dotted, "food": .solid, "eat": .dashed]))
+        #expect(RubyWordUnderlines.wordIDs(["mori": .solid]) == .wordIDs(["mori"], pattern: .solid))
+    }
+
+    /// Each line keeps its kind as it's laid out, to be drawn that way.
+    @Test func linesKeepTheirKind() {
+        let underlines = RubyWordUnderlines.wordIDs(["mori": .dotted, "food": .solid]).underlines(in: Self.content)
+        let layout = Self.layout(underlines: underlines)
+        #expect(layout.paragraphs.flatMap(\.underlines).map(\.pattern) == [.dotted, .solid])
     }
 
     /// A line takes its word's color, to draw it in.
     @Test func linesTakeTheirWordsColor() {
-        let ranges = RubyWordUnderlines.wordIDs(["mori", "food"]).ranges(in: Self.content)
-        let layout = RubyLayout(
+        let underlines = RubyWordUnderlines.wordIDs(["mori", "food"]).underlines(in: Self.content)
+        let ranges = underlines.map(\.range)
+        let laidOut = Self.layout(underlines: underlines, textColors: [RubyColoredRange(range: ranges[1], color: .red)])
+            .paragraphs.flatMap(\.underlines)
+        #expect(laidOut.map(\.range) == ranges)
+        #expect(laidOut.map(\.color) == [nil, .red])
+    }
+
+    /// The test content laid out with `underlines` and `textColors`.
+    private static func layout(underlines: [RubyUnderline], textColors: [RubyColoredRange] = []) -> RubyLayout {
+        RubyLayout(
             measurements: RubyMeasurements(
                 content: Self.content,
                 baseWidth: { text, _ in CGFloat(text.count) },
@@ -68,13 +96,10 @@ import Testing
             romajiSpacing: 0,
             lineBreaking: .phrases,
             insertedSpaceWidth: 0,
-            textColors: [RubyColoredRange(range: ranges[1], color: .red)],
+            textColors: textColors,
             backgrounds: [],
-            underlines: ranges
+            underlines: underlines
         )
-        let underlines = layout.paragraphs.flatMap(\.underlines)
-        #expect(underlines.map(\.range) == ranges)
-        #expect(underlines.map(\.color) == [nil, .red])
     }
 
     /// Underlined text keeps room below each line for the lines, so they

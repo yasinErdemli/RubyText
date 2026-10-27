@@ -18,7 +18,6 @@ struct RubyRenderer: TextRenderer {
     /// The space reserved under each line for underlines, between the text
     /// and annotations below it; 0 without underlines.
     var underlineSpace: CGFloat = 0
-    var underlinePattern: RubyUnderlinePattern = .dotted
     /// Where text cut short by `lineLimit(_:)` shows its ellipsis.
     let truncationMode: Text.TruncationMode
     var emphasis: RubyEmphasisState?
@@ -294,7 +293,7 @@ struct RubyRenderer: TextRenderer {
         lineBounds: CGRect,
         in context: GraphicsContext
     ) {
-        var boxes: [(range: Range<Int>, color: Color?, rect: CGRect)] = []
+        var boxes: [(range: Range<Int>, color: Color?, pattern: RubyUnderlinePattern, rect: CGRect)] = []
         for run in line {
             let offsets = run.characterIndices.map { start.distance(to: $0) }
             guard offsets.count == run.count else { continue }
@@ -304,7 +303,7 @@ struct RubyRenderer: TextRenderer {
                 if let last = boxes.indices.last, boxes[last].range == item.range {
                     boxes[last].rect = boxes[last].rect.union(glyph)
                 } else {
-                    boxes.append((item.range, item.color, glyph))
+                    boxes.append((item.range, item.color, item.pattern, glyph))
                 }
             }
         }
@@ -324,7 +323,7 @@ struct RubyRenderer: TextRenderer {
             let inset = thickness * 1.5
             let start = box.rect.minX + inset + thickness / 2
             let end = max(start, box.rect.maxX - inset - thickness / 2)
-            switch underlinePattern {
+            switch box.pattern {
             case .dotted:
                 // Spread evenly, a dot at each end, about a dot apart.
                 let count = Int(((end - start) / (thickness * 2)).rounded(.down)) + 1
@@ -340,7 +339,7 @@ struct RubyRenderer: TextRenderer {
                 path.move(to: CGPoint(x: start, y: y))
                 path.addLine(to: CGPoint(x: end, y: y))
                 let width = thickness * 0.75
-                let dash: [CGFloat] = underlinePattern == .dashed ? [thickness * 2, thickness * 2.5] : []
+                let dash: [CGFloat] = box.pattern == .dashed ? [thickness * 2, thickness * 2.5] : []
                 context.stroke(path, with: shading, style: StrokeStyle(lineWidth: width, lineCap: .round, dash: dash))
             }
         }

@@ -46,6 +46,8 @@ struct RubyUnderlinedRange {
     let range: Range<Int>
     /// The word's own color, if it's colored.
     let color: Color?
+    /// How its line is drawn.
+    let pattern: RubyUnderlinePattern
 }
 
 /// A word set in its own weight.

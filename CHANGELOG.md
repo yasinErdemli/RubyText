@@ -3,6 +3,14 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
+## Unreleased
+
+- Words can have lines of their own kinds: `.wordIDs(_:)` and
+  `.words(_:)` take each word's `RubyUnderlinePattern`, such as dots
+  under the words a tap explains and a solid line under a gap to fill,
+  all at one height. `RubyWordUnderlines.pattern` is deprecated, since
+  the lines no longer share one.
+
 ## 1.6.1 — 2026-10-27
 
 - A word on its own, such as 私 on a flashcard, sits under the middle of

@@ -204,8 +204,7 @@ public struct RubyText: View {
             textColors: RubyTextContent.coloredRanges(wordColoring.text, in: content),
             backgroundColors: RubyTextContent.coloredRanges(wordColoring.background, in: content),
             textWeights: RubyTextContent.weightedRanges(wordWeights, in: content),
-            underlines: wordUnderlines?.ranges(in: content) ?? [],
-            underlinePattern: wordUnderlines?.pattern ?? .dotted,
+            underlines: wordUnderlines?.underlines(in: content) ?? [],
             speech: speech,
             accessibilityWords: showsWordDetails || wordTapAction != nil
                 ? RubyTextContent.accessibilityWords(in: content, speech: speech)
@@ -570,8 +569,7 @@ private struct RubyTextContent: View {
     @AnimatableIgnored let backgroundColors: [RubyColoredRange]
     @AnimatableIgnored let textWeights: [RubyWeightedRange]
     /// The words with a line under them, and how it's drawn.
-    @AnimatableIgnored let underlines: [Range<Int>]
-    @AnimatableIgnored let underlinePattern: RubyUnderlinePattern
+    @AnimatableIgnored let underlines: [RubyUnderline]
     /// What VoiceOver says in place of parts of the text.
     @AnimatableIgnored let speech: [RubySpokenText]
     /// The words VoiceOver users can choose, if words can be tapped.
@@ -707,7 +705,6 @@ private struct RubyTextContent: View {
                 romajiBelow: romajiBelow,
                 kanaRomaji: kanaRomaji,
                 underlineSpace: underlineSpace(metrics),
-                underlinePattern: underlinePattern,
                 truncationMode: truncationMode,
                 emphasis: emphasis
             ))
@@ -1424,7 +1421,7 @@ struct RubyLayout {
         insertedSpaceWidth: CGFloat,
         textColors: [RubyColoredRange],
         backgrounds: [RubyColoredRange],
-        underlines: [Range<Int>] = [],
+        underlines: [RubyUnderline] = [],
         weightedMetrics: [Font.Weight: RubyMetrics] = [:]
     ) {
         let characters = measurements.characters
@@ -1540,10 +1537,10 @@ struct RubyLayout {
             let placed = Self.place(item.range, paragraphStarts: paragraphStarts)
             paragraphs[placed.paragraph].backgrounds.append(RubyColoredRange(range: placed.range, color: item.color))
         }
-        for range in underlines {
-            let placed = Self.place(range, paragraphStarts: paragraphStarts)
-            let color = colors[RubyMeasurements.index(of: range.lowerBound, in: starts)]
-            paragraphs[placed.paragraph].underlines.append(RubyUnderlinedRange(range: placed.range, color: color))
+        for underline in underlines {
+            let placed = Self.place(underline.range, paragraphStarts: paragraphStarts)
+            let color = colors[RubyMeasurements.index(of: underline.range.lowerBound, in: starts)]
+            paragraphs[placed.paragraph].underlines.append(RubyUnderlinedRange(range: placed.range, color: color, pattern: underline.pattern))
         }
         self.paragraphs = paragraphs
     }
