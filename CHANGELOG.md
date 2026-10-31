@@ -3,7 +3,7 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
-## Unreleased
+## 1.8.0 — 2026-11-01
 
 - `rubyBlanks(_:)` shows chosen words as blanks to fill, such as the gap
   in an exercise. A blank keeps its words' place and the room their
