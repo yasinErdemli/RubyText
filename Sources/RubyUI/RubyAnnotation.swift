@@ -79,6 +79,8 @@ struct RubyParagraph {
     var kanaRomaji: [RubyAnnotation] = []
     var backgrounds: [RubyColoredRange] = []
     var underlines: [RubyUnderlinedRange] = []
+    /// Blanks to fill, drawn as empty boxes in place of their words.
+    var blanks: [Range<Int>] = []
 }
 
 /// The word a `RubyReader` is speaking, and how far along it is.

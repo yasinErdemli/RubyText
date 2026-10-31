@@ -54,14 +54,27 @@ package struct RubySpokenText: Hashable, Sendable {
     package let range: Range<Int>
     package let text: String
 
+    /// Whether a voice pauses here instead of saying anything, as at a
+    /// blank to fill.
+    package let isPause: Bool
+
     package init(range: Range<Int>, text: String) {
         self.range = range
         self.text = text
+        isPause = false
+    }
+
+    /// A pause in place of the text in `range`, which a voice doesn't say.
+    package init(pauseAt range: Range<Int>) {
+        self.range = range
+        text = ""
+        isPause = true
     }
 
     /// `text` as an SSML fragment: the words to say, with XML's special
-    /// characters escaped.
+    /// characters escaped, or a pause.
     package var ssml: String {
+        if isPause { return #"<break strength="medium"/>"# }
         var escaped = ""
         for character in text {
             switch character {

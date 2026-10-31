@@ -312,6 +312,22 @@ RubyText(segments: [
 .onRubyWordTap { word in open(word.wordID) }
 ```
 
+A word to fill in, such as the particle an exercise asks for, can be shown
+as a blank. Give the blank the words that fill it: they keep their place,
+and the room their readings and romaji take, so nothing moves when they
+show, but only an empty box in the tint color is drawn. VoiceOver pauses
+there, and a tap on it does nothing:
+
+```swift
+RubyText(segments: [
+    RubySegment("テレビ", wordID: "terebi"),
+    RubySegment("を", word: .init(attachesToPrevious: true), wordID: "gap"),
+    RubySegment("見", reading: "み", word: .init(attachesToPrevious: false), wordID: "mita"),
+    RubySegment("ました", wordID: "mita"),
+])
+.rubyBlanks(answered ? nil : .wordIDs(["gap"]))
+```
+
 To have a language model read words like 辛い (からい or つらい) from
 context, add `.rubyModelReadings()`. Apple's on-device model answers by
 default; pass any FoundationModels `LanguageModel` to use another:

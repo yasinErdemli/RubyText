@@ -105,6 +105,7 @@ public struct RubyText: View {
     @Environment(\.rubyWordColoring) private var wordColoring
     @Environment(\.rubyWordWeights) private var wordWeights
     @Environment(\.rubyWordUnderlines) private var wordUnderlines
+    @Environment(\.rubyBlanks) private var blanks
     @Environment(\.rubyDictionary) private var dictionary
     @Environment(\.rubyModelReadings) private var modelUpdates
     @Environment(\.rubyModelOptions) private var modelOptions
@@ -184,7 +185,8 @@ public struct RubyText: View {
             dictionaryContent
         }
         let content = rewritten(analyzed)
-        let speech = content.speech(spokenReadings)
+        let blankRanges = blanks?.ranges(in: content) ?? []
+        let speech = Self.speech(content.speech(spokenReadings), pausingAt: blankRanges)
         let placement = RubyPlacement(style: style, furiganaPosition: furiganaPosition, transcription: transcription)
         let kanaRomajiVisibility = placement.kanaRomaji ? kanaRomajiVisibility(in: content, showsFurigana: placement.furigana) : .zero
         RubyTextContent(
@@ -205,9 +207,10 @@ public struct RubyText: View {
             backgroundColors: RubyTextContent.coloredRanges(wordColoring.background, in: content),
             textWeights: RubyTextContent.weightedRanges(wordWeights, in: content),
             underlines: wordUnderlines?.underlines(in: content) ?? [],
+            blanks: blankRanges,
             speech: speech,
             accessibilityWords: showsWordDetails || wordTapAction != nil
-                ? RubyTextContent.accessibilityWords(in: content, speech: speech)
+                ? RubyTextContent.accessibilityWords(in: content, speech: speech, blanks: blankRanges)
                 : [],
             // Word details describe the word as written.
             selectedRange: selectedWord.map { content.range(fromOriginal: $0.range) },
@@ -570,6 +573,8 @@ private struct RubyTextContent: View {
     @AnimatableIgnored let textWeights: [RubyWeightedRange]
     /// The words with a line under them, and how it's drawn.
     @AnimatableIgnored let underlines: [RubyUnderline]
+    /// The blanks to fill, in UTF-16 offsets of the text.
+    @AnimatableIgnored let blanks: [Range<Int>]
     /// What VoiceOver says in place of parts of the text.
     @AnimatableIgnored let speech: [RubySpokenText]
     /// The words VoiceOver users can choose, if words can be tapped.
@@ -633,7 +638,7 @@ private struct RubyTextContent: View {
         )
 
         if above == 0 && below == 0 && reader == nil && textColors.isEmpty && backgroundColors.isEmpty
-            && textWeights.isEmpty && underlines.isEmpty && wordGaps.isZero && content.spaces.isEmpty && !isTappable {
+            && textWeights.isEmpty && underlines.isEmpty && blanks.isEmpty && wordGaps.isZero && content.spaces.isEmpty && !isTappable {
             Text(Self.plainText(content, lineBreaking: lineBreaking, characterBreaking: characterBreaking).speaking(speech))
                 .font(metrics.textFont)
                 .contentTransition(.numericText())
@@ -663,6 +668,7 @@ private struct RubyTextContent: View {
                 textColors: textColors,
                 backgrounds: backgrounds(),
                 underlines: underlines,
+                blanks: blanks,
                 weightedMetrics: Dictionary(uniqueKeysWithValues: Set(textWeights.map(\.weight)).map { ($0, metrics.weighted($0)) })
             )
 
@@ -739,7 +745,9 @@ private struct RubyTextContent: View {
     // MARK: Word taps
 
     private func tapWord(at point: CGPoint, in geometry: RubyTextGeometry, layout: RubyLayout, metrics: RubyMetrics) {
+        // A blank's words are what fills it, so a tap there shows nothing.
         guard let offset = characterOffset(at: point, in: geometry, layout: layout, metrics: metrics),
+              !blanks.contains(where: { $0.contains(offset) }),
               let index = content.dictionaryWords.firstIndex(where: { $0.contains(offset) })
         else {
             selectedWord.wrappedValue = nil
@@ -765,12 +773,13 @@ private struct RubyTextContent: View {
         }
     }
 
-    /// Each dictionary word in `content` with letters in it, named as
-    /// VoiceOver says it in the text with `speech`, for word actions.
-    fileprivate static func accessibilityWords(in content: RubyContent, speech: [RubySpokenText]) -> [RubyAccessibilityWord] {
+    /// Each dictionary word in `content` with letters in it, outside the
+    /// blanks, named as VoiceOver says it in the text with `speech`, for
+    /// word actions.
+    fileprivate static func accessibilityWords(in content: RubyContent, speech: [RubySpokenText], blanks: [Range<Int>] = []) -> [RubyAccessibilityWord] {
         content.dictionaryWords.enumerated().compactMap { index, range in
             let text = RubyReadingUnits.substring(of: content.string, utf16Range: range)
-            guard text.contains(where: \.isLetter) else { return nil }
+            guard text.contains(where: \.isLetter), !blanks.contains(where: { $0.overlaps(range) }) else { return nil }
             // What VoiceOver says for the parts of the word it says differently.
             let spoken = speech.filter { range.contains($0.range.lowerBound) }.map {
                 RubySpokenText(range: ($0.range.lowerBound - range.lowerBound)..<(min($0.range.upperBound, range.upperBound) - range.lowerBound), text: $0.text)
@@ -1423,6 +1432,7 @@ struct RubyLayout {
         textColors: [RubyColoredRange],
         backgrounds: [RubyColoredRange],
         underlines: [RubyUnderline] = [],
+        blanks: [Range<Int>] = [],
         weightedMetrics: [Font.Weight: RubyMetrics] = [:]
     ) {
         let characters = measurements.characters
@@ -1542,6 +1552,10 @@ struct RubyLayout {
             let placed = Self.place(underline.range, paragraphStarts: paragraphStarts)
             let color = colors[RubyMeasurements.index(of: underline.range.lowerBound, in: starts)]
             paragraphs[placed.paragraph].underlines.append(RubyUnderlinedRange(range: placed.range, color: color, pattern: underline.pattern))
+        }
+        for blank in blanks {
+            let placed = Self.place(blank, paragraphStarts: paragraphStarts)
+            paragraphs[placed.paragraph].blanks.append(placed.range)
         }
         self.paragraphs = paragraphs
     }

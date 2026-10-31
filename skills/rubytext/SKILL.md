@@ -176,6 +176,7 @@ and changes animate.
 | `rubyWordColors(_:in:)` | `.partOfSpeech`, `.alternating`, `.words([…])`, `.wordIDs([…])`, `.jlpt`, `.jlpt(above: .n4)`, `.readingSources`; `in: .text` or `.background` | none |
 | `rubyWordWeights(_:)` | `.words([…])`, `.wordIDs([…])`: bold by default, or any `Font.Weight` | none |
 | `rubyWordUnderlines(_:)` | `.words([…])`, `.wordIDs([…])`, each with `pattern: .dotted`, `.dashed` or `.solid`, or a dictionary giving each word its own pattern: a line under each word, in its color or the secondary style | none |
+| `rubyBlanks(_:)` | `.wordIDs([…])`: those words shown as blanks to fill, an empty box in the tint color the height of the line, keeping their place and their annotations' room; VoiceOver pauses there, and taps and word actions skip them | none |
 | `rubyWordDetails(_:)` | popover with reading, dictionary form, part of speech, JLPT level, definitions | off |
 | `onRubyWordTap(perform:)` | your own action with a `RubyWordInfo`, and optionally the word's bounds to anchor a popover | none |
 | `rubyDictionary(_:)` | `RubyDictionary` for definitions | none |

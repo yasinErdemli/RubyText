@@ -3,6 +3,16 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
+## Unreleased
+
+- `rubyBlanks(_:)` shows chosen words as blanks to fill, such as the gap
+  in an exercise. A blank keeps its words' place and the room their
+  readings and romaji take, so nothing moves when they show, and is drawn
+  as an empty rounded box, the height of the line, tinted and outlined in
+  the tint color. Its words and annotations aren't drawn, a reader never
+  marks it, a tap on it does nothing, it isn't among VoiceOver's word
+  actions, and VoiceOver pauses there instead of reading it.
+
 ## 1.7.0 — 2026-10-28
 
 - Words can have lines of their own kinds: `.wordIDs(_:)` and

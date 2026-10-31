@@ -92,6 +92,9 @@ struct RubyRenderer: TextRenderer {
             if !data.backgrounds.isEmpty {
                 drawBackgrounds(data.backgrounds, on: line, paragraphStart: start, tracked: data.tracked, lineBounds: lineBounds, in: context)
             }
+            if !data.blanks.isEmpty {
+                drawBlanks(data.blanks, on: line, paragraphStart: start, tracked: data.tracked, lineBounds: lineBounds, in: context)
+            }
             if !data.underlines.isEmpty {
                 drawUnderlines(data.underlines, on: line, paragraphStart: start, tracked: data.tracked, lineBounds: lineBounds, in: context)
             }
@@ -109,7 +112,10 @@ struct RubyRenderer: TextRenderer {
                     context.draw(run)
                     continue
                 }
-                func isSpoken(_ index: Int) -> Bool { spokenRange?.contains(offsets[index]) ?? false }
+                // A blank's words keep their place but aren't drawn, and a
+                // reader doesn't mark them.
+                func isBlank(_ index: Int) -> Bool { data.blanks.contains { $0.contains(offsets[index]) } }
+                func isSpoken(_ index: Int) -> Bool { !isBlank(index) && (spokenRange?.contains(offsets[index]) ?? false) }
 
                 // Draw glyphs in slices that share the same spacing, each
                 // shifted right within the space before it. Slices of the
@@ -118,15 +124,19 @@ struct RubyRenderer: TextRenderer {
                 while lower < run.count {
                     let tracked = Self.item(at: offsets[lower], in: data.tracked, range: \.range)
                     let spoken = isSpoken(lower)
+                    let blank = isBlank(lower)
                     var upper = lower + 1
                     while upper < run.count,
                           isSpoken(upper) == spoken,
+                          isBlank(upper) == blank,
                           Self.item(at: offsets[upper], in: data.tracked, range: \.range)?.range == tracked?.range {
                         upper += 1
                     }
                     let slice = run[lower..<upper]
                     let shift = tracked?.shift ?? 0
-                    if spoken {
+                    if blank {
+                        // Left out: the box stands in for it.
+                    } else if spoken {
                         emphasizedSlices.append((slice, shift))
                     } else {
                         Self.draw(slice, shift: shift, in: context)
@@ -137,6 +147,7 @@ struct RubyRenderer: TextRenderer {
                 // Collect the boxes that annotations and emphasis sit around.
                 for index in 0..<run.count {
                     if let ellipsis, ellipsis.line == lineNumber, ellipsis.glyph == glyphsBefore + index { continue }
+                    if isBlank(index) { continue }
                     let reading = Self.item(at: offsets[index], in: data.furigana, range: \.range)
                     let romaji = Self.item(at: offsets[index], in: data.romaji, range: \.range)
                     let kanaRomaji = Self.item(at: offsets[index], in: data.kanaRomaji, range: \.range)
@@ -277,6 +288,46 @@ struct RubyRenderer: TextRenderer {
                 RoundedRectangle(cornerRadius: metrics.reservedHeight * 0.3).path(in: rect),
                 with: .color(box.color.opacity(0.25))
             )
+        }
+    }
+
+    // MARK: Blanks
+
+    /// Draws each blank on `line` as an empty rounded box where its words
+    /// are, as tall as the line's text, tinted and outlined in the tint
+    /// color. Drawn before the glyphs, like backgrounds.
+    private func drawBlanks(
+        _ blanks: [Range<Int>],
+        on line: Text.Layout.Line,
+        paragraphStart start: Text.Layout.CharacterIndex,
+        tracked: [RubyTrackedRange],
+        lineBounds: CGRect,
+        in context: GraphicsContext
+    ) {
+        var boxes: [(range: Range<Int>, rect: CGRect)] = []
+        for run in line {
+            let offsets = run.characterIndices.map { start.distance(to: $0) }
+            guard offsets.count == run.count else { continue }
+            for index in 0..<run.count {
+                guard let blank = blanks.first(where: { $0.contains(offsets[index]) }) else { continue }
+                let glyph = Self.glyphBox(in: run, at: index, offset: offsets[index], tracked: tracked)
+                if let last = boxes.indices.last, boxes[last].range == blank {
+                    boxes[last].rect = boxes[last].rect.union(glyph)
+                } else {
+                    boxes.append((blank, glyph))
+                }
+            }
+        }
+
+        let border = metrics.underlineThickness * 0.75
+        for box in boxes {
+            // Inset by its border, so it sits within its words' place,
+            // beside the word before it rather than over it.
+            let rect = CGRect(x: box.rect.minX, y: lineBounds.minY, width: box.rect.width, height: lineBounds.height)
+                .insetBy(dx: border, dy: border)
+            let shape = RoundedRectangle(cornerRadius: rect.height * 0.22).path(in: rect)
+            context.fill(shape, with: .style(.tint.opacity(0.14)))
+            context.stroke(shape, with: .style(.tint.opacity(0.6)), lineWidth: border)
         }
     }
 
