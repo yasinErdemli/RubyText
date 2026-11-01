@@ -3,7 +3,7 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
-## Unreleased
+## 1.9.0 — 2026-11-02
 
 - `RubyKana.fromRomaji(_:isFinished:asKatakana:)` turns romaji into kana
   as a Japanese input method does while it's typed: nn and n' for ん,
