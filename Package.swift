@@ -17,8 +17,8 @@ let package = Package(
     defaultLocalization: "en",
     platforms: [.iOS("27.0"), .macOS("27.0"), .visionOS("27.0")],
     products: [
-        /// Kana to romaji, hiragana to katakana and back, with no
-        /// dictionary and only the standard library.
+        /// Kana to romaji, romaji typed to kana, hiragana to katakana and
+        /// back, with no dictionary and only the standard library.
         .library(name: "RubyTransliteration", targets: ["RubyTransliteration"]),
         /// Readings as plain data: analysis, markup, dictionary lookups,
         /// with whichever analyzer you give it.

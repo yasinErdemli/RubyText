@@ -37,7 +37,7 @@ optionally a dictionary for definitions.
 | `RubyUI` | `RubyText`, `RubyReader` and the modifiers. Importing it also imports `RubyCore` and `RubyTransliteration`. |
 | `RubyMeCab` | `RubyMeCabAnalyzer`: MeCab with an IPAdic or UniDic dictionary. The analyzer to use unless there's a reason not to. |
 | `RubyCore` | Readings as data, without SwiftUI: `RubyConverter`, `RubyString`, `RubyDictionary`, the `RubyAnalyzer` protocol. |
-| `RubyTransliteration` | Kana to romaji, and hiragana to katakana, with no dictionary. |
+| `RubyTransliteration` | Kana to romaji, romaji typed to kana, and hiragana to katakana, with no dictionary. |
 
 `RubyMeCab` needs the `MeCab` package trait, which is on by default. If the
 app won't use it (it only shows readings it already has, or uses another
@@ -256,7 +256,10 @@ converter.annotate("東京へ行きたい。", with: .hiragana)     // 東京（
 ```
 
 Kana alone needs no analyzer: `RubyKana.hiragana("トウキョウ")` is とうきょう, and
-`RubyRomanization.hepburn.transliterate("とうきょう")` is tōkyō.
+`RubyRomanization.hepburn.transliterate("とうきょう")` is tōkyō. For a text field
+that takes romaji, `RubyKana.fromRomaji("konnichiha")` is こんにちは, by an input
+method's rules; pass `isFinished: false` while typing goes on, so a last n
+waits.
 
 Words whose reading depends on meaning, such as 辛い (からい for spicy,
 つらい for hard), are read by a language model with `.rubyModelReadings()`:

@@ -62,7 +62,7 @@ It has four products; take the ones you need:
 | `RubyUI` | `RubyText` and the views around it | `RubyCore` |
 | `RubyCore` | Readings as data: markup, rules, conversion, dictionary lookups, with the analyzer you choose | `RubyTransliteration` |
 | `RubyMeCab` | An analyzer: MeCab with a dictionary in IPAdic's or UniDic's format | `RubyCore`, [Mecab-Swift](https://github.com/shinjukunian/Mecab-Swift), the `MeCab` trait |
-| `RubyTransliteration` | Kana to romaji, hiragana and katakana | Only the standard library |
+| `RubyTransliteration` | Kana to romaji, romaji typed to kana, hiragana and katakana | Only the standard library |
 
 **MeCab is a package trait, on by default.** Mecab-Swift comes with its
 dictionaries, about 400 MB in every build folder, and Swift Package Manager

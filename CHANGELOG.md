@@ -3,6 +3,18 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
+## Unreleased
+
+- `RubyKana.fromRomaji(_:isFinished:asKatakana:)` turns romaji into kana
+  as a Japanese input method does while it's typed: nn and n' for ん,
+  with nn before a vowel splitting as in konnichiha; doubled consonants
+  and tch for っ; Hepburn and Nihon-shiki spellings; x and l for small
+  kana; - for ー and Japanese punctuation. Capitals, or `asKatakana`,
+  give katakana. Kana and anything else are left as they are, so text
+  being typed can be passed back in, and while typing goes on a lone
+  consonant or a last n waits as romaji. Foundation's `latinToHiragana`
+  gets konnichiha, a last n and nn wrong for typing.
+
 ## 1.8.0 — 2026-11-01
 
 - `rubyBlanks(_:)` shows chosen words as blanks to fill, such as the gap

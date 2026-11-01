@@ -13,6 +13,7 @@ RubyRomanization.kunrei.transliterate("しんぶん")                           
 RubyRomanization.polivanov.transliterate("さむらい")                             // самурай
 RubyRomanization.hangul.transliterate("さっぽろ")                                // 삿포로
 RubyKana.katakana("ひらがな")                                                    // ヒラガナ
+RubyKana.fromRomaji("konnichiha")                                               // こんにちは
 "漢字".allSatisfy(\.isKanji)                                                   // true
 ```
 
