@@ -21,6 +21,10 @@ struct RubyRenderer: TextRenderer {
     /// Where text cut short by `lineLimit(_:)` shows its ellipsis.
     let truncationMode: Text.TruncationMode
     var emphasis: RubyEmphasisState?
+    /// How much of the space after a line's last character the text's
+    /// alignment leaves out when it places the line: none for leading, half
+    /// for centered, all of it for trailing.
+    var alignmentShare: CGFloat = 0
 
     /// How much of the reserved height annotations take above and below
     /// each line.
@@ -63,7 +67,14 @@ struct RubyRenderer: TextRenderer {
         // each line's last glyph, since the bounds may extend past it. A
         // paragraph's last line also keeps the space after its last glyph,
         // which widens the text, so a reading there can stay centered.
-        let lineRects = layout.map(\.typographicBounds.rect)
+        let paragraphLines = layout.rubyParagraphLines
+        var lineOffsets: [Int: CGFloat] = [:]
+        for (lineNumber, line, paragraph, start) in paragraphLines where paragraphs.indices.contains(paragraph) {
+            lineOffsets[lineNumber] = alignmentOffset(of: line, start: start, tracked: paragraphs[paragraph].tracked)
+        }
+        let lineRects = layout.enumerated().map { lineNumber, line in
+            line.typographicBounds.rect.offsetBy(dx: lineOffsets[lineNumber] ?? 0, dy: 0)
+        }
         let leadingEdge = lineRects.map(\.minX).min() ?? 0
         var trailingEdge = leadingEdge
         // Text cut short draws an ellipsis in place of a character it
@@ -71,32 +82,36 @@ struct RubyRenderer: TextRenderer {
         // their share of their readings.
         let ellipsis = layout.isTruncated ? Self.ellipsis(in: layout, mode: truncationMode) : nil
 
-        let paragraphLines = layout.rubyParagraphLines
         for (position, (lineNumber, line, paragraph, start)) in paragraphLines.enumerated() {
             guard paragraphs.indices.contains(paragraph) else {
                 for run in line { context.draw(run) }
                 continue
             }
             let data = paragraphs[paragraph]
+            // The line drawn where its alignment puts it, with the space
+            // after its last character.
+            let offset = lineOffsets[lineNumber] ?? 0
+            var lineContext = context
+            lineContext.translateBy(x: offset, y: 0)
             if let run = line.last, run.count > 0, let index = run.characterIndices.last {
                 let endsParagraph = position == paragraphLines.count - 1 || paragraphLines[position + 1].paragraph != paragraph
                 let box = endsParagraph
                     ? run[(run.count - 1)..<run.count].typographicBounds.rect
                     : Self.glyphBox(in: run, at: run.count - 1, offset: start.distance(to: index), tracked: data.tracked)
-                trailingEdge = max(trailingEdge, box.maxX)
+                trailingEdge = max(trailingEdge, box.maxX + offset)
             }
             // Annotations take their vertical position from the line, not
             // from individual glyphs, whose bounds vary (tracked runs, font
             // fallback), so everything on a line shares one baseline.
             let lineBounds = line.typographicBounds.rect
             if !data.backgrounds.isEmpty {
-                drawBackgrounds(data.backgrounds, on: line, paragraphStart: start, tracked: data.tracked, lineBounds: lineBounds, in: context)
+                drawBackgrounds(data.backgrounds, on: line, paragraphStart: start, tracked: data.tracked, lineBounds: lineBounds, in: lineContext)
             }
             if !data.blanks.isEmpty {
-                drawBlanks(data.blanks, on: line, paragraphStart: start, tracked: data.tracked, lineBounds: lineBounds, in: context)
+                drawBlanks(data.blanks, on: line, paragraphStart: start, tracked: data.tracked, lineBounds: lineBounds, in: lineContext)
             }
             if !data.underlines.isEmpty {
-                drawUnderlines(data.underlines, on: line, paragraphStart: start, tracked: data.tracked, lineBounds: lineBounds, in: context)
+                drawUnderlines(data.underlines, on: line, paragraphStart: start, tracked: data.tracked, lineBounds: lineBounds, in: lineContext)
             }
 
             let spokenRange = emphasis.flatMap { $0.paragraph == paragraph ? $0.range : nil }
@@ -139,7 +154,7 @@ struct RubyRenderer: TextRenderer {
                     } else if spoken {
                         emphasizedSlices.append((slice, shift))
                     } else {
-                        Self.draw(slice, shift: shift, in: context)
+                        Self.draw(slice, shift: shift, in: lineContext)
                     }
                     lower = upper
                 }
@@ -157,21 +172,24 @@ struct RubyRenderer: TextRenderer {
                     let glyph = Self.glyphBox(in: run, at: index, offset: offsets[index], tracked: data.tracked)
                     let rect = CGRect(x: glyph.minX, y: lineBounds.minY, width: glyph.width, height: lineBounds.height)
                     if spoken { wordRect = wordRect.union(rect) }
+                    // Annotations are drawn after every line, in the text's
+                    // coordinates, so they take the line's offset now.
+                    let placed = rect.offsetBy(dx: offset, dy: 0)
                     if let reading {
-                        Self.add(reading, rect: rect, offset: offsets[index], paragraph: paragraph, line: lineNumber, to: &furiganaFragments)
+                        Self.add(reading, rect: placed, offset: offsets[index], paragraph: paragraph, line: lineNumber, to: &furiganaFragments)
                     }
                     if let romaji {
-                        Self.add(romaji, rect: rect, offset: offsets[index], paragraph: paragraph, line: lineNumber, to: &romajiFragments)
+                        Self.add(romaji, rect: placed, offset: offsets[index], paragraph: paragraph, line: lineNumber, to: &romajiFragments)
                     }
                     if let kanaRomaji {
-                        Self.add(kanaRomaji, rect: rect, offset: offsets[index], paragraph: paragraph, line: lineNumber, to: &kanaRomajiFragments)
+                        Self.add(kanaRomaji, rect: placed, offset: offsets[index], paragraph: paragraph, line: lineNumber, to: &kanaRomajiFragments)
                     }
                 }
             }
 
             if let emphasis, !emphasizedSlices.isEmpty {
-                drawSpokenWord(emphasizedSlices, in: wordRect, emphasis: emphasis, context: context)
-                emphasizedLines[lineNumber] = wordRect
+                drawSpokenWord(emphasizedSlices, in: wordRect, emphasis: emphasis, context: lineContext)
+                emphasizedLines[lineNumber] = wordRect.offsetBy(dx: offset, dy: 0)
             }
         }
 
@@ -491,6 +509,23 @@ struct RubyRenderer: TextRenderer {
             box.size.width = max(box.width - spacing.tracking, 0)
         }
         return box
+    }
+
+    /// How far to move a line so it sits where its alignment means it to.
+    /// Text aligns a line as if the space after its last character weren't
+    /// there, but that space is room an annotation needs, like a word on its
+    /// own under a wider reading (私 under わたし), whose glyphs are moved
+    /// right into it. Centered, the line would sit right of the middle by
+    /// half of that space.
+    private func alignmentOffset(
+        of line: Text.Layout.Line,
+        start: Text.Layout.CharacterIndex,
+        tracked: [RubyTrackedRange]
+    ) -> CGFloat {
+        guard alignmentShare > 0, let run = line.last, let index = run.characterIndices.last,
+              let spacing = Self.item(at: start.distance(to: index), in: tracked, range: \.range)
+        else { return 0 }
+        return -spacing.tracking * alignmentShare
     }
 
     private static func draw(_ slice: Text.Layout.RunSlice, shift: CGFloat, in context: GraphicsContext) {

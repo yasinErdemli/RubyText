@@ -584,6 +584,8 @@ private struct RubyTextContent: View {
     @AnimatableIgnored @Environment(\.rubyEmphasis) private var emphasisOptions
     @AnimatableIgnored @Environment(\.rubyLineBreaking) private var lineBreaking
     @AnimatableIgnored @Environment(\.truncationMode) private var truncationMode
+    @AnimatableIgnored @Environment(\.multilineTextAlignment) private var alignment
+    @AnimatableIgnored @Environment(\.layoutDirection) private var layoutDirection
     @AnimatableIgnored @Environment(\.rubySpacing) private var spacing
     @AnimatableIgnored @Environment(\.rubyShowsWordDetails) private var showsWordDetails
     @AnimatableIgnored @Environment(\.rubyWordTapAction) private var wordTapAction
@@ -618,6 +620,19 @@ private struct RubyTextContent: View {
     /// The space below each line: for underlines, then for annotations.
     private func belowHeight(_ metrics: RubyMetrics) -> CGFloat {
         underlineSpace(metrics) + metrics.reservedHeight * below
+    }
+
+    /// How much of the space after a line's last character its alignment
+    /// leaves out, for the renderer to put back: Japanese runs left to
+    /// right, so the far edge is the right one, which is the leading edge
+    /// in a right-to-left layout.
+    private var alignmentShare: CGFloat {
+        let rightToLeft = layoutDirection == .rightToLeft
+        switch alignment {
+        case .leading: return rightToLeft ? 1 : 0
+        case .center: return 0.5
+        case .trailing: return rightToLeft ? 0 : 1
+        }
     }
 
     /// The space below each line for underlines, if there are any.
@@ -712,7 +727,8 @@ private struct RubyTextContent: View {
                 kanaRomaji: kanaRomaji,
                 underlineSpace: underlineSpace(metrics),
                 truncationMode: truncationMode,
-                emphasis: emphasis
+                emphasis: emphasis,
+                alignmentShare: alignmentShare
             ))
             // Over a material, such as a popover's glass, foreground styles
             // turn vibrant, and text the renderer draws in them, such as

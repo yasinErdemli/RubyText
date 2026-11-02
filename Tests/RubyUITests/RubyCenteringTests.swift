@@ -54,6 +54,32 @@ import Testing
         #expect(romaji.upperBound <= view.upperBound + 1, "romaji \(romaji), view \(view)")
     }
 
+    /// A word on its own in centered text, as on a question's card, used
+    /// to sit right of the middle: the text centered it as if the space
+    /// after it weren't there, and its glyphs moved right into that space
+    /// too. Trailing text, at its own width, did the same with all of it.
+    /// Offered more width, trailing text is laid out without that space,
+    /// so it isn't checked there.
+    @Test(arguments: [(TextAlignment.center, false), (.leading, false), (.center, true), (.trailing, true)], [false, true])
+    func aWordOnItsOwnSitsInTheMiddleOfAlignedText(_ alignment: (TextAlignment, fixedSize: Bool), romaji: Bool) throws {
+        let text = RubyText(segments: [RubySegment("私", reading: "わたし")])
+            .rubyStyle(romaji ? [.furigana, .kanaRomaji] : .furigana)
+            .font(.system(size: 48))
+        let view = VStack {
+            if alignment.fixedSize { text.fixedSize() } else { text }
+        }
+        .frame(width: 300)
+        .multilineTextAlignment(alignment.0)
+        let renderer = ImageRenderer(content: view)
+        let image = try #require(renderer.cgImage)
+        let bands = try Self.inkColumns(in: image)
+        try #require(bands.count == (romaji ? 3 : 2))
+        let middle = Double(image.width - 1) / 2
+        for band in bands {
+            #expect(abs(band.mid - middle) <= 2, "\(band) in \(image.width)")
+        }
+    }
+
     /// The columns with ink in each band of rows, top to bottom: the
     /// reading, the base, and any romaji, which empty rows separate.
     private static func inkColumns(in image: CGImage) throws -> [ClosedRange<Int>] {

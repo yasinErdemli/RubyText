@@ -3,6 +3,18 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
+## Unreleased
+
+- A word on its own in centered text, such as 私 under わたし on a
+  question's card, sits in the middle. Text centers a line as if the
+  space after its last character weren't there, and the word's glyphs
+  moved right into that space as well, so it sat right of the middle by
+  half of the room its reading or romaji took (about 10 to 17 points at
+  48). Each line now goes back by the share its alignment left out,
+  centered or trailing, with its annotations, highlights and blanks.
+  Trailing text offered more width than it needs still leaves that
+  room out of its frame, so a word there can sit off its place.
+
 ## 1.9.0 — 2026-11-02
 
 - `RubyKana.fromRomaji(_:isFinished:asKatakana:)` turns romaji into kana
