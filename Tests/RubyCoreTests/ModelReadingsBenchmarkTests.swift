@@ -283,9 +283,16 @@ let homographCases = [
     h("一万円札で払った。", "札", "さつ"),
 ]
 
-/// The benchmark with Foundation Models as a tie-breaker. Runs only where
-/// Apple Intelligence is available, such as a Mac with it turned on.
-@Suite(.enabled(if: SystemLanguageModel.default.isAvailable, "Apple Intelligence isn't available"))
+/// The benchmark with Foundation Models as a tie-breaker. Asks the model
+/// about some 500 sentences, which takes minutes, so it runs only when
+/// asked, where Apple Intelligence is available, such as a Mac with it
+/// turned on:
+///
+///     RUBY_MODEL_BENCHMARK=1 swift test --filter ModelReadingsBenchmarkTests
+@Suite(.enabled(
+    if: ProcessInfo.processInfo.environment["RUBY_MODEL_BENCHMARK"] != nil && SystemLanguageModel.default.isAvailable,
+    "Set RUBY_MODEL_BENCHMARK where Apple Intelligence is available"
+))
 struct ModelReadingsBenchmarkTests {
     /// Fails for any reading the dictionary got right and the model
     /// changed, and prints the scores with and without the model.
