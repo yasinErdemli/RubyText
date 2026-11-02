@@ -3,7 +3,7 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
-## Unreleased
+## 1.9.1 — 2026-11-02
 
 - A word on its own in centered text, such as 私 under わたし on a
   question's card, sits in the middle. Text centers a line as if the
