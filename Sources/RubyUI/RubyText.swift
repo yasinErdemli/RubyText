@@ -529,6 +529,7 @@ extension View {
     ///   - updates: Whether readings change all together or each as soon
     ///     as it's answered.
     ///   - model: The model that answers.
+    @available(iOS 27, macOS 27, visionOS 27, *)
     public func rubyModelReadings(
         _ isEnabled: Bool = true,
         updates: RubyModelReadingUpdates = .allAtOnce,
@@ -1115,7 +1116,10 @@ extension AttributedString {
             let upper = utf16.index(lower, offsetBy: item.range.count)
             text.append(self[index..<lower])
             var spoken = AttributedString(self[lower..<upper])
-            spoken.accessibilitySpeechSSML = item.ssml
+            // Before iOS 27, VoiceOver reads the words as the system would.
+            if #available(iOS 27, macOS 27, visionOS 27, *) {
+                spoken.accessibilitySpeechSSML = item.ssml
+            }
             text.append(spoken)
             index = upper
             offset = item.range.upperBound

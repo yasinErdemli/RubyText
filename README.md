@@ -44,7 +44,10 @@ install [RubyText's skill](#with-an-ai-coding-agent) so it knows the API.
 
 ## Requirements
 
-iOS 27, macOS 27 or visionOS 27, and Swift 6.2.
+iOS 26, macOS 27 or visionOS 26, and Swift 6.2. Readings by meaning
+(`rubyModelReadings()`) need iOS 27 or visionOS 27, where language models
+are; before them RubyText keeps the dictionary's readings, and VoiceOver
+reads words as the system would rather than as RubyText's readings.
 
 ## Installation
 

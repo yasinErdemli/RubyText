@@ -3,6 +3,17 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
+## Unreleased
+
+- RubyText runs on iOS 26 and visionOS 26 as well as 27. Readings by
+  meaning need a FoundationModels `LanguageModel`, which is new in 27, so
+  `rubyModelReadings(_:updates:model:)`, `RubyModelReadings.prewarm(_:)`
+  and `RubyModelOptions(model:)` and `model` are marked iOS 27 and
+  visionOS 27. Before 27 the dictionary's readings stay, as when Apple
+  Intelligence is off. VoiceOver reads words as the system would there,
+  without RubyText's SSML, and reading aloud uses iOS 26's audio session
+  and engine calls and its interruption notification.
+
 ## 1.9.1 — 2026-11-02
 
 - A word on its own in centered text, such as 私 under わたし on a

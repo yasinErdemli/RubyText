@@ -91,6 +91,8 @@ public final class RubyReader {
     @ObservationIgnored private var pausedByInterruption = false
     /// Interruption observations; they end when the tokens are released.
     @ObservationIgnored private var interruptionObservers: [NotificationCenter.ObservationToken] = []
+    /// Interruptions before iOS 27, which has no interruption messages.
+    @ObservationIgnored private var interruptionObserver: Task<Void, Never>?
     @ObservationIgnored private var routeChangeObserver: Task<Void, Never>?
 
     /// Creates a reader that takes its analyzer from the `RubyText` views
@@ -109,15 +111,24 @@ public final class RubyReader {
         self.analyzer = analyzer
         // macOS has no audio session, so nothing interrupts reading there.
         #if os(iOS) || os(visionOS)
-        interruptionObservers = [
-            NotificationCenter.default.addObserver(for: AVAudioSession.DidBecomeInactiveMessage.self) { [weak self] message in
-                guard case .systemInterruption = message.deactivationResult else { return }
-                self?.interruptionBegan()
-            },
-            NotificationCenter.default.addObserver(for: AVAudioSession.ResumptionRecommendationMessage.self) { [weak self] message in
-                self?.interruptionEnded(shouldResume: message.recommendation == .shouldResume)
-            },
-        ]
+        if #available(iOS 27, visionOS 27, *) {
+            interruptionObservers = [
+                NotificationCenter.default.addObserver(for: AVAudioSession.DidBecomeInactiveMessage.self) { [weak self] message in
+                    guard case .systemInterruption = message.deactivationResult else { return }
+                    self?.interruptionBegan()
+                },
+                NotificationCenter.default.addObserver(for: AVAudioSession.ResumptionRecommendationMessage.self) { [weak self] message in
+                    self?.interruptionEnded(shouldResume: message.recommendation == .shouldResume)
+                },
+            ]
+        } else {
+            interruptionObserver = Task { [weak self] in
+                for await notification in NotificationCenter.default.notifications(named: AVAudioSession.interruptionNotification) {
+                    guard let self else { return }
+                    handleInterruption(notification)
+                }
+            }
+        }
         routeChangeObserver = Task { [weak self] in
             for await notification in NotificationCenter.default.notifications(named: AVAudioSession.routeChangeNotification) {
                 guard let self else { return }
@@ -128,6 +139,7 @@ public final class RubyReader {
     }
 
     isolated deinit {
+        interruptionObserver?.cancel()
         routeChangeObserver?.cancel()
     }
 
@@ -348,6 +360,23 @@ public final class RubyReader {
     }
 
     #if os(iOS) || os(visionOS)
+    /// An interruption beginning or ending, from the notification iOS 26
+    /// sends for both.
+    private func handleInterruption(_ notification: Notification) {
+        guard let rawType = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: rawType)
+        else { return }
+        switch type {
+        case .began:
+            interruptionBegan()
+        case .ended:
+            let rawOptions = notification.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
+            interruptionEnded(shouldResume: AVAudioSession.InterruptionOptions(rawValue: rawOptions).contains(.shouldResume))
+        @unknown default:
+            break
+        }
+    }
+
     /// Pauses when headphones or another output disconnects, rather than
     /// continuing out loud on the speaker.
     private func handleRouteChange(_ notification: Notification) {
@@ -502,9 +531,13 @@ nonisolated final class RubySpeechPlayback: @unchecked Sendable {
                 // The audio session is already active; see `RubyAudioSession`.
                 storage.format = buffer.format
                 do {
-                    try engine.connectNode(player, to: engine.mainMixerNode, format: buffer.format)
+                    if #available(iOS 27, macOS 27, visionOS 27, *) {
+                        try engine.connectNode(player, to: engine.mainMixerNode, format: buffer.format)
+                    } else {
+                        engine.connect(player, to: engine.mainMixerNode, format: buffer.format)
+                    }
                     try engine.start()
-                    try player.playAudio()
+                    try play()
                 } catch {
                     storage.isStopped = true
                     onFinish?()
@@ -556,7 +589,7 @@ nonisolated final class RubySpeechPlayback: @unchecked Sendable {
             guard storage.format != nil, !storage.isStopped else { return }
             // An interruption stops the engine; start it again first.
             if !engine.isRunning { try? engine.start() }
-            try? player.playAudio()
+            try? play()
         }
     }
 
@@ -566,7 +599,17 @@ nonisolated final class RubySpeechPlayback: @unchecked Sendable {
         storage.withLock { storage in
             guard storage.format != nil, !storage.isStopped, !storage.isPaused else { return }
             try? engine.start()
-            try? player.playAudio()
+            try? play()
+        }
+    }
+
+    /// Starts the player. iOS 27 reports a failure as an error; before it
+    /// the player raises an exception instead.
+    private func play() throws {
+        if #available(iOS 27, macOS 27, visionOS 27, *) {
+            try player.playAudio()
+        } else {
+            player.play()
         }
     }
 

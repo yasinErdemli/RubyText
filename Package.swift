@@ -15,7 +15,9 @@ let swiftSettings: [SwiftSetting] = [
 let package = Package(
     name: "RubyText",
     defaultLocalization: "en",
-    platforms: [.iOS("27.0"), .macOS("27.0"), .visionOS("27.0")],
+    // iOS 26 and visionOS 26 for apps that support them; readings by meaning
+    // and a few audio and VoiceOver details need 27 and are skipped before it.
+    platforms: [.iOS("26.0"), .macOS("27.0"), .visionOS("26.0")],
     products: [
         /// Kana to romaji, romaji typed to kana, hiragana to katakana and
         /// back, with no dictionary and only the standard library.

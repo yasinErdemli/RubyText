@@ -76,6 +76,7 @@ public nonisolated enum RubyModelReadings {
     /// Loads `model` and the instructions it's asked with ahead of the
     /// first question, which otherwise waits for them. Call it when a
     /// screen that will show readings by meaning appears, or earlier.
+    @available(iOS 27, macOS 27, visionOS 27, *)
     public static func prewarm(_ model: any LanguageModel = SystemLanguageModel.default) {
         prewarm(options: RubyModelOptions(model: model))
     }
@@ -83,6 +84,7 @@ public nonisolated enum RubyModelReadings {
     /// Whether `model` can answer now. Apple's models know whether they're
     /// available here; other models are asked, and the dictionary's
     /// readings stay if they fail.
+    @available(iOS 27, macOS 27, visionOS 27, *)
     package static func isAvailable(_ model: any LanguageModel) -> Bool {
         switch model {
         case let model as SystemLanguageModel: model.isAvailable
@@ -353,15 +355,21 @@ public nonisolated enum RubyModelReadings {
 /// How readings by meaning are asked for: which model answers, how, and
 /// what it's told. Each option can be turned on separately, to compare how
 /// well a model reads with it.
+///
+/// Models answer from iOS 27, macOS 27 and visionOS 27. Before them the
+/// options can be made and passed around, but no model is available, so
+/// the dictionary's readings stay.
 @_spi(Experiments) public struct RubyModelOptions: Hashable, Sendable {
     /// The model that answers: Apple's on-device model unless another is
     /// given.
+    @available(iOS 27, macOS 27, visionOS 27, *)
     public var model: any LanguageModel {
-        get { identity.model }
+        get { identity?.model as? any LanguageModel ?? SystemLanguageModel.default }
         set { identity = RubyModelIdentity(newValue) }
     }
 
-    private var identity: RubyModelIdentity
+    /// The model, or `nil` before the systems that have language models.
+    private var identity: RubyModelIdentity?
     /// Ask about every word in a text together, in one request, rather
     /// than one word at a time. Fewer requests matter most with Private
     /// Cloud Compute, where each goes over the network.
@@ -383,8 +391,30 @@ public nonisolated enum RubyModelReadings {
     /// long.
     public var reasons = true
 
+    /// Options for Apple's on-device model.
     public init(
-        model: any LanguageModel = SystemLanguageModel.default,
+        asksTogether: Bool = false,
+        showsReadings: Bool = false,
+        marksWord: Bool = false,
+        includesNeighbors: Bool = true,
+        isJapanese: Bool = false,
+        reasons: Bool = true
+    ) {
+        if #available(iOS 27, macOS 27, visionOS 27, *) {
+            self.identity = RubyModelIdentity(SystemLanguageModel.default)
+        }
+        self.asksTogether = asksTogether
+        self.showsReadings = showsReadings
+        self.marksWord = marksWord
+        self.includesNeighbors = includesNeighbors
+        self.isJapanese = isJapanese
+        self.reasons = reasons
+    }
+
+    /// Options for `model`.
+    @available(iOS 27, macOS 27, visionOS 27, *)
+    public init(
+        model: any LanguageModel,
         asksTogether: Bool = false,
         showsReadings: Bool = false,
         marksWord: Bool = false,
@@ -410,9 +440,11 @@ public nonisolated enum RubyModelReadings {
     /// Whether the model can answer: Apple's on-device model where Apple
     /// Intelligence is on and the model downloaded, and Private Cloud
     /// Compute where it's reachable, though only apps with its entitlement
-    /// can ask it. Other models are assumed to be.
+    /// can ask it. Other models are assumed to be. None is before iOS 27,
+    /// macOS 27 and visionOS 27.
     public var isAvailable: Bool {
-        RubyModelReadings.isAvailable(model)
+        guard #available(iOS 27, macOS 27, visionOS 27, *) else { return false }
+        return RubyModelReadings.isAvailable(model)
     }
 
     /// The instructions the model's session starts with.
@@ -477,29 +509,35 @@ public nonisolated enum RubyModelReadings {
 
 /// A language model, the same as another of its type with the same
 /// configuration, so answers can be kept for each model.
+///
+/// `LanguageModel` is new in iOS 27, macOS 27 and visionOS 27, and a stored
+/// property can't be of a type that's missing on earlier systems. So the
+/// model is kept as `any Sendable`, with what comparing and hashing it
+/// needs captured when it's made.
 private struct RubyModelIdentity: Hashable, Sendable {
-    let model: any LanguageModel
+    let model: any Sendable
+    private let isSame: @Sendable (any Sendable) -> Bool
+    private let hashModel: @Sendable (inout Hasher) -> Void
 
-    init(_ model: any LanguageModel) {
+    @available(iOS 27, macOS 27, visionOS 27, *)
+    init<Model: LanguageModel>(_ model: Model) {
         self.model = model
+        // The same model: of the same type, configured the same way.
+        isSame = { other in
+            (other as? Model)?.executorConfiguration == model.executorConfiguration
+        }
+        hashModel = { hasher in
+            hasher.combine(ObjectIdentifier(Model.self))
+            hasher.combine(model.executorConfiguration)
+        }
     }
 
     static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.model.isSameModel(as: rhs.model)
+        lhs.isSame(rhs.model)
     }
 
     func hash(into hasher: inout Hasher) {
-        hasher.combine(ObjectIdentifier(type(of: model)))
-        hasher.combine(model.executorConfiguration)
-    }
-}
-
-extension LanguageModel {
-    /// Whether `other` is this model: of the same type, configured the
-    /// same way.
-    fileprivate func isSameModel(as other: any LanguageModel) -> Bool {
-        guard let other = other as? Self else { return false }
-        return executorConfiguration == other.executorConfiguration
+        hashModel(&hasher)
     }
 }
 
@@ -519,16 +557,18 @@ package struct RubyLanguageModelChooser: RubyReadingChooser {
 
     package var asksTogether: Bool { options.asksTogether }
 
+    @available(iOS 27, macOS 27, visionOS 27, *)
     private static func session(_ options: RubyModelOptions) -> LanguageModelSession {
         LanguageModelSession(model: options.model, instructions: options.instructions)
     }
 
     /// The session `prewarm()` loaded the model with, kept so loading
-    /// isn't cancelled.
-    private static let warmSession = Mutex<LanguageModelSession?>(nil)
+    /// isn't cancelled. A `LanguageModelSession`, kept as `any Sendable`
+    /// since the type is new in iOS 27.
+    private static let warmSession = Mutex<(any Sendable)?>(nil)
 
     static func prewarm(options: RubyModelOptions) {
-        guard options.isAvailable else { return }
+        guard #available(iOS 27, macOS 27, visionOS 27, *), options.isAvailable else { return }
         let session = session(options)
         session.prewarm()
         warmSession.withLock { $0 = session }
@@ -539,7 +579,9 @@ package struct RubyLanguageModelChooser: RubyReadingChooser {
     }
 
     package func choose(_ questions: [RubyReadingQuestion]) async throws -> [Int?] {
-        guard options.isAvailable, !questions.isEmpty else { return questions.map { _ in nil } }
+        guard #available(iOS 27, macOS 27, visionOS 27, *), options.isAvailable, !questions.isEmpty else {
+            return questions.map { _ in nil }
+        }
         let together = questions.count > 1
         var properties: [DynamicGenerationSchema.Property] = []
         for (number, question) in questions.enumerated() {

@@ -11,7 +11,7 @@ above or below, or both, and finds the readings on device. `RubyText` is used
 like SwiftUI's `Text`, and is configured with environment modifiers, like
 `.font`, on it or any view above it.
 
-Requirements: iOS 27, macOS 27 or visionOS 27, and Swift 6.2.
+Requirements: iOS 26, macOS 27 or visionOS 26, and Swift 6.2. `rubyModelReadings()` and `RubyModelReadings.prewarm(_:)` need iOS 27 or visionOS 27.
 Repository: https://github.com/yasinErdemli/RubyText
 
 When RubyText is already a dependency, its source is in the package

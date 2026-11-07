@@ -4,7 +4,8 @@ import Speech
 
 /// Prepares the shared audio session for reading aloud without blocking the
 /// main thread: the category is set on a background task, and activation
-/// uses the asynchronous API. macOS has no audio session to prepare.
+/// uses the asynchronous API where there is one, from iOS 27, and the
+/// background task before it. macOS has no audio session to prepare.
 nonisolated enum RubyAudioSession {
     static func activateForSpeech() async {
         #if os(iOS) || os(visionOS)
@@ -13,8 +14,15 @@ nonisolated enum RubyAudioSession {
             if session.category != .playback || session.mode != .spokenAudio {
                 try? session.setCategory(.playback, mode: .spokenAudio)
             }
+            // Before iOS 27 activation only blocks, so it waits here, off
+            // the main thread.
+            if #unavailable(iOS 27, visionOS 27) {
+                try? session.setActive(true)
+            }
         }.value
-        _ = try? await AVAudioSession.sharedInstance().activate(options: [])
+        if #available(iOS 27, visionOS 27, *) {
+            _ = try? await AVAudioSession.sharedInstance().activate(options: [])
+        }
         #endif
     }
 }
