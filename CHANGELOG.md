@@ -3,7 +3,7 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
-## Unreleased
+## 1.10.0 — 2026-11-07
 
 - RubyText runs on iOS 26 and visionOS 26 as well as 27. Readings by
   meaning need a FoundationModels `LanguageModel`, which is new in 27, so
