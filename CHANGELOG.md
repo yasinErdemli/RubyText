@@ -3,7 +3,7 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
-## Unreleased
+## 1.11.0 — 2026-11-10
 
 - Text from segments breaks lines between the phrases it gives, never
   inside one. Breaking between phrases asked the system's phrase model,
