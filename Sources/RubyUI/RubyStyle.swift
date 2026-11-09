@@ -283,10 +283,19 @@ public struct RubySpacing: Hashable, Sendable {
 public enum RubyLineBreaking: Hashable, Sendable {
     /// Between phrases, so words stay with their particles and endings
     /// (東京へ, 日本語を) and never split across lines, like
-    /// `word-break: auto-phrase` on the web. A phrase longer than a line
-    /// still breaks within it. Where that would start a line with 。 or
-    /// another character that may not start one, as it can in large
-    /// text, that paragraph breaks between characters instead.
+    /// `word-break: auto-phrase` on the web.
+    ///
+    /// Text from segments breaks between the phrases they give
+    /// (`RubySegment.Word.attachesToPrevious`), never inside one: the
+    /// system's own phrases split some words (ありがとうござ / いました).
+    /// Where one of them is wider than a line, its paragraph breaks
+    /// between words instead. Other text breaks between the phrases the
+    /// system finds.
+    ///
+    /// A phrase or word longer than a line still breaks within it. Where
+    /// that would start a line with 。 or another character that may not
+    /// start one, as it can in large text, that paragraph breaks between
+    /// characters instead.
     case phrases
     /// Between almost any two characters, following the rules against
     /// starting a line with 。 or ゃ. Each paragraph's last word stays
@@ -317,17 +326,22 @@ public enum RubyLineBreaking: Hashable, Sendable {
     ///     characters, because breaking as this asks started one of their
     ///     lines with a character that may not start one; see
     ///     `badlyBrokenParagraphs(in:lineStarts:)`.
+    ///   - givenPhrases: Whether word joiners keep the text's phrases
+    ///     whole (`RubyWordJoiners`), so it may break anywhere else.
     func setLanguage(
         of text: inout AttributedString,
         endings: @autoclosure () -> [Range<Int>],
-        characterBreaking: Set<Int> = []
+        characterBreaking: Set<Int> = [],
+        givenPhrases: Bool = false
     ) {
         func set(_ language: String, in range: Range<Int>) {
             let lower = text.utf16.index(text.startIndex, offsetBy: range.lowerBound)
             let upper = text.utf16.index(lower, offsetBy: range.count)
             text[lower..<upper].languageIdentifier = language
         }
-        text.languageIdentifier = languageIdentifier
+        // Joiners keep the given phrases whole, so the system's phrases
+        // would only stop breaks between them.
+        text.languageIdentifier = givenPhrases ? Self.anywhere.languageIdentifier : languageIdentifier
         if self == .anywhere {
             for ending in endings() { set(Self.phrases.languageIdentifier, in: ending) }
         }

@@ -644,18 +644,27 @@ private struct RubyTextContent: View {
     var body: some View {
         let metrics = RubyMetrics(font: font ?? .body, in: fontResolutionContext)
         let lineBreakKey = RubyLineBreakFallback.Key(string: content.string, font: metrics.cacheKey, lineBreaking: lineBreaking)
-        let characterBreaking = lineBreakFallback.wrappedValue.flatMap { $0.key == lineBreakKey ? $0.paragraphs : nil } ?? []
+        let fallback = lineBreakFallback.wrappedValue.flatMap { $0.key == lineBreakKey ? $0 : nil }
+        let characterBreaking = fallback?.paragraphs ?? []
+        let joiners = lineBreaking.joiners(
+            in: content, widePhrases: fallback?.widePhrases ?? [], wideWords: fallback?.wideWords ?? [], characterBreaking: characterBreaking
+        )
         let lineStartCheck = RubyLineStartCheck(
             // Only text with a character that may not start a line can
-            // start one with it.
-            isEnabled: !content.string.allSatisfy(RubyLineBreaking.canStartLine),
+            // start one with it, and only text with given phrases can
+            // break inside one.
+            isEnabled: !joiners.isEmpty || !content.string.allSatisfy(RubyLineBreaking.canStartLine),
             key: lineBreakKey,
+            phrases: joiners.isEmpty ? [] : content.readingUnits.map(\.range),
+            words: joiners.isEmpty ? [] : content.words.map(\.range),
+            joiners: joiners,
             fallback: lineBreakFallback
         )
 
         if above == 0 && below == 0 && reader == nil && textColors.isEmpty && backgroundColors.isEmpty
             && textWeights.isEmpty && underlines.isEmpty && blanks.isEmpty && wordGaps.isZero && content.spaces.isEmpty && !isTappable {
-            Text(Self.plainText(content, lineBreaking: lineBreaking, characterBreaking: characterBreaking).speaking(speech))
+            Text(Self.plainText(content, lineBreaking: lineBreaking, characterBreaking: characterBreaking, joiners: joiners)
+                .speaking(joiners.moved(speech)))
                 .font(metrics.textFont)
                 .contentTransition(.numericText())
                 .modifier(lineStartCheck)
@@ -680,6 +689,7 @@ private struct RubyTextContent: View {
                 romajiSpacing: metrics.romajiSpacing,
                 lineBreaking: lineBreaking,
                 characterBreaking: characterBreaking,
+                joiners: joiners,
                 insertedSpaceWidth: spacing.width,
                 textColors: textColors,
                 backgrounds: backgrounds(),
@@ -711,7 +721,7 @@ private struct RubyTextContent: View {
         let above = metrics.reservedHeight * above
         let below = belowHeight(metrics)
 
-        return Text(layout.text.speaking(speech))
+        return Text(layout.text.speaking(layout.joiners.moved(speech)))
             .font(metrics.textFont)
             // Text rewritten in another script rolls into the new one, glyph
             // by glyph, letters and kana as well as digits.
@@ -857,10 +867,20 @@ private struct RubyTextContent: View {
 
     /// Text without annotations, tagged as Japanese so lines break the
     /// same way as annotated text.
-    private static func plainText(_ content: RubyContent, lineBreaking: RubyLineBreaking, characterBreaking: Set<Int>) -> AttributedString {
+    private static func plainText(
+        _ content: RubyContent,
+        lineBreaking: RubyLineBreaking,
+        characterBreaking: Set<Int>,
+        joiners: RubyWordJoiners = .none
+    ) -> AttributedString {
         var text = AttributedString(content.string)
-        lineBreaking.setLanguage(of: &text, endings: RubyLineBreaking.endings(in: content), characterBreaking: characterBreaking)
-        return text
+        lineBreaking.setLanguage(
+            of: &text,
+            endings: RubyLineBreaking.endings(in: content),
+            characterBreaking: characterBreaking,
+            givenPhrases: lineBreaking.breaksAtGivenPhrases(in: content)
+        )
+        return joiners.inserted(into: text)
     }
 
     /// The ranges `colors` colors, with neighboring words of the same color
@@ -1000,8 +1020,14 @@ private struct RubyLineBreakFallback: Equatable {
     let key: Key
     /// The width proposed to the text, `nil` for as wide as it likes.
     let width: CGFloat?
-    /// The paragraphs, by index.
+    /// The paragraphs, by index, that break between characters.
     let paragraphs: Set<Int>
+    /// Given phrases wider than a line, as UTF-16 ranges, which break
+    /// between their words.
+    var widePhrases: Set<Range<Int>> = []
+    /// Given words wider than a line, which break between their
+    /// morphemes.
+    var wideWords: Set<Range<Int>> = []
 }
 
 /// Keeps 。 and other characters that may not start a line off the start
@@ -1015,9 +1041,16 @@ private struct RubyLineBreakFallback: Equatable {
 /// same. Text at ordinary sizes, whose phrases fit on a line, is left as
 /// it is.
 private struct RubyLineStartCheck: ViewModifier {
-    /// Whether the text has a character that may not start a line.
+    /// Whether the text has a character that may not start a line, or
+    /// phrases given to keep whole.
     let isEnabled: Bool
     let key: RubyLineBreakFallback.Key
+    /// The phrases given to keep whole, as UTF-16 ranges in the content,
+    /// and their words.
+    var phrases: [Range<Int>] = []
+    var words: [Range<Int>] = []
+    /// The joiners in the laid-out text.
+    var joiners: RubyWordJoiners = .none
     @Binding var fallback: RubyLineBreakFallback?
 
     @State private var proposedWidth = RubyProposedWidth()
@@ -1041,6 +1074,8 @@ private struct RubyLineStartCheck: ViewModifier {
     private func check(_ layout: Text.Layout) {
         let width = proposedWidth.value
         var paragraphs: Set<Int> = []
+        var widePhrases: Set<Range<Int>> = []
+        var wideWords: Set<Range<Int>> = []
         if let fallback, fallback.key == key {
             // In another width, the paragraphs may fit between phrases
             // again: they're laid out between phrases and checked again.
@@ -1049,14 +1084,27 @@ private struct RubyLineStartCheck: ViewModifier {
                 return
             }
             paragraphs = fallback.paragraphs
+            widePhrases = fallback.widePhrases
+            wideWords = fallback.wideWords
         }
-        let lineStarts = layout.rubyParagraphLines.compactMap { _, line, paragraph, start in
-            line.flatMap(\.characterIndices).min().map { (paragraph: paragraph, offset: start.distance(to: $0)) }
-        }
+        let paragraphStarts = RubyLineBreaking.paragraphRanges(in: key.string).map(\.lowerBound)
+        let lineStarts = joiners.originalLineStarts(
+            layout.rubyParagraphLines.compactMap { _, line, paragraph, start in
+                line.flatMap(\.characterIndices).min().map { (paragraph: paragraph, offset: start.distance(to: $0)) }
+            },
+            paragraphStarts: paragraphStarts
+        )
         let broken = RubyLineBreaking.badlyBrokenParagraphs(in: key.string, lineStarts: lineStarts)
+        let foundWide = RubyLineBreaking.findWide(
+            in: key.string,
+            lineStarts: lineStarts, paragraphStarts: paragraphStarts, phrases: phrases, words: words,
+            characterBreaking: paragraphs, widePhrases: &widePhrases, wideWords: &wideWords
+        )
         // Paragraphs already breaking between characters can't do better.
-        guard !broken.isSubset(of: paragraphs) else { return }
-        fallback = RubyLineBreakFallback(key: key, width: width, paragraphs: paragraphs.union(broken))
+        guard !broken.isSubset(of: paragraphs) || foundWide else { return }
+        fallback = RubyLineBreakFallback(
+            key: key, width: width, paragraphs: paragraphs.union(broken), widePhrases: widePhrases, wideWords: wideWords
+        )
     }
 }
 
@@ -1234,6 +1282,9 @@ final class RubyMeasurements {
     /// Indices of the characters that are spaces put between phrases of
     /// kana text.
     let insertedSpaces: [Int]
+    /// Whether the text's phrases are the ones its segments gave, which
+    /// lines break between (`RubyLineBreaking.phrases`).
+    let givenPhrases: Bool
     /// UTF-16 offset where each paragraph starts.
     let paragraphStarts: [Int]
     /// The end of each paragraph, kept on one line when lines may break
@@ -1414,6 +1465,7 @@ final class RubyMeasurements {
         insertedSpaces = content.spaces.map { Self.index(of: $0, in: starts) }
         paragraphStarts = RubyLineBreaking.paragraphRanges(in: content.string).map(\.lowerBound)
         endings = RubyLineBreaking.endings(in: content)
+        givenPhrases = content.phrasesAreGiven
         self.weights = characterWeights
     }
 
@@ -1433,6 +1485,8 @@ final class RubyMeasurements {
 struct RubyLayout {
     let text: AttributedString
     let paragraphs: [RubyParagraph]
+    /// The word joiners in `text`, which the content doesn't have.
+    let joiners: RubyWordJoiners
     private let paragraphStarts: [Int]
 
     init(
@@ -1448,6 +1502,7 @@ struct RubyLayout {
         romajiSpacing: CGFloat,
         lineBreaking: RubyLineBreaking,
         characterBreaking: Set<Int> = [],
+        joiners: RubyWordJoiners = .none,
         insertedSpaceWidth: CGFloat,
         textColors: [RubyColoredRange],
         backgrounds: [RubyColoredRange],
@@ -1513,23 +1568,34 @@ struct RubyLayout {
         }
         // The language decides where lines may break, such as only between
         // phrases. It's a standard attribute, so copying still works.
-        lineBreaking.setLanguage(of: &text, endings: measurements.endings, characterBreaking: characterBreaking)
-        self.text = text
+        lineBreaking.setLanguage(
+            of: &text,
+            endings: measurements.endings,
+            characterBreaking: characterBreaking,
+            givenPhrases: measurements.givenPhrases && lineBreaking == .phrases
+        )
+        // Joiners keep given phrases whole. They're only in the laid-out
+        // text, and `place` moves ranges past them.
+        self.text = joiners.inserted(into: text)
+        self.joiners = joiners
 
         // Layout character indices restart at each paragraph, so ranges are
         // converted to paragraph-relative offsets.
         let paragraphStarts = measurements.paragraphStarts
         self.paragraphStarts = paragraphStarts
+        func place(_ range: Range<Int>) -> (paragraph: Int, range: Range<Int>) {
+            Self.place(range, paragraphStarts: paragraphStarts, joiners: joiners)
+        }
         var paragraphs = [RubyParagraph](repeating: RubyParagraph(), count: paragraphStarts.count)
         for item in tracked {
-            let placed = Self.place(item.range, paragraphStarts: paragraphStarts)
+            let placed = place(item.range)
             paragraphs[placed.paragraph].tracked.append(RubyTrackedRange(range: placed.range, tracking: item.tracking, shift: item.shift))
         }
         if furigana > 0 {
             for (id, reading) in measurements.furigana.enumerated() {
                 let visibility = readingVisibility.value(at: reading.source, default: 1)
                 guard visibility > 0 else { continue }
-                let placed = Self.place(reading.range, paragraphStarts: paragraphStarts)
+                let placed = place(reading.range)
                 paragraphs[placed.paragraph].furigana.append(RubyAnnotation(
                     id: id, text: reading.text, range: placed.range, baseCount: reading.characters.count,
                     color: colors[reading.characters.lowerBound],
@@ -1544,7 +1610,7 @@ struct RubyLayout {
             romaji.enumerated().compactMap { id, word in
                 let opacity = visibility.value(at: word.source, default: 1)
                 guard opacity > 0 else { return nil }
-                let placed = Self.place(word.range, paragraphStarts: paragraphStarts)
+                let placed = place(word.range)
                 return (placed.paragraph, RubyAnnotation(
                     id: id, text: word.text, range: placed.range, baseCount: word.characters.count,
                     color: colors[word.characters.lowerBound],
@@ -1565,16 +1631,16 @@ struct RubyLayout {
             }
         }
         for item in backgrounds {
-            let placed = Self.place(item.range, paragraphStarts: paragraphStarts)
+            let placed = place(item.range)
             paragraphs[placed.paragraph].backgrounds.append(RubyColoredRange(range: placed.range, color: item.color))
         }
         for underline in underlines {
-            let placed = Self.place(underline.range, paragraphStarts: paragraphStarts)
+            let placed = place(underline.range)
             let color = colors[RubyMeasurements.index(of: underline.range.lowerBound, in: starts)]
             paragraphs[placed.paragraph].underlines.append(RubyUnderlinedRange(range: placed.range, color: color, pattern: underline.pattern))
         }
         for blank in blanks {
-            let placed = Self.place(blank, paragraphStarts: paragraphStarts)
+            let placed = place(blank)
             paragraphs[placed.paragraph].blanks.append(placed.range)
         }
         self.paragraphs = paragraphs
@@ -1716,21 +1782,24 @@ struct RubyLayout {
         return (tracking, shifts)
     }
 
-    /// Converts a paragraph-relative UTF-16 offset to one in the whole text.
+    /// Converts a paragraph-relative UTF-16 offset in the laid-out text to
+    /// one in the whole content.
     func offset(_ offset: Int, inParagraph paragraph: Int) -> Int {
-        (paragraphStarts.indices.contains(paragraph) ? paragraphStarts[paragraph] : 0) + offset
+        let start = paragraphStarts.indices.contains(paragraph) ? paragraphStarts[paragraph] : 0
+        return joiners.originalOffset(joiners.joinedOffset(start) + offset)
     }
 
-    /// Converts a UTF-16 range in the whole text to its paragraph and a
-    /// paragraph-relative range.
+    /// Converts a UTF-16 range in the whole content to its paragraph and a
+    /// paragraph-relative range in the laid-out text.
     func place(_ range: Range<Int>) -> (paragraph: Int, range: Range<Int>) {
-        Self.place(range, paragraphStarts: paragraphStarts)
+        Self.place(range, paragraphStarts: paragraphStarts, joiners: joiners)
     }
 
-    private static func place(_ range: Range<Int>, paragraphStarts: [Int]) -> (paragraph: Int, range: Range<Int>) {
+    private static func place(_ range: Range<Int>, paragraphStarts: [Int], joiners: RubyWordJoiners) -> (paragraph: Int, range: Range<Int>) {
         let paragraph = (paragraphStarts.lastIndex { $0 <= range.lowerBound }) ?? 0
-        let start = paragraphStarts[paragraph]
-        return (paragraph, (range.lowerBound - start)..<(range.upperBound - start))
+        let start = joiners.joinedOffset(paragraphStarts[paragraph])
+        let joined = joiners.joinedRange(range)
+        return (paragraph, (joined.lowerBound - start)..<(joined.upperBound - start))
     }
 }
 

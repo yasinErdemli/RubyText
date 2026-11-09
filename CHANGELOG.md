@@ -3,6 +3,22 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
+## Unreleased
+
+- Text from segments breaks lines between the phrases it gives, never
+  inside one. Breaking between phrases asked the system's phrase model,
+  which doesn't know the app's words and split some of them even with
+  room to spare: ありがとうござ / いました, 森 / さん, ガーコ / さん.
+  `RubyText` now puts word joiners (U+2060) between the characters of
+  each given phrase in the text it lays out, as BudouX does on the web,
+  and breaks strictly everywhere else. A phrase wider than a line breaks
+  between its words, and a word wider than a line between its morphemes
+  with two letters or more on each side (ありがとう / ございました！),
+  laid out again as a line starting with 。 already is. Text read by an
+  analyzer still breaks between the system's phrases. The joiners are
+  only in the laid-out text: ranges, taps, colors, annotations and
+  VoiceOver's text move past them.
+
 ## 1.10.0 — 2026-11-07
 
 - RubyText runs on iOS 26 and visionOS 26 as well as 27. Readings by
