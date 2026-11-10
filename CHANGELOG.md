@@ -3,6 +3,16 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
+## Unreleased
+
+- A word's underline can have a color of its own. `RubyUnderlineStyle`
+  gives a line its pattern and, optionally, a color, and
+  `RubyWordUnderlines.words(_:)` and `.wordIDs(_:)` take a dictionary of
+  them, so the words a lesson has just taught can have dots in the accent
+  color while every other word's stay grey. A line's own color is drawn
+  as it's given, not faded; without one, a line takes its word's color,
+  faded, or the secondary style, as before.
+
 ## 1.11.0 — 2026-11-10
 
 - Text from segments breaks lines between the phrases it gives, never

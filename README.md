@@ -315,6 +315,16 @@ RubyText(segments: [
 .onRubyWordTap { word in open(word.wordID) }
 ```
 
+A line can have a color of its own, such as the accent color under the
+words a lesson has just taught, with every other word's dots in grey:
+
+```swift
+.rubyWordUnderlines(.wordIDs([
+    "neko": RubyUnderlineStyle(color: .accentColor),
+    "inu": RubyUnderlineStyle(),
+]))
+```
+
 A word to fill in, such as the particle an exercise asks for, can be shown
 as a blank. Give the blank the words that fill it: they keep their place,
 and the room their readings and romaji take, so nothing moves when they
