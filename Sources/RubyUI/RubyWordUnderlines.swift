@@ -13,15 +13,24 @@ import SwiftUI
 ///
 ///     .rubyWordUnderlines(.wordIDs(["neko": .dotted, "gap": .solid]))
 ///
+/// A line can have a color of its own, such as the accent color under the
+/// words a lesson has just taught, with the rest in grey:
+///
+///     .rubyWordUnderlines(.wordIDs([
+///         "neko": RubyUnderlineStyle(color: .accentColor),
+///         "inu": RubyUnderlineStyle(),
+///     ]))
+///
 /// Each word gets a line of its own, short of its edges, so neighboring
-/// words read as two. A line takes its word's color from
-/// `rubyWordColors(_:in:)`, faded, or the secondary foreground style.
+/// words read as two. A line without a color of its own takes its word's
+/// color from `rubyWordColors(_:in:)`, faded, or the secondary foreground
+/// style.
 /// Underlined text keeps a little more room below each line, between the
 /// text and any romaji under it.
 public struct RubyWordUnderlines: Hashable, Sendable {
     private enum Rule: Hashable, Sendable {
-        case words([String: RubyUnderlinePattern])
-        case wordIDs([String: RubyUnderlinePattern])
+        case words([String: RubyUnderlineStyle])
+        case wordIDs([String: RubyUnderlineStyle])
     }
 
     private let rule: Rule
@@ -29,7 +38,7 @@ public struct RubyWordUnderlines: Hashable, Sendable {
     /// words have kinds of their own.
     @available(*, deprecated, message: "Words can have lines of their own kinds, so there's no one pattern.")
     public var pattern: RubyUnderlinePattern {
-        let all = Set(patterns.values)
+        let all = Set(styles.values.map(\.pattern))
         return all.count == 1 ? all.first! : .dotted
     }
 
@@ -37,31 +46,45 @@ public struct RubyWordUnderlines: Hashable, Sendable {
     /// word in any conjugation by its dictionary form (生まれる matches
     /// 生まれた), or a run of whole words (見当がつく), underlined as one.
     public static func words(_ words: some Sequence<String>, pattern: RubyUnderlinePattern = .dotted) -> RubyWordUnderlines {
-        RubyWordUnderlines(rule: .words(Self.patterns(words, pattern)))
+        RubyWordUnderlines(rule: .words(Self.styles(words, pattern)))
     }
 
     /// Underlines chosen words, each with its own kind of line, matched
     /// as `words(_:pattern:)` matches them.
     public static func words(_ patterns: [String: RubyUnderlinePattern]) -> RubyWordUnderlines {
-        RubyWordUnderlines(rule: .words(patterns))
+        RubyWordUnderlines(rule: .words(patterns.mapValues { RubyUnderlineStyle(pattern: $0) }))
+    }
+
+    /// Underlines chosen words, each with its own kind of line and,
+    /// where it's given, its own color, matched as `words(_:pattern:)`
+    /// matches them.
+    public static func words(_ styles: [String: RubyUnderlineStyle]) -> RubyWordUnderlines {
+        RubyWordUnderlines(rule: .words(styles))
     }
 
     /// Underlines the words with chosen IDs, which you give their segments
     /// as `wordID`: each word exactly, wherever it is, and no other word
     /// written the same.
     public static func wordIDs(_ ids: some Sequence<String>, pattern: RubyUnderlinePattern = .dotted) -> RubyWordUnderlines {
-        RubyWordUnderlines(rule: .wordIDs(Self.patterns(ids, pattern)))
+        RubyWordUnderlines(rule: .wordIDs(Self.styles(ids, pattern)))
     }
 
     /// Underlines the words with chosen IDs, each with its own kind of
     /// line, matched as `wordIDs(_:pattern:)` matches them.
     public static func wordIDs(_ patterns: [String: RubyUnderlinePattern]) -> RubyWordUnderlines {
-        RubyWordUnderlines(rule: .wordIDs(patterns))
+        RubyWordUnderlines(rule: .wordIDs(patterns.mapValues { RubyUnderlineStyle(pattern: $0) }))
     }
 
-    /// Every one of `keys` with the same pattern.
-    private static func patterns(_ keys: some Sequence<String>, _ pattern: RubyUnderlinePattern) -> [String: RubyUnderlinePattern] {
-        Dictionary(keys.map { ($0, pattern) }, uniquingKeysWith: { first, _ in first })
+    /// Underlines the words with chosen IDs, each with its own kind of
+    /// line and, where it's given, its own color, matched as
+    /// `wordIDs(_:pattern:)` matches them.
+    public static func wordIDs(_ styles: [String: RubyUnderlineStyle]) -> RubyWordUnderlines {
+        RubyWordUnderlines(rule: .wordIDs(styles))
+    }
+
+    /// Every one of `keys` with the same pattern, in no color of its own.
+    private static func styles(_ keys: some Sequence<String>, _ pattern: RubyUnderlinePattern) -> [String: RubyUnderlineStyle] {
+        Dictionary(keys.map { ($0, RubyUnderlineStyle(pattern: pattern)) }, uniquingKeysWith: { first, _ in first })
     }
 
     /// The ranges of `content` with a line under them: one per match, so
@@ -72,7 +95,7 @@ public struct RubyWordUnderlines: Hashable, Sendable {
     }
 
     /// The lines under `content`, one per match as `ranges(in:)` finds
-    /// them, each with its kind of line.
+    /// them, each with its kind of line and its own color, if it has one.
     func underlines(in content: RubyContent) -> [RubyUnderline] {
         // Words are matched as written, then underlined wherever rewriting
         // moved them.
@@ -87,13 +110,16 @@ public struct RubyWordUnderlines: Hashable, Sendable {
                 ranges.append((word.range, match))
             }
         }
-        return ranges.map { RubyUnderline(range: $0.range, pattern: patterns[$0.match] ?? .dotted) }
+        return ranges.map { match in
+            let style = styles[match.match] ?? RubyUnderlineStyle()
+            return RubyUnderline(range: match.range, pattern: style.pattern, color: style.color)
+        }
     }
 
-    /// Each chosen word or ID's kind of line.
-    private var patterns: [String: RubyUnderlinePattern] {
+    /// Each chosen word or ID's kind of line, and its color.
+    private var styles: [String: RubyUnderlineStyle] {
         switch rule {
-        case .words(let patterns), .wordIDs(let patterns): patterns
+        case .words(let styles), .wordIDs(let styles): styles
         }
     }
 
@@ -109,10 +135,29 @@ public struct RubyWordUnderlines: Hashable, Sendable {
     }
 }
 
-/// A line under a word, in UTF-16 offsets of the text, and its kind.
+/// A line under a word, in UTF-16 offsets of the text, its kind, and
+/// its own color, if it has one.
 struct RubyUnderline: Hashable, Sendable {
     let range: Range<Int>
     let pattern: RubyUnderlinePattern
+    var color: Color? = nil
+}
+
+/// How `RubyWordUnderlines` draws one word's line: its kind, and its own
+/// color, if it has one.
+public struct RubyUnderlineStyle: Hashable, Sendable {
+    /// How the line is drawn.
+    public var pattern: RubyUnderlinePattern
+    /// The line's own color, drawn as it's given, not faded; nil takes the
+    /// word's color, faded, or the secondary foreground style.
+    public var color: Color?
+
+    /// A line of a kind, dotted by default, in a color of its own or, by
+    /// default, its word's.
+    public init(pattern: RubyUnderlinePattern = .dotted, color: Color? = nil) {
+        self.pattern = pattern
+        self.color = color
+    }
 }
 
 /// How `RubyWordUnderlines` draws its lines.
@@ -132,7 +177,8 @@ extension EnvironmentValues {
 
 extension View {
     /// Draws a line under chosen words in `RubyText` views in this
-    /// hierarchy, dotted by default, or of each word's own kind. Pass `nil` to underline none.
+    /// hierarchy, dotted by default, or of each word's own kind and color.
+    /// Pass `nil` to underline none.
     public func rubyWordUnderlines(_ underlines: RubyWordUnderlines?) -> some View {
         environment(\.rubyWordUnderlines, underlines)
     }

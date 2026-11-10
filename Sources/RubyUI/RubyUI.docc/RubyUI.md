@@ -68,6 +68,7 @@ ContentView()
 - ``SwiftUICore/View/rubyWordUnderlines(_:)``
 - ``RubyWordUnderlines``
 - ``RubyUnderlinePattern``
+- ``RubyUnderlineStyle``
 
 ### Blanks to fill
 

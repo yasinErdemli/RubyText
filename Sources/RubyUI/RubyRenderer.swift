@@ -362,17 +362,17 @@ struct RubyRenderer: TextRenderer {
         lineBounds: CGRect,
         in context: GraphicsContext
     ) {
-        var boxes: [(range: Range<Int>, color: Color?, pattern: RubyUnderlinePattern, rect: CGRect)] = []
+        var boxes: [(item: RubyUnderlinedRange, rect: CGRect)] = []
         for run in line {
             let offsets = run.characterIndices.map { start.distance(to: $0) }
             guard offsets.count == run.count else { continue }
             for index in 0..<run.count {
                 guard let item = Self.item(at: offsets[index], in: items, range: \.range) else { continue }
                 let glyph = Self.glyphBox(in: run, at: index, offset: offsets[index], tracked: tracked)
-                if let last = boxes.indices.last, boxes[last].range == item.range {
+                if let last = boxes.indices.last, boxes[last].item.range == item.range {
                     boxes[last].rect = boxes[last].rect.union(glyph)
                 } else {
-                    boxes.append((item.range, item.color, item.pattern, glyph))
+                    boxes.append((item, glyph))
                 }
             }
         }
@@ -381,10 +381,13 @@ struct RubyRenderer: TextRenderer {
         // Centered in the space reserved for it.
         let y = lineBounds.maxY + underlineSpace / 2
         for box in boxes {
-            // A word's line takes its color, faded so the word stands out
-            // more than its line; others take the secondary style, as
-            // furigana do.
-            let shading: GraphicsContext.Shading = if let color = box.color {
+            // A line's own color is drawn as given. Otherwise a word's line
+            // takes the word's color, faded so the word stands out more
+            // than its line; others take the secondary style, as furigana
+            // do.
+            let shading: GraphicsContext.Shading = if let color = box.item.lineColor {
+                .color(color)
+            } else if let color = box.item.color {
                 .color(color.opacity(0.6))
             } else {
                 .style(.secondary)
@@ -392,7 +395,7 @@ struct RubyRenderer: TextRenderer {
             let inset = thickness * 1.5
             let start = box.rect.minX + inset + thickness / 2
             let end = max(start, box.rect.maxX - inset - thickness / 2)
-            switch box.pattern {
+            switch box.item.pattern {
             case .dotted:
                 // Spread evenly, a dot at each end, about a dot apart.
                 let count = Int(((end - start) / (thickness * 2)).rounded(.down)) + 1
@@ -408,7 +411,7 @@ struct RubyRenderer: TextRenderer {
                 path.move(to: CGPoint(x: start, y: y))
                 path.addLine(to: CGPoint(x: end, y: y))
                 let width = thickness * 0.75
-                let dash: [CGFloat] = box.pattern == .dashed ? [thickness * 2, thickness * 2.5] : []
+                let dash: [CGFloat] = box.item.pattern == .dashed ? [thickness * 2, thickness * 2.5] : []
                 context.stroke(path, with: shading, style: StrokeStyle(lineWidth: width, lineCap: .round, dash: dash))
             }
         }

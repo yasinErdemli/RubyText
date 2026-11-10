@@ -1637,7 +1637,9 @@ struct RubyLayout {
         for underline in underlines {
             let placed = place(underline.range)
             let color = colors[RubyMeasurements.index(of: underline.range.lowerBound, in: starts)]
-            paragraphs[placed.paragraph].underlines.append(RubyUnderlinedRange(range: placed.range, color: color, pattern: underline.pattern))
+            paragraphs[placed.paragraph].underlines.append(RubyUnderlinedRange(
+                range: placed.range, color: color, lineColor: underline.color, pattern: underline.pattern
+            ))
         }
         for blank in blanks {
             let placed = place(blank)

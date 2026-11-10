@@ -79,6 +79,39 @@ import Testing
         #expect(laidOut.map(\.color) == [nil, .red])
     }
 
+    /// A line can have a color of its own, such as the accent color under
+    /// a lesson's new words, while the rest keep their word's color or
+    /// the secondary style.
+    @Test func linesCanHaveTheirOwnColor() {
+        let byID = RubyWordUnderlines.wordIDs([
+            "mori": RubyUnderlineStyle(),
+            "food": RubyUnderlineStyle(color: .purple),
+            "eat": RubyUnderlineStyle(pattern: .solid, color: .green),
+        ])
+        let underlines = byID.underlines(in: Self.content)
+        #expect(underlines.map(\.color) == [nil, .purple, .green])
+        #expect(underlines.map(\.pattern) == [.dotted, .dotted, .solid])
+        let byWord = RubyWordUnderlines.words(["食べ物": RubyUnderlineStyle(color: .purple)])
+        #expect(byWord.underlines(in: Self.content).map(\.color) == [.purple])
+        // Without a color, a style is the pattern alone.
+        #expect(RubyWordUnderlines.wordIDs(["mori": RubyUnderlineStyle(pattern: .dashed)]) == .wordIDs(["mori"], pattern: .dashed))
+        #expect(RubyWordUnderlines.wordIDs(["mori": RubyUnderlineStyle(color: .purple)]) != .wordIDs(["mori"]))
+        // Lines chosen by pattern alone have no color of their own.
+        #expect(RubyWordUnderlines.wordIDs(["mori", "food"]).underlines(in: Self.content).map(\.color) == [nil, nil])
+    }
+
+    /// A line keeps its own color as it's laid out, beside its word's.
+    @Test func linesKeepTheirOwnColor() {
+        let underlines = RubyWordUnderlines.wordIDs([
+            "mori": RubyUnderlineStyle(color: .purple),
+            "food": RubyUnderlineStyle(),
+        ]).underlines(in: Self.content)
+        let laidOut = Self.layout(underlines: underlines, textColors: [RubyColoredRange(range: underlines[0].range, color: .red)])
+            .paragraphs.flatMap(\.underlines)
+        #expect(laidOut.map(\.lineColor) == [.purple, nil])
+        #expect(laidOut.map(\.color) == [.red, nil])
+    }
+
     /// The test content laid out with `underlines` and `textColors`.
     private static func layout(underlines: [RubyUnderline], textColors: [RubyColoredRange] = []) -> RubyLayout {
         RubyLayout(
