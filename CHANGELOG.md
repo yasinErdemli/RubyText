@@ -3,7 +3,7 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
-## Unreleased
+## 1.12.0 — 2026-11-10
 
 - A word's underline can have a color of its own. `RubyUnderlineStyle`
   gives a line its pattern and, optionally, a color, and
