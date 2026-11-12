@@ -8,7 +8,7 @@ import SwiftUI
 ///     RubyText("吾輩は猫である。")
 ///         .rubyReader(reader)
 ///         .rubyEmphasis([.tint, .grow])
-public struct RubyEmphasis: OptionSet, Hashable, Sendable {
+nonisolated public struct RubyEmphasis: OptionSet, Hashable, Sendable {
     public let rawValue: Int
 
     public init(rawValue: Int) {

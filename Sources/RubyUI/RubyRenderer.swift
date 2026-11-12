@@ -4,7 +4,7 @@ import SwiftUI
 /// Draws text normally, then draws furigana above and romaji above or
 /// below the annotated ranges, or romaji under each kana, underlines
 /// chosen words, and emphasizes the word a `RubyReader` is speaking.
-struct RubyRenderer: TextRenderer {
+nonisolated struct RubyRenderer: TextRenderer {
     let metrics: RubyMetrics
     /// Annotation data for each paragraph of the text.
     let paragraphs: [RubyParagraph]
@@ -799,7 +799,7 @@ struct RubyRenderer: TextRenderer {
     }
 }
 
-extension Text.Layout {
+nonisolated extension Text.Layout {
     /// Each line with text, with its line number, the paragraph it belongs
     /// to, and where that paragraph starts.
     ///

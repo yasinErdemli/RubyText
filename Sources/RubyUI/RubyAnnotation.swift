@@ -11,7 +11,7 @@ import UIKit
 /// attached to the `Text` with `customAttribute(_:)`: custom attributes travel
 /// with copied text and make the system fail to write the pasteboard, which
 /// breaks Copy for the whole selection.
-struct RubyAnnotation {
+nonisolated struct RubyAnnotation {
     /// Distinguishes adjacent annotations.
     let id: Int
     let text: String
@@ -34,14 +34,14 @@ struct RubyAnnotation {
 }
 
 /// A word drawn with a colored background.
-struct RubyColoredRange {
+nonisolated struct RubyColoredRange {
     /// UTF-16 offsets within the paragraph.
     let range: Range<Int>
     let color: Color
 }
 
 /// A word drawn with a line under it.
-struct RubyUnderlinedRange {
+nonisolated struct RubyUnderlinedRange {
     /// UTF-16 offsets within the paragraph.
     let range: Range<Int>
     /// The word's own color, if it's colored.
@@ -53,7 +53,7 @@ struct RubyUnderlinedRange {
 }
 
 /// A word set in its own weight.
-struct RubyWeightedRange: Hashable {
+nonisolated struct RubyWeightedRange: Hashable {
     /// UTF-16 offsets in the text.
     let range: Range<Int>
     let weight: Font.Weight
@@ -61,7 +61,7 @@ struct RubyWeightedRange: Hashable {
 
 /// Space added to a range of base text to make room for annotations and
 /// word spacing.
-struct RubyTrackedRange {
+nonisolated struct RubyTrackedRange {
     /// UTF-16 offsets within the paragraph.
     let range: Range<Int>
     /// Space after each glyph, which isn't part of its box.
@@ -72,7 +72,7 @@ struct RubyTrackedRange {
 }
 
 /// Everything the renderer needs for one paragraph, sorted by range.
-struct RubyParagraph {
+nonisolated struct RubyParagraph {
     var tracked: [RubyTrackedRange] = []
     var furigana: [RubyAnnotation] = []
     /// Drawn above the text or below it, depending on the style.
@@ -86,7 +86,7 @@ struct RubyParagraph {
 }
 
 /// The word a `RubyReader` is speaking, and how far along it is.
-struct RubyEmphasisState {
+nonisolated struct RubyEmphasisState {
     let options: RubyEmphasis
     let paragraph: Int
     /// UTF-16 offsets within the paragraph.
@@ -99,7 +99,7 @@ struct RubyEmphasisState {
 
 /// Size relationships between base text and its annotations, derived from
 /// the font in the environment.
-struct RubyMetrics {
+nonisolated struct RubyMetrics {
     static let annotationScale: CGFloat = 0.5
 
     /// Annotations use the base font scaled down, so they keep its family and weight.
@@ -126,11 +126,14 @@ struct RubyMetrics {
         weight.map { RubyMetrics(font: font.weight($0), in: context) } ?? self
     }
 
-    private static let phraseBreakingFonts = NSCache<CTFont, CTFont>()
+    // NSCache is safe to use from any thread, and metrics are made off the
+    // main thread too, where SwiftUI draws text in the background.
+    nonisolated(unsafe) private static let phraseBreakingFonts = NSCache<CTFont, CTFont>()
 
     /// The font descriptor attribute holding a font's text style. AppKit
     /// fonts have the same attribute, but only UIKit names it.
-    private static let textStyleAttribute: CFString = {
+    // A constant string, never changed once made.
+    nonisolated(unsafe) private static let textStyleAttribute: CFString = {
         #if canImport(UIKit)
         UIFontDescriptor.AttributeName.textStyle.rawValue as CFString
         #else

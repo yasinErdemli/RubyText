@@ -137,7 +137,7 @@ public struct RubyWordUnderlines: Hashable, Sendable {
 
 /// A line under a word, in UTF-16 offsets of the text, its kind, and
 /// its own color, if it has one.
-struct RubyUnderline: Hashable, Sendable {
+nonisolated struct RubyUnderline: Hashable, Sendable {
     let range: Range<Int>
     let pattern: RubyUnderlinePattern
     var color: Color? = nil
@@ -145,7 +145,7 @@ struct RubyUnderline: Hashable, Sendable {
 
 /// How `RubyWordUnderlines` draws one word's line: its kind, and its own
 /// color, if it has one.
-public struct RubyUnderlineStyle: Hashable, Sendable {
+nonisolated public struct RubyUnderlineStyle: Hashable, Sendable {
     /// How the line is drawn.
     public var pattern: RubyUnderlinePattern
     /// The line's own color, drawn as it's given, not faded; nil takes the
@@ -161,7 +161,7 @@ public struct RubyUnderlineStyle: Hashable, Sendable {
 }
 
 /// How `RubyWordUnderlines` draws its lines.
-public enum RubyUnderlinePattern: Hashable, Sendable {
+nonisolated public enum RubyUnderlinePattern: Hashable, Sendable {
     /// Round dots, as many apps mark words with more to show.
     case dotted
     /// Short dashes.

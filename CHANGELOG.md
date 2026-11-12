@@ -3,6 +3,15 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
+## Unreleased
+
+- `RubyText` no longer stops an app when SwiftUI draws it on its background
+  render thread. The renderer and the metrics, emphasis and underline
+  types it draws with belonged to the main actor, so the first time
+  SwiftUI drew a line off the main thread, during an animation, Swift's
+  isolation check stopped the app. They're nonisolated now; nothing about
+  how text looks or is laid out changes.
+
 ## 1.12.0 — 2026-11-10
 
 - A word's underline can have a color of its own. `RubyUnderlineStyle`
