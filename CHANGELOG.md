@@ -3,7 +3,7 @@
 RubyText follows [semantic versioning](https://semver.org). Notable changes
 are listed here, newest first.
 
-## Unreleased
+## 1.12.1 — 2026-11-13
 
 - `RubyText` no longer stops an app when SwiftUI draws it on its background
   render thread. The renderer and the metrics, emphasis and underline
